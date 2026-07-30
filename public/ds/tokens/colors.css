@@ -1,0 +1,64 @@
+/* ============================================================
+   VAKILPEDIA — COLOR SYSTEM · BASE PALETTES (immutable)
+   These raw ramps never change between themes. The theme-
+   responsive SEMANTIC layer lives in tokens/themes.css and
+   flips via [data-theme]. Components read semantic tokens.
+   ============================================================ */
+:root {
+  /* ---- Graphite ink ramp (dark surface source) ------------- */
+  --ink-900: #06070A;
+  --ink-850: #0A0B0F;
+  --ink-800: #0E1014;
+  --ink-750: #121419;
+  --ink-700: #171A20;
+  --ink-600: #1E2229;
+  --ink-500: #2A2F38;
+  --ink-400: #3A404B;
+
+  /* ---- Muted navy (cool depth, theme-neutral tints) -------- */
+  --navy-900: #0B0E17;
+  --navy-800: #10141F;
+  --navy-700: #161B2A;
+  --navy-600: #1D2438;
+
+  /* ---- Paper ramp (light surface source) ------------------- */
+  --paper-000: #FFFFFF;
+  --paper-050: #FAFBFC;
+  --paper-100: #F4F5F8;
+  --paper-200: #ECEEF3;
+  --paper-300: #E3E6EC;
+  --paper-400: #D3D7E0;
+
+  /* ---- Soft violet (primary accent — brand purple) --------- */
+  --violet-050: #EEEDFF;
+  --violet-300: #A9A4FF;
+  --violet-400: #8B85FF;
+  --violet-500: #635BFF;  /* PRIMARY brand accent (from codebase) */
+  --violet-600: #4F46E5;
+  --violet-700: #3E37C4;
+
+  /* ---- Warm gold (premium accent — VakilCard / stationery) - */
+  --gold-200: #F3E3C0;
+  --gold-300: #E9CE96;
+  --gold-400: #E0BC74;  /* HERO gold */
+  --gold-500: #CDA15A;
+  --gold-600: #A9823F;
+
+  /* ---- Semantic status hues (constant; -dim flips by theme) - */
+  --success: #35C377;
+  --warning: #E0982C;
+  --danger:  #F0546B;
+  --info:    #3B9BE0;
+  --live:    #35C377;
+
+  /* ---- Fixed accent aliases (same in both themes) ---------- */
+  --accent:         var(--violet-500);
+  --accent-hi:      var(--violet-400);
+  --accent-premium: var(--gold-400);
+  --on-accent:      #FFFFFF;
+  --focus-ring:     var(--violet-400);
+
+  /* ---- Card hero surfaces (physical card — theme-neutral) --- */
+  --iridescent: linear-gradient(120deg, #fbe7d4 0%, #f4d9e8 18%, #e6ddf6 38%, #dbe9f7 58%, #f3ece0 78%, #f7e4d2 100%); /* @kind color */
+  --pearl: linear-gradient(135deg, #f6f3ef 0%, #eef0f4 50%, #f4ece5 100%); /* @kind color */
+}

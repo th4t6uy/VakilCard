@@ -1,0 +1,8 @@
+/* Vakilpedia webfonts — served from Google Fonts CDN.
+   Inter Tight  : UI / body / display sans (variable 100–900, upright + italic)
+   Instrument Serif : brand/tagline serif italic ("Where the machine follows the lawyer.")
+   EB Garamond  : serif fallback for Instrument Serif
+   NOTE: no self-hosted binaries were provided, so these load from the Google Fonts
+   CDN exactly as the production Vakilpedia app does. Swap for self-hosted .woff2 if
+   you need offline / air-gapped rendering. */
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,100..900;1,100..900&family=Instrument+Serif:ital@0;1&family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=JetBrains+Mono:wght@400;500;600&display=swap');

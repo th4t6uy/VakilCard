@@ -1,0 +1,44 @@
+/* ============================================================
+   VAKILPEDIA — EFFECTS: blur, motion, composed glass recipes
+   Colour/shadow values that flip by theme live in themes.css;
+   this file holds theme-neutral effect tokens + composites that
+   REFERENCE themed vars (so they auto-adapt to light/dark).
+   ============================================================ */
+:root {
+  /* ---- Backdrop blur strengths ----------------------------- */
+  --blur-sm: 8px;
+  --blur-md: 16px;
+  --blur-lg: 24px;
+  --blur-xl: 40px;
+  --blur-2xl: 64px;
+
+  /* ---- Edge lighting composites (reference themed edges) --- */
+  --inset-edge: inset 0 1px 0 var(--edge-hi), inset 0 -1px 0 var(--edge-lo);
+  --inset-edge-soft: inset 0 1px 0 var(--edge-hi);
+
+  /* ---- Restrained accent glow (halos — use sparingly) ------ */
+  --glow-violet: 0 0 40px var(--violet-glow);
+  --glow-gold:   0 0 40px var(--gold-glow);
+  --glow-live:   0 0 0 3px rgba(53,195,119,0.20);
+
+  /* ---- Focus ring ------------------------------------------ */
+  --ring: 0 0 0 3px rgba(139,133,255,0.45);
+
+  /* ---- Motion — physical, understated. No bounce. ---------- */
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1); /* @kind other */
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1); /* @kind other */
+  --ease-glass: cubic-bezier(0.32, 0.72, 0, 1); /* @kind other */
+  --dur-fast: 140ms; /* @kind other */
+  --dur-base: 240ms; /* @kind other */
+  --dur-slow: 420ms; /* @kind other */
+  --dur-drift: 8s; /* @kind other */
+
+  /* ---- Press / hover deltas -------------------------------- */
+  --press-scale: 0.975; /* @kind other */
+  --hover-lift: -2px; /* @kind other */
+}
+
+/* Respect reduced-motion globally */
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-fast: 0ms; /* @kind other */ --dur-base: 0ms; /* @kind other */ --dur-slow: 0ms; /* @kind other */ --dur-drift: 0ms; /* @kind other */ }
+}

@@ -1,0 +1,252 @@
+// VakilCard API client — the single place frontend code talks to the
+// identity backend. Handles both auth modes:
+//   1. Phone-first: access JWT (1h) + rotating refresh token from
+//      /api/vakilcard/auth — stored via this module only, refreshed
+//      transparently on expiry/401. No ad-hoc token handling elsewhere.
+//   2. Google (Phase-1 compat): Firebase ID token from firebase/auth.
+//
+// DEV-ONLY QA bypass: every call funnels through `call()` below, which asks
+// `qaCall()` (lib/vakilcardQa.js) first — that only ever returns a value
+// when an in-memory QA session is active, which itself can only start for
+// one hardcoded phone number on a non-production build served from a dev
+// host (see that module's header comment for the full safety gate). When
+// `qaCall()` returns undefined (the normal case), execution falls through to
+// the real fetch below, completely unchanged.
+import { auth } from "../firebase";
+import { qaCall, qaActive } from "./vakilcardQa";
+
+const ACCESS_KEY = "vc_access_token";
+const REFRESH_KEY = "vc_refresh_token";
+
+/* ---------------- token store ---------------- */
+
+export function setTokens({ access_token, refresh_token }) {
+  if (access_token) localStorage.setItem(ACCESS_KEY, access_token);
+  if (refresh_token) localStorage.setItem(REFRESH_KEY, refresh_token);
+}
+
+export function clearTokens() {
+  localStorage.removeItem(ACCESS_KEY);
+  localStorage.removeItem(REFRESH_KEY);
+}
+
+export function hasPhoneSession() {
+  return !!localStorage.getItem(REFRESH_KEY);
+}
+
+function jwtExpMs(token) {
+  try {
+    return JSON.parse(atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))).exp * 1000;
+  } catch {
+    return 0;
+  }
+}
+
+let refreshing = null; // single-flight refresh
+
+async function refreshTokens() {
+  if (!refreshing) {
+    refreshing = (async () => {
+      const refresh_token = localStorage.getItem(REFRESH_KEY);
+      if (!refresh_token) return null;
+      const r = await fetch("/api/vakilcard/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "refresh", refresh_token }),
+      });
+      if (!r.ok) {
+        clearTokens(); // revoked/expired/reused — session is over
+        return null;
+      }
+      const data = await r.json();
+      setTokens(data);
+      return data.access_token;
+    })().finally(() => (refreshing = null));
+  }
+  return refreshing;
+}
+
+/** Current bearer token: fresh phone access token, else Firebase ID token. */
+export async function getBearer() {
+  const access = localStorage.getItem(ACCESS_KEY);
+  if (access) {
+    if (jwtExpMs(access) - Date.now() > 30_000) return access;
+    const renewed = await refreshTokens();
+    if (renewed) return renewed;
+  }
+  if (localStorage.getItem(REFRESH_KEY)) {
+    const renewed = await refreshTokens();
+    if (renewed) return renewed;
+  }
+  if (auth.currentUser) return auth.currentUser.getIdToken();
+  return null;
+}
+
+export async function logout() {
+  const refresh_token = localStorage.getItem(REFRESH_KEY);
+  if (refresh_token) {
+    try {
+      await fetch("/api/vakilcard/auth", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "logout", refresh_token }),
+      });
+    } catch {
+      /* best effort */
+    }
+  }
+  clearTokens();
+}
+
+/* ---------------- api calls ---------------- */
+
+export class ApiError extends Error {
+  constructor(code, status) {
+    super(code);
+    this.code = code;
+    this.status = status;
+  }
+}
+
+async function call(path, { method = "GET", body, authed = true, retry = true } = {}) {
+  // DEV-ONLY QA bypass — see header comment. No-op (returns undefined,
+  // falling straight through to the real fetch) unless a QA session is
+  // active, which itself requires the dev-build + dev-host gate to pass.
+  const qa = await qaCall(path, { method, body });
+  if (qa !== undefined) return qa;
+
+  const headers = {};
+  if (body) headers["Content-Type"] = "application/json";
+  if (authed) {
+    const bearer = await getBearer();
+    if (!bearer) throw new ApiError("unauthenticated", 401);
+    headers["Authorization"] = `Bearer ${bearer}`;
+  }
+  const r = await fetch(`/api/vakilcard/${path}`, {
+    method,
+    headers,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  if (r.status === 401 && authed && retry && localStorage.getItem(REFRESH_KEY)) {
+    // Access token may have just been revoked server-side — one refresh retry.
+    const renewed = await refreshTokens();
+    if (renewed) return call(path, { method, body, authed, retry: false });
+  }
+  const data = await r.json().catch(() => ({}));
+  if (!r.ok) throw new ApiError(data.error || `http_${r.status}`, r.status);
+  return data;
+}
+
+// Auth (unauthenticated actions)
+export const startVerification = (phone) =>
+  call("auth", { method: "POST", body: { action: "start", phone }, authed: false });
+export const resendVerification = (phone) =>
+  call("auth", { method: "POST", body: { action: "resend", phone }, authed: false });
+export const verifyCode = async (phone, code) => {
+  const data = await call("auth", { method: "POST", body: { action: "verify", phone, code }, authed: false });
+  setTokens(data);
+  return data;
+};
+
+// Password auth — the primary login credential (OTP costs money per send;
+// it stays available for recovery, device changes and preference).
+export const loginPassword = async (phone, password) => {
+  const data = await call("auth", { method: "POST", body: { action: "login_password", phone, password }, authed: false });
+  setTokens(data);
+  return data;
+};
+export const setPassword = (password) =>
+  call("auth", { method: "POST", body: { action: "set_password", password } });
+export const changePassword = (current_password, new_password) =>
+  call("auth", { method: "POST", body: { action: "change_password", current_password, new_password } });
+
+// Profile
+export const getMe = () => call("me");
+export const getMyAnalytics = () => call("me?analytics=1");
+export const checkUsername = (u) => call(`me?check=${encodeURIComponent(u)}`);
+export const saveProfile = (body) => call("me", { method: "POST", body });
+export const deleteProfile = () => call("me", { method: "DELETE" });
+
+// Account
+export const getAccount = () => call("account");
+export const changeUsername = (username) =>
+  call("account", { method: "POST", body: { action: "change_username", username } }); // Pro-only (402 pro_required)
+export const setUsernameAuto = (full_name) =>
+  call("account", { method: "POST", body: { action: "set_username_auto", full_name } });
+export const setUsernamePhone = () =>
+  call("account", { method: "POST", body: { action: "set_username_phone", consent: true } });
+export const linkGoogle = (id_token) =>
+  call("account", { method: "POST", body: { action: "link_google", id_token } });
+
+// Subscription (Free vs Pro)
+export const getSubscription = () => call("subscription");
+export const checkoutPro = () =>
+  call("subscription", { method: "POST", body: { action: "checkout", plan: "PRO" } });
+export const cancelPro = () =>
+  call("subscription", { method: "POST", body: { action: "cancel" } });
+
+/** True when an ApiError means "upgrade to Pro" — the standard trigger for
+ *  the UpgradeSheet, never a dead end. */
+export const isProRequired = (e) => !!e && e.status === 402;
+
+/** True when an ApiError means "not an admin" — used to redirect non-admin
+ *  accounts away from /vakilcard/admin instead of showing a raw error. */
+export const isForbidden = (e) => !!e && e.status === 403;
+
+// Admin (founder-only — server checks the caller's verified phone against
+// VAKILCARD_ADMIN_PHONES; a 403 here means the account isn't on that list,
+// not a client-side gate).
+export const adminSummary = () => call("admin?action=summary");
+export const adminList = ({ q = "", plan = "ALL", page = 1, pageSize = 25 } = {}) =>
+  call(`admin?action=list&q=${encodeURIComponent(q)}&plan=${plan}&page=${page}&pageSize=${pageSize}`);
+export const adminDetail = (id) => call(`admin?action=detail&id=${encodeURIComponent(id)}`);
+export const adminUpgrade = (id, founder = false) =>
+  call("admin", { method: "POST", body: { action: "upgrade", id, founder } });
+export const adminGrantTrial = (id, days = 14) =>
+  call("admin", { method: "POST", body: { action: "grant_trial", id, days } });
+export const adminDowngrade = (id) =>
+  call("admin", { method: "POST", body: { action: "downgrade", id } });
+export const adminSuspend = (id) =>
+  call("admin", { method: "POST", body: { action: "suspend", id } });
+export const adminUnsuspend = (id) =>
+  call("admin", { method: "POST", body: { action: "unsuspend", id } });
+export const adminDeleteCard = (id) =>
+  call("admin", { method: "POST", body: { action: "delete", id } });
+
+/* ---- Read-only VakilCard Users registry (Part B/C) ---- */
+function registryQuery(p = {}) {
+  const {
+    q = "", verification = "ALL", plan = "ALL", card = "ALL", password = "ALL",
+    sort = "NEWEST", page = 1, pageSize = 25,
+  } = p;
+  return (
+    `q=${encodeURIComponent(q)}&verification=${verification}&plan=${plan}` +
+    `&card=${card}&password=${password}&sort=${sort}&page=${page}&pageSize=${pageSize}`
+  );
+}
+export const adminRegistry = (params = {}) =>
+  call(`admin?action=registry&${registryQuery(params)}`);
+
+/** CSV export — raw (non-JSON) authenticated fetch, returns a Blob for download. */
+export const adminRegistryExport = async (params = {}) => {
+  const bearer = await getBearer();
+  if (!bearer) throw new ApiError("unauthenticated", 401);
+  const r = await fetch(`/api/vakilcard/admin?action=registry_export&${registryQuery(params)}`, {
+    headers: { Authorization: `Bearer ${bearer}` },
+  });
+  if (!r.ok) {
+    const data = await r.json().catch(() => ({}));
+    throw new ApiError(data.error || `http_${r.status}`, r.status);
+  }
+  return r.blob();
+};
+
+/** Fire-and-forget funnel/profile analytics beacon. Skipped during a QA session. */
+export function track(event_type, profile_id = null) {
+  if (qaActive()) return;
+  try {
+    navigator.sendBeacon("/api/vakilcard/track", JSON.stringify({ event_type, profile_id }));
+  } catch {
+    /* analytics never blocks UX */
+  }
+}

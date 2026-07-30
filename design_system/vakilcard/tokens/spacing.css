@@ -1,0 +1,52 @@
+/* ============================================================
+   VAKILPEDIA — SPACING, RADII, LAYOUT
+   Generous, breathing. Mobile-first. Large touch targets.
+   ============================================================ */
+:root {
+  /* ---- Spacing scale (4px base) ---------------------------- */
+  --sp-0: 0; /* @kind other */
+  --sp-1: 0.25rem;   /* 4  */
+  --sp-2: 0.5rem;    /* 8  */
+  --sp-3: 0.75rem;   /* 12 */
+  --sp-4: 1rem;      /* 16 */
+  --sp-5: 1.25rem;   /* 20 */
+  --sp-6: 1.5rem;    /* 24 */
+  --sp-8: 2rem;      /* 32 */
+  --sp-10: 2.5rem;   /* 40 */
+  --sp-12: 3rem;     /* 48 */
+  --sp-16: 4rem;     /* 64 */
+  --sp-20: 5rem;     /* 80 */
+  --sp-24: 6rem;     /* 96 */
+
+  /* ---- Corner radii — generous, Apple-soft ----------------- */
+  --r-xs:  8px;
+  --r-sm:  12px;
+  --r-md:  16px;    /* buttons, inputs, chips                  */
+  --r-lg:  22px;    /* standard cards                          */
+  --r-xl:  28px;    /* content cards                           */
+  --r-2xl: 34px;    /* hero / glass panels                     */
+  --r-3xl: 44px;    /* VakilCard, marquee surfaces             */
+  --r-pill: 999px;  /* pills, action tiles                     */
+  --r-round: 50%;
+
+  /* ---- Touch / hit targets (accessibility floor) ----------- */
+  --touch-min: 44px;   /* never smaller                        */
+  --touch-comfort: 52px; /* @kind other */
+  --touch-tile: 64px;  /* preferred large action tiles         */
+
+  /* ---- Section rhythm -------------------------------------- */
+  --section-y: var(--sp-20); /* @kind other */
+  --section-y-sm: var(--sp-12); /* @kind other */
+  --container-max: 1200px; /* @kind other */
+  --content-max: 720px;   /* readable measure                  */
+
+  /* ---- Layer indices --------------------------------------- */
+  --z-base: 0; /* @kind other */
+  --z-raised: 10; /* @kind other */
+  --z-sticky: 100; /* @kind other */
+  --z-nav: 200; /* @kind other */
+  --z-overlay: 300; /* @kind other */
+  --z-modal: 400; /* @kind other */
+  --z-toast: 500; /* @kind other */
+  --z-card-hero: 350; /* @kind other */ /* VakilCard floats above the scroll */
+}

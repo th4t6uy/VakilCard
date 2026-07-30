@@ -1,0 +1,12 @@
+{
+  "short_name": "VakilCard",
+  "name": "VakilCard — Digital Chamber Card",
+  "icons": [
+    { "src": "vakilcard-pwa-192.png", "type": "image/png", "sizes": "192x192" },
+    { "src": "vakilcard-pwa-512.png", "type": "image/png", "sizes": "512x512" }
+  ],
+  "start_url": "/vakilcard",
+  "display": "standalone",
+  "theme_color": "#000000",
+  "background_color": "#ffffff"
+}

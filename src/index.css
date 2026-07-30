@@ -1,0 +1,362 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter+Tight:ital,wght@0,100..900;1,100..900&family=Instrument+Serif:ital@0;1&family=EB+Garamond:ital,wght@0,400..800;1,400..800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --color-bg-white: #ffffff;
+  --color-awake-sky: #CDEFFB;
+  --color-awake-amber: #FDEECB;
+  --color-awake-purple: #635BFF;
+  --color-purple_glow: rgba(99, 91, 255, 0.14);
+  --color-blue_glow: rgba(205, 239, 251, 0.35);
+  --color-amber_glow: rgba(253, 238, 203, 0.35);
+}
+
+body {
+    margin: 0;
+    font-family: 'Inter Tight', sans-serif;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: var(--color-bg-white);
+    color: #1b1d1e;
+    overflow-x: hidden;
+}
+
+.font-instrument-italic {
+    font-family: 'Instrument Serif', 'EB Garamond', serif;
+    font-style: italic;
+    font-weight: 400;
+}
+
+.font-serif-italic {
+    font-family: 'Instrument Serif', 'EB Garamond', serif;
+    font-style: italic;
+    font-weight: 400;
+}
+
+i, em, .italic {
+    font-family: 'Instrument Serif', 'EB Garamond', serif;
+    font-style: italic;
+}
+
+/* Base tailwind layers */
+@layer base {
+    :root {
+        /* Awake Theme Tokens */
+        --color-amber-100: #FDEECB;
+        --color-sky-100: #CDEFFB;
+        --color-gray-200: #e5e7eb;
+        --color-white: #fff;
+        --spacing: .25rem;
+        
+        --text-sm: .875rem;
+        --text-base: 1rem;
+        --text-5xl: 3rem;
+        --text-7xl: 4.5rem;
+        --text-8xl: 6rem;
+        --text-9xl: 8rem;
+
+        --font-weight-normal: 400;
+        --font-weight-medium: 500;
+        --tracking-tight: -.025em;
+        --blur-3xl: 64px;
+
+        /* System Variables */
+        --background: 0 0% 100%;
+        --foreground: 0 0% 3.9%;
+        --card: 0 0% 100%;
+        --card-foreground: 0 0% 3.9%;
+        --primary: 0 0% 9%;
+        --primary-foreground: 0 0% 98%;
+        --border: 0 0% 89.8%;
+        --radius: 0.5rem;
+    }
+}
+
+@layer utilities {
+    .bg-awake-gradient {
+        background-image: linear-gradient(to right, var(--color-sky-100), var(--color-white), var(--color-amber-100));
+    }
+    
+    .hero-gradient-overlay {
+        position: absolute;
+        width: 100%;
+        height: 100%;
+        background: linear-gradient(to right, var(--color-sky-100), var(--color-white), var(--color-amber-100));
+        border-radius: 9999px;
+        top: 6rem;
+        filter: blur(64px);
+        z-index: -10;
+        opacity: 0.7;
+    }
+
+    .font-instrument {
+        font-family: 'Instrument Serif', serif;
+    }
+    
+    .font-inter-tight {
+        font-family: 'Inter Tight', sans-serif;
+    }
+}
+
+@layer base {
+  * {
+    border-color: var(--color-gray-200, currentcolor);
+  }
+  body {
+    @apply text-slate-900 bg-white antialiased;
+    font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
+  }
+  
+  /* Global Text Justification for Paragraphs and Content Blocks */
+  p, .text-content, .description, li {
+    @apply text-justify;
+    overflow-wrap: break-word;
+    word-wrap: break-word;
+    hyphens: auto;
+  }
+
+  /* Custom scrollbar for scrollable areas like Bare Act */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 6px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #ccc;
+    border-radius: 10px;
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #999;
+  }
+
+  /* Mobile Spacing and Width Optimization - Removing intrusive centering */
+  @media (max-width: 768px) {
+    .mx-auto, section, .container {
+      width: 100% !important;
+      max-width: 100% !important;
+      padding-left: 1rem !important;
+      padding-right: 1rem !important;
+    }
+    
+    section {
+      padding-top: 2rem !important;
+      padding-bottom: 2rem !important;
+    }
+    
+    h1, h2, h3, h4, h5, h6 {
+      @apply text-center;
+      word-break: normal !important;
+      overflow-wrap: normal !important;
+      text-align: center !important;
+      hyphens: none !important;
+      letter-spacing: -0.05em !important;
+    }
+
+    /* Prevent horizontal scroll safely */
+    html, body {
+      overflow-x: hidden !important;
+      position: relative;
+      width: 100%;
+      -webkit-overflow-scrolling: touch;
+    }
+
+    p, .text-content, .description, li {
+      overflow-wrap: break-word;
+      word-wrap: break-word;
+      hyphens: auto;
+    }
+  }
+}
+
+/* Dynamic Hue Animations */
+@keyframes moveVertical {
+  0%, 100% { transform: translateY(-20%); }
+  50% { transform: translateY(20%); }
+}
+
+@keyframes moveInCircle {
+  0% { transform: rotate(0deg) translateY(-10%); }
+  50% { transform: rotate(180deg) translateY(10%); }
+  100% { transform: rotate(360deg) translateY(-10%); }
+}
+
+@keyframes moveHorizontal {
+  0%, 100% { transform: translateX(-20%); }
+  50% { transform: translateX(20%); }
+}
+
+@keyframes marquee {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(-50%); }
+}
+
+.marquee-container {
+  overflow: hidden;
+  white-space: nowrap;
+  position: relative;
+  width: 100%;
+}
+
+.marquee-content {
+  display: flex;
+  width: max-content;
+  animation: marquee 40s linear infinite;
+}
+
+.animate-marquee {
+  animation: marquee 40s linear infinite;
+}
+
+@keyframes vakilpediaWatermark {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.03); }
+}
+
+.animate-watermark-25 {
+  animation: vakilpediaWatermark 8s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transform-origin: center;
+}
+
+/* Awake Style Animated Background */
+.bg-animated {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  filter: blur(80px);
+  opacity: 0.6;
+  background: linear-gradient(90deg, var(--color-awake-sky) 0%, #FFFFFF 33.23%, #FFFFFF 65.77%, var(--color-awake-amber) 100%);
+}
+
+.bg-animated::before,
+.bg-animated::after {
+  content: "";
+  position: absolute;
+  width: 800px;
+  height: 800px;
+  border-radius: 50%;
+  animation: float 25s infinite linear alternate;
+  opacity: 0.25;
+}
+
+.bg-animated::before {
+  background: radial-gradient(circle, var(--color-purple_glow), transparent 70%);
+  top: calc(50% - 460px);
+  left: calc(50% - 620px);
+}
+
+.bg-animated::after {
+  background: radial-gradient(circle, var(--color-blue_glow), transparent 70%);
+  top: calc(50% - 420px);
+  left: calc(50% - 180px);
+  animation-duration: 30s;
+}
+
+.bg-glow-amber {
+  position: absolute;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, var(--color-amber_glow), transparent 70%);
+  top: calc(50% - 300px);
+  left: calc(50% - 300px);
+  z-index: -1;
+  filter: blur(100px);
+  animation: float 20s infinite linear alternate-reverse;
+  opacity: 0.3;
+}
+
+@keyframes float {
+  0% { transform: translate(0, 0) scale(1); }
+  50% { transform: translate(50px, 50px) scale(1.1); }
+  100% { transform: translate(-30px, -20px) scale(1); }
+}
+
+.animate-first {
+  animation: moveVertical 80s ease-in-out infinite;
+}
+.animate-second {
+  animation: moveInCircle 100s reverse infinite;
+  transform-origin: center center;
+}
+.animate-fourth {
+  animation: moveHorizontal 90s ease-in-out infinite;
+}
+
+/* Accessibility & Focus Indicators */
+button:focus-visible,
+a:focus-visible,
+input:focus-visible,
+textarea:focus-visible,
+[role="button"]:focus-visible {
+  outline: 3px solid #f59e0b !important;
+  outline-offset: 3px !important;
+}
+
+/* Micro-interactions: Active button click scale effect */
+button:active,
+a[role="button"]:active {
+  transform: scale(0.97) !important;
+  transition: transform 0.1s ease !important;
+}
+
+/* Reduced Motion preference */
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-delay: 0s !important;
+    animation-duration: 0s !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0s !important;
+    scroll-behavior: auto !important;
+    transform: none !important;
+  }
+}
+
+/* Form validation feedback effects */
+input:invalid:not(:placeholder-shown),
+textarea:invalid:not(:placeholder-shown) {
+  border-color: #ef4444 !important;
+  box-shadow: 0 0 0 2px rgba(239, 68, 68, 0.1) !important;
+}
+
+/* Scroll bar optimization */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Brand hero accent — EB Garamond Italic for highlight phrases inside
+   Inter-black headlines (see DESIGN_SYSTEM.md three-font system). */
+.font-eb-garamond-italic {
+    font-family: 'EB Garamond', 'Instrument Serif', serif;
+    font-style: italic;
+    font-weight: 500;
+}
+
+/* Fluid centered page container — replaces fixed wide-screen side padding.
+   Scales with the viewport (16/24/32px gutters) and caps at readable
+   widths per tier: 640/768/1024/1280/1440/1600. */
+.vp-container {
+    width: 100%;
+    margin-inline: auto;
+    padding-inline: 16px;
+}
+@media (min-width: 640px)  { .vp-container { max-width: 640px;  padding-inline: 24px; } }
+@media (min-width: 768px)  { .vp-container { max-width: 768px; } }
+@media (min-width: 1024px) { .vp-container { max-width: 1024px; padding-inline: 32px; } }
+@media (min-width: 1280px) { .vp-container { max-width: 1280px; } }
+@media (min-width: 1536px) { .vp-container { max-width: 1440px; } }
+@media (min-width: 1700px) { .vp-container { max-width: 1600px; } }

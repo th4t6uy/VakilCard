@@ -1,0 +1,126 @@
+/* ============================================================
+   VAKILPEDIA — THEME LAYER (semantic tokens)
+   Dark-first: :root is dark. Set [data-theme="light"] on <html>
+   (or any wrapper) to flip. Components read ONLY these semantic
+   tokens, never the raw palettes, so both themes stay in sync.
+   Toggle:  document.documentElement.dataset.theme = 'light' | 'dark'
+   ============================================================ */
+:root {
+  --bg-void: var(--ink-900);
+  --bg-app: var(--ink-850);
+  --surface: var(--ink-800);
+  --surface-2: var(--ink-750);
+  --surface-3: var(--ink-700);
+  --surface-hover: var(--ink-600);
+  --surface-line: var(--ink-500);
+  --text-hi: #F4F6F8;
+  --text-mid: #C3C7CF;
+  --text-low: #8B9099;
+  --text-dim: #5C616B;
+  --glass-thin: rgba(255,255,255,0.04);
+  --glass: rgba(255,255,255,0.06);
+  --glass-thick: rgba(255,255,255,0.09);
+  --glass-frost: rgba(18,20,26,0.62);
+  --glass-tint-violet: rgba(99,91,255,0.12);
+  --glass-tint-gold: rgba(224,188,116,0.11);
+  --hairline: rgba(255,255,255,0.08);
+  --hairline-strong: rgba(255,255,255,0.14);
+  --divider: var(--ink-500);
+  --edge-hi: rgba(255,255,255,0.14);
+  --edge-lo: rgba(0,0,0,0.55);
+  --success-dim: rgba(53,195,119,0.15);
+  --warning-dim: rgba(224,152,44,0.16);
+  --danger-dim: rgba(240,84,107,0.15);
+  --info-dim: rgba(59,155,224,0.15);
+  --violet-glow: rgba(99,91,255,0.35);
+  --gold-glow: rgba(224,188,116,0.28);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.40);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.35);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.45);
+  --shadow-lg: 0 18px 48px rgba(0,0,0,0.55);
+  --shadow-xl: 0 30px 80px rgba(0,0,0,0.62);
+  --shadow-card: 0 12px 40px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.30);
+  --glass-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --atmo-violet: radial-gradient(circle at 20% 12%, rgba(99,91,255,0.16), transparent 42%); /* @kind color */
+  --atmo-gold: radial-gradient(circle at 82% 6%, rgba(224,188,116,0.10), transparent 40%); /* @kind color */
+}
+
+[data-theme="dark"] {
+  --bg-void: var(--ink-900);
+  --bg-app: var(--ink-850);
+  --surface: var(--ink-800);
+  --surface-2: var(--ink-750);
+  --surface-3: var(--ink-700);
+  --surface-hover: var(--ink-600);
+  --surface-line: var(--ink-500);
+  --text-hi: #F4F6F8;
+  --text-mid: #C3C7CF;
+  --text-low: #8B9099;
+  --text-dim: #5C616B;
+  --glass-thin: rgba(255,255,255,0.04);
+  --glass: rgba(255,255,255,0.06);
+  --glass-thick: rgba(255,255,255,0.09);
+  --glass-frost: rgba(18,20,26,0.62);
+  --glass-tint-violet: rgba(99,91,255,0.12);
+  --glass-tint-gold: rgba(224,188,116,0.11);
+  --hairline: rgba(255,255,255,0.08);
+  --hairline-strong: rgba(255,255,255,0.14);
+  --divider: var(--ink-500);
+  --edge-hi: rgba(255,255,255,0.14);
+  --edge-lo: rgba(0,0,0,0.55);
+  --success-dim: rgba(53,195,119,0.15);
+  --warning-dim: rgba(224,152,44,0.16);
+  --danger-dim: rgba(240,84,107,0.15);
+  --info-dim: rgba(59,155,224,0.15);
+  --violet-glow: rgba(99,91,255,0.35);
+  --gold-glow: rgba(224,188,116,0.28);
+  --shadow-xs: 0 1px 2px rgba(0,0,0,0.40);
+  --shadow-sm: 0 2px 8px rgba(0,0,0,0.35);
+  --shadow-md: 0 8px 24px rgba(0,0,0,0.45);
+  --shadow-lg: 0 18px 48px rgba(0,0,0,0.55);
+  --shadow-xl: 0 30px 80px rgba(0,0,0,0.62);
+  --shadow-card: 0 12px 40px rgba(0,0,0,0.45), 0 2px 6px rgba(0,0,0,0.30);
+  --glass-shadow: 0 20px 60px rgba(0,0,0,0.55), inset 0 1px 0 rgba(255,255,255,0.14), inset 0 0 0 1px rgba(255,255,255,0.04);
+  --atmo-violet: radial-gradient(circle at 20% 12%, rgba(99,91,255,0.16), transparent 42%); /* @kind color */
+  --atmo-gold: radial-gradient(circle at 82% 6%, rgba(224,188,116,0.10), transparent 40%); /* @kind color */
+}
+
+[data-theme="light"] {
+  --bg-void: var(--paper-200);
+  --bg-app: var(--paper-100);
+  --surface: var(--paper-000);
+  --surface-2: var(--paper-050);
+  --surface-3: var(--paper-000);
+  --surface-hover: var(--paper-100);
+  --surface-line: var(--paper-300);
+  --text-hi: #14161B;
+  --text-mid: #3D424D;
+  --text-low: #6A7180;
+  --text-dim: #9AA1AD;
+  --glass-thin: rgba(255,255,255,0.45);
+  --glass: rgba(255,255,255,0.62);
+  --glass-thick: rgba(255,255,255,0.82);
+  --glass-frost: rgba(255,255,255,0.72);
+  --glass-tint-violet: rgba(99,91,255,0.10);
+  --glass-tint-gold: rgba(201,151,63,0.13);
+  --hairline: rgba(17,20,32,0.09);
+  --hairline-strong: rgba(17,20,32,0.16);
+  --divider: var(--paper-300);
+  --edge-hi: rgba(255,255,255,0.9);
+  --edge-lo: rgba(17,20,32,0.05);
+  --success-dim: rgba(53,195,119,0.14);
+  --warning-dim: rgba(224,152,44,0.15);
+  --danger-dim: rgba(240,84,107,0.12);
+  --info-dim: rgba(59,155,224,0.12);
+  --violet-glow: rgba(99,91,255,0.22);
+  --gold-glow: rgba(201,151,63,0.20);
+  --shadow-xs: 0 1px 2px rgba(20,22,40,0.05);
+  --shadow-sm: 0 2px 8px rgba(20,22,40,0.06);
+  --shadow-md: 0 8px 24px rgba(20,22,40,0.08);
+  --shadow-lg: 0 18px 48px rgba(20,22,40,0.12);
+  --shadow-xl: 0 30px 80px rgba(20,22,40,0.16);
+  --shadow-card: 0 8px 30px rgba(20,22,40,0.08), 0 1px 3px rgba(20,22,40,0.06);
+  --glass-shadow: 0 20px 60px rgba(20,22,40,0.14), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(17,20,32,0.04);
+  --atmo-violet: radial-gradient(circle at 20% 12%, rgba(99,91,255,0.10), transparent 44%); /* @kind color */
+  --atmo-gold: radial-gradient(circle at 82% 6%, rgba(201,151,63,0.09), transparent 42%); /* @kind color */
+}

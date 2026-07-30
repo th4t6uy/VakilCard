@@ -1,0 +1,43 @@
+<!-- @dsCard group="VakilCard" viewport="412x760" name="VakilCard — Demo Card" subtitle="Showcase card (fictional lawyer) for marketing the service" -->
+<!DOCTYPE html><html data-theme="dark"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VakilCard — Demo</title>
+<link rel="stylesheet" href="../../styles.css">
+<script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+<script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+<script src="../../_ds_bundle.js"></script>
+<style>*{box-sizing:border-box}
+html,body{margin:0;height:100%;background:var(--bg-void);font-family:var(--font-sans);color:var(--text-hi)}
+#root{height:100vh;display:flex;align-items:stretch;justify-content:center;background:var(--bg-void)}
+/* OG Vakilpedia liquid-glass environment — drifting colour glows the frosted glass refracts */
+.vp-glow{position:absolute;border-radius:50%;filter:blur(70px);pointer-events:none;z-index:0;will-change:transform}
+.vp-g1{width:340px;height:340px;background:radial-gradient(circle,rgba(99,91,255,0.55),transparent 70%);top:-60px;left:-80px;animation:vpFloatA 26s ease-in-out infinite alternate}
+.vp-g2{width:300px;height:300px;background:radial-gradient(circle,rgba(224,188,116,0.40),transparent 70%);top:120px;right:-90px;animation:vpFloatB 32s ease-in-out infinite alternate}
+.vp-g3{width:360px;height:360px;background:radial-gradient(circle,rgba(59,155,224,0.35),transparent 70%);bottom:-120px;left:-40px;animation:vpFloatC 30s ease-in-out infinite alternate}
+@keyframes vpFloatA{0%{transform:translate(0,0) scale(1)}100%{transform:translate(60px,80px) scale(1.15)}}
+@keyframes vpFloatB{0%{transform:translate(0,0) scale(1)}100%{transform:translate(-50px,60px) scale(1.1)}}
+@keyframes vpFloatC{0%{transform:translate(0,0) scale(1)}100%{transform:translate(40px,-60px) scale(1.12)}}
+[data-theme="light"] .vp-g1{background:radial-gradient(circle,rgba(99,91,255,0.28),transparent 70%)}
+[data-theme="light"] .vp-g2{background:radial-gradient(circle,rgba(224,188,116,0.30),transparent 70%)}
+[data-theme="light"] .vp-g3{background:radial-gradient(circle,rgba(59,155,224,0.22),transparent 70%)}
+@media (prefers-reduced-motion: reduce){.vp-glow{animation:none!important}}
+/* Clean auto-hiding scrollbar — thin vertical pill, no track, only while scrolling */
+.vp-scroll{scrollbar-width:thin;scrollbar-color:transparent transparent}
+.vp-scroll::-webkit-scrollbar{width:6px}
+.vp-scroll::-webkit-scrollbar-track{background:transparent}
+.vp-scroll::-webkit-scrollbar-thumb{background:transparent;border-radius:999px;transition:background .3s ease}
+.vp-scroll.is-scrolling{scrollbar-color:rgba(255,255,255,0.28) transparent}
+.vp-scroll.is-scrolling::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.28)}
+[data-theme="light"] .vp-scroll.is-scrolling{scrollbar-color:rgba(30,28,40,0.28) transparent}
+[data-theme="light"] .vp-scroll.is-scrolling::-webkit-scrollbar-thumb{background:rgba(30,28,40,0.28)}
+</style></head>
+<body><div id="root"></div>
+<script type="text/babel" src="./tweaks-panel.jsx"></script>
+<script type="text/babel" src="./VakilCardApp.jsx"></script>
+<script type="text/babel">
+  const mount = () => window.VakilCardApp
+    ? ReactDOM.createRoot(document.getElementById('root')).render(<window.VakilCardApp profile={window.vakilDemoProfile}/>)
+    : setTimeout(mount, 40);
+  mount();
+</script>
+</body></html>

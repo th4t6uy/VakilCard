@@ -1,0 +1,10 @@
+{
+  "version": 2,
+  "rewrites": [
+    { "source": "/api/:path*", "destination": "/api/:path*" },
+    { "source": "/vakilcard", "destination": "/index.html" },
+    { "source": "/vakilcard/:path*", "destination": "/index.html" },
+    { "source": "/:username([a-zA-Z0-9][a-zA-Z0-9._-]{2,29})", "destination": "/api/vakilcard/profile?username=:username" },
+    { "source": "/(.*)", "destination": "/index.html" }
+  ]
+}
