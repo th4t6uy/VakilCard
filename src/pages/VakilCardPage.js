@@ -7,8 +7,6 @@
 //                share, publish, analytics, account.
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { onAuthStateChanged, signInWithPopup, signOut } from "firebase/auth";
-import { auth, googleProvider } from "../firebase";
 import {
   ArrowRight, Banknote, Briefcase, Check, Copy, Download, ExternalLink, Eye,
   Globe2, Image as ImageIcon, Landmark, Loader2, Lock, LogOut, Phone, Pencil,
@@ -128,10 +126,8 @@ const EDIT_SECTIONS = [
 export default function VakilCardPage() {
   const navigate = useNavigate();
   const { username: routeUsername } = useParams(); // set on /vakilcard/:username/dashboard
-  const [fbUser, setFbUser] = useState(undefined);
   const [profile, setProfile] = useState(undefined); // undefined=loading, null=none
   const [counts, setCounts] = useState(null);
-  const [signingIn, setSigningIn] = useState(false);
   const [loadError, setLoadError] = useState(false);
   const [qrUrl, setQrUrl] = useState("");
   const [copied, setCopied] = useState(false);
@@ -154,11 +150,13 @@ export default function VakilCardPage() {
   const [pwErr, setPwErr] = useState("");
   const [pwDone, setPwDone] = useState(false);
 
-  const authed = hasPhoneSession() || fbUser;
+  // Phone (WhatsApp OTP) is the only supported identity — Google/Firebase
+  // auth was removed. hasPhoneSession() reads localStorage synchronously,
+  // so no async "auth state resolving" placeholder is needed here.
+  const authed = hasPhoneSession();
 
   useEffect(() => {
     document.title = "VakilCard — One Link. Everything Your Client Needs. | Vakilpedia";
-    return onAuthStateChanged(auth, (u) => setFbUser(u || null));
   }, []);
 
   const load = useCallback(async () => {
@@ -179,10 +177,9 @@ export default function VakilCardPage() {
   }, []);
 
   useEffect(() => {
-    if (fbUser === undefined) return;
     if (authed) load();
     else setProfile(null);
-  }, [fbUser, authed, load]);
+  }, [authed, load]);
 
   useEffect(() => {
     if (!authed) return;
@@ -269,14 +266,8 @@ export default function VakilCardPage() {
     return () => { alive = false; };
   }, [profile, url]);
 
-  const signInGoogle = async () => {
-    setSigningIn(true);
-    try { await signInWithPopup(auth, googleProvider); } catch {} finally { setSigningIn(false); }
-  };
-
   const doLogout = async () => {
     await apiLogout();
-    if (auth.currentUser) await signOut(auth);
     setProfile(null);
   };
 
@@ -338,7 +329,7 @@ export default function VakilCardPage() {
   // Signed out → single entry point: the full landing + OTP experience.
   // SignupPage itself routes post-verification (new → onboarding,
   // existing → back here as the dashboard).
-  if (fbUser !== undefined && !authed) {
+  if (!authed) {
     return (
       <>
         <SEOHead 
@@ -348,13 +339,13 @@ export default function VakilCardPage() {
           canonicalUrl="https://www.vakilpedia.com/vakilcard"
           imageUrl="https://www.vakilpedia.com/logo.png"
         />
-        <SignupPage onGoogleSignIn={signInGoogle} googleSigningIn={signingIn} />
+        <SignupPage />
       </>
     );
   }
 
   // Loading / error
-  if (fbUser === undefined || profile === undefined) {
+  if (profile === undefined) {
     return shell(
       loadError ? (
         <div className="text-center py-24">
@@ -371,7 +362,7 @@ export default function VakilCardPage() {
     );
   }
 
-  // Authed but no card yet (e.g. Google sign-in without a profile)
+  // Authed but no card yet.
   if (!profile) {
     return shell(
       <div className="text-center py-16">

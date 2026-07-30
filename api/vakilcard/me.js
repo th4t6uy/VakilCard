@@ -3,9 +3,9 @@
 //   GET  /api/vakilcard/me?check=<name>   → username availability
 //   POST /api/vakilcard/me                → create/update own profile
 //   DELETE /api/vakilcard/me              → delete profile
-// Auth: Bearer token — VakilCard session JWT (phone-first identity) or a
-// Firebase ID token (Google-first, Phase-1 compat). Profile ownership is by
-// account_id; DB access is service-role (RLS deny-all by design).
+// Auth: Bearer token — VakilCard session JWT (phone-first identity, the
+// only supported identity). Profile ownership is by account_id; DB access
+// is service-role (RLS deny-all by design).
 //
 // Username CHANGES are not handled here — POST /api/vakilcard/account
 // {action:"change_username"} owns that flow (permanent-redirect aliases +
@@ -75,21 +75,6 @@ async function loadOwn(accountId) {
     `vakilcard_profiles?account_id=eq.${accountId}&select=${encodeURIComponent(SEL)}`
   );
   return rows[0] || null;
-}
-
-/** Google-first users get an account lazily on first profile write. */
-async function ensureAccountForFirebase(fb) {
-  const [account] = await db("vakilpedia_accounts", {
-    method: "POST",
-    body: {},
-    prefer: "return=representation",
-  });
-  await db("account_oauth_identities?on_conflict=provider,provider_uid", {
-    method: "POST",
-    body: { account_id: account.id, provider: "firebase", provider_uid: fb.uid, email: fb.email },
-    prefer: "resolution=merge-duplicates,return=minimal",
-  });
-  return account.id;
 }
 
 module.exports = async function handler(req, res) {
@@ -163,14 +148,10 @@ module.exports = async function handler(req, res) {
         return json(res, 402, { error: "pro_required", feature: "website" });
       }
 
-      if (!accountId && who.via === "firebase") {
-        accountId = await ensureAccountForFirebase(who.firebase);
-      }
       if (!accountId) return json(res, 401, { error: "unauthenticated" });
 
       const profileRow = {
         account_id: accountId,
-        ...(who.via === "firebase" ? { firebase_uid: who.firebase.uid } : {}),
         username: uname,
         full_name: str(b.full_name, 120),
         designation: str(b.designation, 120),
@@ -183,7 +164,7 @@ module.exports = async function handler(req, res) {
           : [],
         bio: str(b.bio, 500),
         photo_url: str(b.photo_url, 1000),
-        email: str(b.email, 254) || (who.firebase && who.firebase.email) || null,
+        email: str(b.email, 254) || null,
         phone: str(b.phone, 20),
         whatsapp: str(b.whatsapp, 20),
         website: str(b.website, 500),

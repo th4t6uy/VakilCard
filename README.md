@@ -26,11 +26,19 @@ VakilCard-only lib/components, the VakilCard design system (`design_system/`), t
 functions (`api/vakilcard/*.js`), VakilCard's 8 Supabase migrations (`supabase/migrations/`, reference
 copies — the applied migration history of record remains in Vakilpedia-website), and its 4 test files.
 
-**Duplicated here, not moved (Shared class — see extraction report):** `src/firebase.js`,
+**Duplicated here, not moved (Shared class — see extraction report):**
 `src/components/{BrandWordmark,SEOHead}.js`, `src/index.css`. These are also used by other products
 in Vakilpedia-website (EvidenceHash, the marketing pages, etc.) — copied here so this app is
 self-contained, canonical originals remain in Vakilpedia-website. If they drift, reconcile manually;
 no shared package was introduced for this pass (per the mission's "no unnecessary abstraction").
+
+**Historical note:** `src/firebase.js` (Firebase Web SDK init, used only for optional Google
+Sign-In) was duplicated here at extraction time but has since been removed entirely — 2026-07-30,
+"remove Firebase completely". Authentication is WhatsApp OTP + Supabase + this app's own JWT
+session/token system only. See `supabase/migrations/202607180001_vakilcard_mvp_schema.sql` and
+`202607180002_vakilcard_identity_phase2.sql` for the (now-historical, unedited) `firebase_uid`
+column and `'firebase'` oauth-provider value — inert schema, kept as applied-migration history
+rather than rewritten.
 
 **Not moved (stays in Vakilpedia-website):**
 - The stale-looking duplicate API directory at Vakilpedia-website's repo root (`api/vakilcard/*.js`,

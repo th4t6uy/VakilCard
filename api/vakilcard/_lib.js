@@ -11,8 +11,6 @@
 // throws, matching the existing SERVICE_KEY behavior below.
 const SUPABASE_URL = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
 const SERVICE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
-const FIREBASE_API_KEY =
-  process.env.FIREBASE_API_KEY || process.env.REACT_APP_FIREBASE_API_KEY || "";
 
 // ---------------------------------------------------------------------------
 // DIAGNOSTIC INSTRUMENTATION (added 2026-07-30 to trace PGRST204 on
@@ -160,32 +158,6 @@ async function db(path, { method = "GET", body, headers = {}, prefer } = {}) {
   return data;
 }
 
-/**
- * Verify a Firebase ID token via the Identity Toolkit REST API
- * (dependency-free alternative to firebase-admin). Returns { uid, email }
- * or null when invalid.
- */
-async function verifyFirebaseToken(idToken) {
-  if (!idToken || !FIREBASE_API_KEY) return null;
-  try {
-    const r = await fetch(
-      `https://identitytoolkit.googleapis.com/v1/accounts:lookup?key=${FIREBASE_API_KEY}`,
-      {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ idToken }),
-      }
-    );
-    if (!r.ok) return null;
-    const data = await r.json();
-    const user = data && data.users && data.users[0];
-    if (!user || !user.localId) return null;
-    return { uid: user.localId, email: user.email || null };
-  } catch {
-    return null;
-  }
-}
-
 /** Extract Bearer token from request. */
 function bearer(req) {
   const h = req.headers["authorization"] || "";
@@ -320,35 +292,20 @@ async function resolveProfileOrAlias(segment) {
 
 /**
  * Resolve the authenticated account from a Bearer token.
- * Accepts (1) a VakilCard session JWT (phone-first identity) or
- * (2) a Firebase ID token (Google identity — Phase 1 compat and linking).
+ * Accepts a VakilCard session JWT (phone-first identity, the only
+ * supported identity — Google/Firebase auth was removed).
  * Returns { accountId, profileId?, via } or null.
  */
 async function resolveAccount(req) {
   const token = bearer(req);
   if (!token) return null;
-  // 1) Our own JWT — local verification, no network.
+  // Our own JWT — local verification, no network.
   const { verify: verifyJwt } = require("./_jwt");
   const claims = verifyJwt(token);
   if (claims && claims.sub) {
     return { accountId: claims.sub, profileId: claims.pid || null, via: "jwt" };
   }
-  // 2) Firebase ID token.
-  const fb = await verifyFirebaseToken(token);
-  if (!fb) return null;
-  const linked = await db(
-    `account_oauth_identities?provider_uid=eq.${encodeURIComponent(fb.uid)}&provider=in.(firebase,google)&select=account_id`
-  );
-  if (linked.length) return { accountId: linked[0].account_id, via: "firebase", firebase: fb };
-  // Legacy Phase-1 profile not yet backfilled into identities.
-  const legacy = await db(
-    `vakilcard_profiles?firebase_uid=eq.${encodeURIComponent(fb.uid)}&select=id,account_id`
-  );
-  if (legacy.length && legacy[0].account_id) {
-    return { accountId: legacy[0].account_id, profileId: legacy[0].id, via: "firebase", firebase: fb };
-  }
-  // Authenticated with Google but no account yet (Google-first onboarding).
-  return { accountId: null, via: "firebase", firebase: fb };
+  return null;
 }
 
 /** Fire-and-forget analytics insert. Never throws. */
@@ -366,7 +323,6 @@ async function trackEvent(profileId, eventType, referrer) {
 
 module.exports = {
   db,
-  verifyFirebaseToken,
   bearer,
   readJsonBody,
   esc,

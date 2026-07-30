@@ -1,9 +1,8 @@
 // VakilCard API client — the single place frontend code talks to the
-// identity backend. Handles both auth modes:
-//   1. Phone-first: access JWT (1h) + rotating refresh token from
-//      /api/vakilcard/auth — stored via this module only, refreshed
-//      transparently on expiry/401. No ad-hoc token handling elsewhere.
-//   2. Google (Phase-1 compat): Firebase ID token from firebase/auth.
+// identity backend. Phone-first (and only) identity: access JWT (1h) +
+// rotating refresh token from /api/vakilcard/auth — stored via this
+// module only, refreshed transparently on expiry/401. No ad-hoc token
+// handling elsewhere. (Google/Firebase auth was removed.)
 //
 // DEV-ONLY QA bypass: every call funnels through `call()` below, which asks
 // `qaCall()` (lib/vakilcardQa.js) first — that only ever returns a value
@@ -12,7 +11,6 @@
 // host (see that module's header comment for the full safety gate). When
 // `qaCall()` returns undefined (the normal case), execution falls through to
 // the real fetch below, completely unchanged.
-import { auth } from "../firebase";
 import { qaCall, qaActive } from "./vakilcardQa";
 
 const ACCESS_KEY = "vc_access_token";
@@ -66,7 +64,7 @@ async function refreshTokens() {
   return refreshing;
 }
 
-/** Current bearer token: fresh phone access token, else Firebase ID token. */
+/** Current bearer token: fresh phone access token, or null. */
 export async function getBearer() {
   const access = localStorage.getItem(ACCESS_KEY);
   if (access) {
@@ -78,7 +76,6 @@ export async function getBearer() {
     const renewed = await refreshTokens();
     if (renewed) return renewed;
   }
-  if (auth.currentUser) return auth.currentUser.getIdToken();
   return null;
 }
 

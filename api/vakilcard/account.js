@@ -1,9 +1,7 @@
-// Account management: usernames, aliases, identity linking.
+// Account management: usernames, aliases.
 //   GET  /api/vakilcard/account                    → identities + aliases overview
 //   POST /api/vakilcard/account { action: "change_username", username }
-//   POST /api/vakilcard/account { action: "link_google", id_token }
-//   POST /api/vakilcard/account { action: "unlink_google" }
-// Auth: VakilCard JWT or Firebase ID token (Bearer).
+// Auth: VakilCard JWT (Bearer).
 //
 // Username changes never break links: the old username is demoted to a
 // permanent-redirect alias and recorded in vakilcard_username_history.
@@ -11,7 +9,6 @@ const {
   db,
   readJsonBody,
   resolveAccount,
-  verifyFirebaseToken,
   validateUsername,
   isReservedUsername,
 } = require("./_lib");
@@ -168,39 +165,6 @@ module.exports = async function handler(req, res) {
       if (taken && !(taken.reason === "taken" && taken.profileId === profile.id))
         return json(res, 409, { error: "username_" + taken.reason });
       return performUsernameSwitch(profile, digits, { aliasKind: "phone", source: "PHONE" });
-    }
-
-    if (action === "link_google") {
-      const fb = await verifyFirebaseToken(String(body.id_token || ""));
-      if (!fb) return json(res, 400, { error: "invalid_google_token" });
-      const existing = await db(
-        `account_oauth_identities?provider_uid=eq.${encodeURIComponent(fb.uid)}&provider=in.(firebase,google)&select=account_id`
-      );
-      if (existing.length && existing[0].account_id !== accountId)
-        return json(res, 409, { error: "google_linked_elsewhere" });
-      if (!existing.length) {
-        await db("account_oauth_identities", {
-          method: "POST",
-          body: { account_id: accountId, provider: "google", provider_uid: fb.uid, email: fb.email },
-          prefer: "return=minimal",
-        });
-      }
-      await audit("google_linked", { accountId, meta: { email: fb.email } });
-      return json(res, 200, { ok: true, email: fb.email });
-    }
-
-    if (action === "unlink_google") {
-      // Never strand the account: phone identity must exist before unlinking.
-      const phones = await db(
-        `account_phone_identities?account_id=eq.${accountId}&verified_at=not.is.null&select=id`
-      );
-      if (!phones.length) return json(res, 400, { error: "would_lock_out" });
-      await db(
-        `account_oauth_identities?account_id=eq.${accountId}&provider=in.(firebase,google)`,
-        { method: "DELETE", prefer: "return=minimal" }
-      );
-      await audit("google_unlinked", { accountId });
-      return json(res, 200, { ok: true });
     }
 
     return json(res, 400, { error: "unknown_action" });

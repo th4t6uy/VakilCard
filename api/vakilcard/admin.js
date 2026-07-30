@@ -12,7 +12,7 @@
 //   POST { action: "unsuspend", id }             -> is_suspended = false
 //   POST { action: "delete",    id }             -> hard delete (irreversible)
 //
-// Auth: session-authed (Bearer JWT/Firebase, same as every other VakilCard
+// Auth: session-authed (Bearer JWT, same as every other VakilCard
 // endpoint) — NOT a shared secret. The authenticated account's verified
 // phone must be in the VAKILCARD_ADMIN_PHONES allowlist. This is
 // deliberately the SAME subscription_plan/subscription_status columns

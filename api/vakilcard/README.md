@@ -11,17 +11,17 @@ RLS **deny-all**; nothing is readable with the anon key.
 | `SUPABASE_SERVICE_ROLE_KEY` | required — all DB access |
 | `SUPABASE_URL` | optional (defaults to the project URL) |
 | `VAKILPEDIA_AUTH_SECRET` | required — signs session JWTs and HMACs verification codes |
-| `FIREBASE_API_KEY` | required for Google identity (token verification) |
 | `WA_PHONE_ID`, `WA_TOKEN` | Meta WhatsApp Business API (same values as the Render backend) |
 | `VERIFICATION_PROVIDER` | `whatsapp` (default) or `console` (dev: codes to logs only) |
 
 ## Identity model
 
-Phone (WhatsApp-verified) is the **primary** identity; Google is optional and
-linkable later. One `vakilpedia_accounts` row owns any number of
-`account_phone_identities` and `account_oauth_identities`. Every endpoint
-accepts `Authorization: Bearer <token>` where token is either a VakilCard
-session JWT (issued by `auth` verify) or a Firebase ID token.
+Phone (WhatsApp-verified) is the **only** identity — Google/Firebase auth was
+removed 2026-07-30. One `vakilpedia_accounts` row owns any number of
+`account_phone_identities`. Every endpoint accepts
+`Authorization: Bearer <token>` where token is a VakilCard session JWT
+(issued by `auth` verify). The `account_oauth_identities` table remains in
+schema as inert, unused infrastructure (see migration history).
 
 ## Endpoints
 
@@ -57,8 +57,6 @@ reserved names, profiles, aliases). `POST` creates/updates the profile
 - `GET` — identities + aliases overview.
 - `change_username` — `{username}` (3–30, `a-z 0-9 _ - .`); old username becomes
   a **permanent-redirect alias** + `vakilcard_username_history` row. Links never break.
-- `link_google` — `{id_token}` (Firebase); refuses if linked to another account.
-- `unlink_google` — refused if it would strand the account (no verified phone).
 
 ### `GET /:username` → `api/vakilcard/profile`
 Server-rendered public card (OG/Twitter/JSON-LD, edge-cached 300s).

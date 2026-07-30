@@ -1,7 +1,7 @@
 // Image upload/removal for VakilCard (photo / UPI QR).
 //   POST   /api/vakilcard/upload  { kind: "photo"|"upiqr", data: <base64> }
 //   DELETE /api/vakilcard/upload  { kind: "photo"|"upiqr" }
-// Auth: VakilCard JWT or Firebase token. The client ships an already
+// Auth: VakilCard JWT. The client ships an already
 // optimized image (photo: WebP — or JPEG/PNG on browsers without a WebP
 // encoder; QR: lossless PNG preferred — see lib/vakilcardImage.js). The
 // server independently sniffs the magic bytes (WebP/PNG/JPEG only),
