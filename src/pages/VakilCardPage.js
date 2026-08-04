@@ -169,9 +169,33 @@ const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 // "Users only buy what they can see": Free owners see and use real booking
 // here today; the Pro-only rows (calendar sync, review link) render locked
 // with the same UpgradeSheet trigger as everywhere else.
+// A "group" is one row in the editor: a time range + slot length applied to
+// however many days the owner picks (e.g. Mon–Fri, one row, not five). The
+// server still stores one flat {day,start,end,slot_minutes} entry per day
+// (booking.js/sanitizeBookingWindows is unchanged) — grouping/flattening
+// happens only here, client-side, purely for a calendar-like picking UX.
+function groupWindows(flat) {
+  const groups = [];
+  for (const w of flat || []) {
+    const g = groups.find((g) => g.start === w.start && g.end === w.end && g.slot_minutes === w.slot_minutes);
+    if (g) g.days.push(w.day);
+    else groups.push({ id: `${w.start}-${w.end}-${w.slot_minutes}-${groups.length}`, days: [w.day], start: w.start, end: w.end, slot_minutes: w.slot_minutes });
+  }
+  return groups;
+}
+function flattenGroups(groups) {
+  const out = [];
+  for (const g of groups) {
+    for (const day of g.days) out.push({ day, start: g.start, end: g.end, slot_minutes: g.slot_minutes });
+  }
+  return out;
+}
+let groupIdSeq = 0;
+
 function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [reviewLink, setReviewLink] = useState("");
   const [savingReview, setSavingReview] = useState(false);
@@ -181,24 +205,26 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
   const load = useCallback(() => {
     setLoading(true);
     getBookingConfig()
-      .then((c) => setCfg(c))
+      .then((c) => { setCfg(c); setGroups(groupWindows(c && c.windows)); })
       .catch(() => setCfg(null))
       .finally(() => setLoading(false));
   }, []);
   useEffect(() => { load(); }, [load]);
 
-  const windows = (cfg && cfg.windows) || [];
-  const setWindows = (next) => setCfg((c) => ({ ...(c || {}), windows: next }));
-  const addWindow = () => setWindows([...windows, { day: 1, start: "10:00", end: "13:00", slot_minutes: 30 }]);
-  const removeWindow = (i) => setWindows(windows.filter((_, idx) => idx !== i));
-  const updateWindow = (i, patch) => setWindows(windows.map((w, idx) => (idx === i ? { ...w, ...patch } : w)));
+  const addGroup = () => setGroups([...groups, { id: `new-${groupIdSeq++}`, days: [], start: "10:00", end: "13:00", slot_minutes: 30 }]);
+  const removeGroup = (id) => setGroups(groups.filter((g) => g.id !== id));
+  const updateGroup = (id, patch) => setGroups(groups.map((g) => (g.id === id ? { ...g, ...patch } : g)));
+  const toggleDay = (id, day) =>
+    setGroups(groups.map((g) => (g.id === id ? { ...g, days: g.days.includes(day) ? g.days.filter((d) => d !== day) : [...g.days, day].sort() } : g)));
 
   const saveWindows = async () => {
     setSavingWindows(true);
     setErr("");
     try {
-      const r = await saveBookingWindows(windows);
+      const flat = flattenGroups(groups.filter((g) => g.days.length));
+      const r = await saveBookingWindows(flat);
       setCfg((c) => ({ ...c, windows: r.windows }));
+      setGroups(groupWindows(r.windows));
     } catch {
       setErr("Couldn't save your availability — please try again.");
     } finally {
@@ -247,30 +273,45 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
       {loading ? (
         <p className="text-sm text-slate-500">Loading…</p>
       ) : (
-        <div className="space-y-2">
-          {windows.map((w, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
-              <select value={w.day} onChange={(e) => updateWindow(i, { day: +e.target.value })} className="rounded-xl border border-slate-200 text-sm font-bold px-2 py-1.5">
-                {DAY_LABELS.map((d, di) => <option key={di} value={di}>{d}</option>)}
-              </select>
-              <input type="time" value={w.start} onChange={(e) => updateWindow(i, { start: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
-              <span className="text-slate-400 text-sm">to</span>
-              <input type="time" value={w.end} onChange={(e) => updateWindow(i, { end: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
-              <select value={w.slot_minutes} onChange={(e) => updateWindow(i, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5">
-                {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
-              </select>
-              <button type="button" onClick={() => removeWindow(i)} className="ml-auto text-rose-600" aria-label="Remove window"><X className="h-4 w-4" /></button>
+        <div className="space-y-3">
+          {groups.map((g) => (
+            <div key={g.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div className="flex flex-wrap gap-1.5 mb-3">
+                {DAY_LABELS.map((d, di) => (
+                  <button
+                    key={di}
+                    type="button"
+                    onClick={() => toggleDay(g.id, di)}
+                    aria-pressed={g.days.includes(di)}
+                    className={`h-9 w-9 rounded-full text-xs font-black transition-colors ${
+                      g.days.includes(di) ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                    }`}
+                  >
+                    {d[0]}
+                  </button>
+                ))}
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+                <span className="text-slate-400 text-sm">to</span>
+                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+                <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5">
+                  {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
+                </select>
+                <button type="button" onClick={() => removeGroup(g.id)} className="ml-auto text-rose-600" aria-label="Remove this availability row"><X className="h-4 w-4" /></button>
+              </div>
+              {!g.days.length && <p className="text-xs text-amber-600 mt-2">Pick at least one day — this row won't be saved otherwise.</p>}
             </div>
           ))}
           <div className="flex flex-wrap gap-2 pt-1">
-            <button type="button" onClick={addWindow} className={btn}><Plus className="h-4 w-4" />Add a window</button>
+            <button type="button" onClick={addGroup} className={btn}><Plus className="h-4 w-4" />Add availability</button>
             <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
               {savingWindows ? "Saving…" : "Save availability"}
             </button>
           </div>
         </div>
       )}
-      <p className="text-xs text-slate-500 mt-2 hyphens-none">Live on your card today — no calendar check on Free, so avoid double-listing the same hours elsewhere.</p>
+      <p className="text-xs text-slate-500 mt-2 hyphens-none">Live on your card today — no calendar check on Free, so avoid double-listing the same hours elsewhere. Tap the day circles to pick which days a time range applies to (e.g. Mon–Fri in one row).</p>
 
       <div className="mt-6 pt-5 border-t border-slate-200">
         <div className="flex items-center justify-between">
