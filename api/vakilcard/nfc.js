@@ -21,6 +21,12 @@ const { db, esc, jsStr, readJsonBody, resolveAccount } = require("./_lib");
 const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 const CODE_RE = /^[a-z0-9]{6,16}$/;
 
+// Shared Vakilpedia/VakilCard lockup for the standalone (non-SPA) pages
+// below — mirrors the header treatment used across the React app (see
+// VakilCardPage.js's "Vakilpedia product lockup"), hand-written in inline
+// styles since these pages have no Tailwind/React available.
+const BRAND_HEADER = `<div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:22px"><img src="/vakilcard-pwa-192.png" alt="" style="height:28px;width:28px;border-radius:8px;object-fit:cover;flex:none;box-shadow:0 2px 6px rgba(0,0,0,.15)"><span style="font-weight:900;letter-spacing:-0.02em;color:#0f172a;font-size:17px">Vakilpedia<sup style="font-size:9px;font-weight:600;margin-left:1px;vertical-align:super">TM</sup></span><span style="border-radius:999px;background:#0f172a;color:#fff;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:4px 9px">VakilCard</span></div>`;
+
 function json(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -34,7 +40,7 @@ function errorPage(res, status, title, body) {
   res.setHeader("X-Robots-Tag", "noindex");
   res.setHeader("Cache-Control", "no-store");
   res.end(
-    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | VakilCard</title><meta name="robots" content="noindex"></head><body style="font-family:system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(120deg,#CDEFFB,#FDEECB)"><div style="text-align:center;padding:24px;max-width:420px"><h1 style="font-weight:900">${esc(title)}</h1><p style="color:#475569">${body}</p></div></body></html>`
+    `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(title)} | VakilCard</title><meta name="robots" content="noindex"></head><body style="font-family:system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(120deg,#CDEFFB,#FDEECB)"><div style="text-align:center;padding:24px;max-width:420px">${BRAND_HEADER}<h1 style="font-weight:900">${esc(title)}</h1><p style="color:#475569">${body}</p></div></body></html>`
   );
 }
 
@@ -80,6 +86,7 @@ function claimPage(code) {
 </head>
 <body>
 <div class="card">
+  ${BRAND_HEADER}
   <div id="step-phone" class="step active">
     <h1>Activate this VakilCard</h1>
     <p>Enter your phone number to link this card to your account. If you don't have a VakilCard yet, this creates one.</p>
