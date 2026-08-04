@@ -8,14 +8,17 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowRight, Banknote, Briefcase, Check, Copy, Download, ExternalLink, Eye,
-  Globe2, Image as ImageIcon, Landmark, Loader2, Lock, LogOut, Phone, Pencil,
-  QrCode, Rocket, Share2, Smartphone, Trash2, UserRound,
+  ArrowRight, Banknote, Briefcase, CalendarClock, Check, Copy, Download,
+  ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
+  Lock, LogOut, Phone, Pencil, Plus, QrCode, Rocket, Share2, Smartphone,
+  Sparkles, Star, Trash2, UserRound, X,
 } from "lucide-react";
 import {
   getMe, getMyAnalytics, getAccount, saveProfile, deleteProfile,
   logout as apiLogout, changePassword as apiChangePassword,
   hasPhoneSession, track, ApiError,
+  getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
+  googleCalendarConnectUrl, disconnectGoogleCalendar,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
 import LiveCardPreview from "../components/LiveCardPreview";
@@ -123,6 +126,246 @@ const EDIT_SECTIONS = [
   ["presence", "Social links", Globe2],
 ];
 
+// "Users only buy what they can see." — every Pro capability is always
+// visible here, Free or Pro; Free renders it as a locked row with a PRO
+// badge that opens the ONE UpgradeSheet, Pro renders its real (or
+// honestly-labelled "coming soon") status. Never hidden, never a dead tap.
+// `key` must exist in api/vakilcard/_entitlements.js's PRO_FEATURES.
+const PRO_TOOLS = [
+  { key: "website", icon: Globe2, title: "Personal website button", freeDesc: "Add a live link to your own site on your card.", proDesc: "Set your site under Contact & website — it goes live on your card." },
+  { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay in one tap via their own UPI app — no QR needed.", proDesc: "Active — clients tapping Pay get the native UPI app chooser automatically." },
+  { key: "booking", icon: CalendarClock, title: "Smart appointment booking", freeDesc: "Basic booking is already on — upgrade for Google Calendar sync so you're never double-booked, plus payment-before-confirmation.", proDesc: "Set up below — connect Google Calendar and require payment before a slot is confirmed." },
+  { key: "remove_branding", icon: Sparkles, title: "Remove Vakilpedia branding", freeDesc: "Your card, only your name — no \"Powered by Vakilpedia\".", proDesc: "Toggle it off in Theme below." },
+  { key: "google_review", icon: Star, title: "Get more reviews", freeDesc: "A direct \"Leave a review\" button straight to Google.", proDesc: "Add your review link in Booking & Reviews below." },
+];
+
+function ProToolRow({ tool, pro, onLocked }) {
+  const Icon = tool.icon;
+  return (
+    <button
+      type="button"
+      onClick={() => (pro ? null : onLocked(tool.key))}
+      className={`w-full rounded-2xl border p-4 text-left transition-colors flex items-start gap-3 ${pro ? "border-slate-200 bg-slate-50 cursor-default" : "border-slate-200 bg-white hover:border-[#635BFF]/50"}`}
+    >
+      <span className={`h-9 w-9 rounded-xl flex items-center justify-center flex-none ${pro ? "bg-emerald-100" : "bg-[#635BFF]/10"}`}>
+        <Icon className={`h-4 w-4 ${pro ? "text-emerald-700" : "text-[#635BFF]"}`} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-sm font-black text-slate-900">{tool.title}</p>
+          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none">Pro</span>}
+        </div>
+        <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">{pro ? tool.proDesc : tool.freeDesc}</p>
+      </div>
+    </button>
+  );
+}
+
+const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+// Booking & Reviews — the one panel covering Phase 3 (Free windows-based
+// booking + appointment inbox), Phase 4 (Pro Google Calendar connect +
+// payment-confirmation actions) and the review-link half of Phase 5.
+// "Users only buy what they can see": Free owners see and use real booking
+// here today; the Pro-only rows (calendar sync, review link) render locked
+// with the same UpgradeSheet trigger as everywhere else.
+function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
+  const [cfg, setCfg] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [savingWindows, setSavingWindows] = useState(false);
+  const [reviewLink, setReviewLink] = useState("");
+  const [savingReview, setSavingReview] = useState(false);
+  const [busyId, setBusyId] = useState(null);
+  const [err, setErr] = useState("");
+
+  const load = useCallback(() => {
+    setLoading(true);
+    getBookingConfig()
+      .then((c) => setCfg(c))
+      .catch(() => setCfg(null))
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const windows = (cfg && cfg.windows) || [];
+  const setWindows = (next) => setCfg((c) => ({ ...(c || {}), windows: next }));
+  const addWindow = () => setWindows([...windows, { day: 1, start: "10:00", end: "13:00", slot_minutes: 30 }]);
+  const removeWindow = (i) => setWindows(windows.filter((_, idx) => idx !== i));
+  const updateWindow = (i, patch) => setWindows(windows.map((w, idx) => (idx === i ? { ...w, ...patch } : w)));
+
+  const saveWindows = async () => {
+    setSavingWindows(true);
+    setErr("");
+    try {
+      const r = await saveBookingWindows(windows);
+      setCfg((c) => ({ ...c, windows: r.windows }));
+    } catch {
+      setErr("Couldn't save your availability — please try again.");
+    } finally {
+      setSavingWindows(false);
+    }
+  };
+
+  const saveReviewLink = async () => {
+    setSavingReview(true);
+    setErr("");
+    try {
+      await onSaveReviewLink(reviewLink);
+    } catch {
+      setErr("Couldn't save your review link.");
+    } finally {
+      setSavingReview(false);
+    }
+  };
+
+  const connectCalendar = async () => {
+    window.location.href = await googleCalendarConnectUrl();
+  };
+  const disconnectCalendar = async () => {
+    await disconnectGoogleCalendar();
+    load();
+  };
+
+  const act = async (id, fn) => {
+    setBusyId(id);
+    setErr("");
+    try {
+      await fn();
+      load();
+    } catch {
+      setErr("That action didn't go through — please try again.");
+    } finally {
+      setBusyId(null);
+    }
+  };
+
+  return (
+    <div className={panel}>
+      <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Booking &amp; Reviews</h2>
+
+      <p className="text-sm font-bold text-slate-800 mb-2">Weekly availability</p>
+      {loading ? (
+        <p className="text-sm text-slate-500">Loading…</p>
+      ) : (
+        <div className="space-y-2">
+          {windows.map((w, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200 bg-white p-3">
+              <select value={w.day} onChange={(e) => updateWindow(i, { day: +e.target.value })} className="rounded-xl border border-slate-200 text-sm font-bold px-2 py-1.5">
+                {DAY_LABELS.map((d, di) => <option key={di} value={di}>{d}</option>)}
+              </select>
+              <input type="time" value={w.start} onChange={(e) => updateWindow(i, { start: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+              <span className="text-slate-400 text-sm">to</span>
+              <input type="time" value={w.end} onChange={(e) => updateWindow(i, { end: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+              <select value={w.slot_minutes} onChange={(e) => updateWindow(i, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5">
+                {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
+              </select>
+              <button type="button" onClick={() => removeWindow(i)} className="ml-auto text-rose-600" aria-label="Remove window"><X className="h-4 w-4" /></button>
+            </div>
+          ))}
+          <div className="flex flex-wrap gap-2 pt-1">
+            <button type="button" onClick={addWindow} className={btn}><Plus className="h-4 w-4" />Add a window</button>
+            <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+              {savingWindows ? "Saving…" : "Save availability"}
+            </button>
+          </div>
+        </div>
+      )}
+      <p className="text-xs text-slate-500 mt-2 hyphens-none">Live on your card today — no calendar check on Free, so avoid double-listing the same hours elsewhere.</p>
+
+      <div className="mt-6 pt-5 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-slate-800">Google Calendar sync</p>
+          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+        </div>
+        {!pro ? (
+          <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to stop double-bookings →</button>
+        ) : !cfg || !cfg.calendar_platform_configured ? (
+          <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
+        ) : cfg.calendar_connected ? (
+          <div className="flex items-center gap-3 mt-2">
+            <span className="text-sm text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected</span>
+            <button type="button" onClick={disconnectCalendar} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
+          </div>
+        ) : (
+          <button type="button" onClick={connectCalendar} className={btn + " mt-2"}><CalendarClock className="h-4 w-4" />Connect Google Calendar</button>
+        )}
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-slate-800">Google review link</p>
+          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+        </div>
+        {!pro ? (
+          <>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">Free shows a "View Reviews" link to your office's Google listing. Upgrade for a direct "Leave a Review" button.</p>
+            <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade →</button>
+          </>
+        ) : (
+          <div className="flex flex-wrap gap-2 mt-2">
+            <input
+              value={reviewLink}
+              onChange={(e) => setReviewLink(e.target.value)}
+              placeholder="https://g.page/r/.../review"
+              className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
+            />
+            <button type="button" onClick={saveReviewLink} disabled={savingReview} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+              {savingReview ? "Saving…" : "Save"}
+            </button>
+          </div>
+        )}
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-slate-200">
+        <p className="text-sm font-bold text-slate-800 mb-2">Appointment requests</p>
+        {loading ? (
+          <p className="text-sm text-slate-500">Loading…</p>
+        ) : !cfg || !cfg.requests || !cfg.requests.length ? (
+          <p className="text-sm text-slate-500">No requests yet.</p>
+        ) : (
+          <div className="space-y-2">
+            {cfg.requests.map((r) => (
+              <div key={r.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-bold text-slate-900">{r.client_name} <span className="text-slate-400 font-normal">· {r.client_phone}</span></p>
+                  <span className={`rounded-full text-[10px] font-black uppercase px-2 py-0.5 flex-none ${
+                    r.status === "confirmed" ? "bg-emerald-100 text-emerald-700" :
+                    r.status === "declined" ? "bg-rose-100 text-rose-700" :
+                    r.status === "completed" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"
+                  }`}>{r.status}</span>
+                </div>
+                <p className="text-xs text-slate-500 mt-1">{r.starts_at ? new Date(r.starts_at).toLocaleString("en-IN") : r.requested_slot}</p>
+                {r.purpose && <p className="text-xs text-slate-500 mt-1 hyphens-none">{r.purpose}</p>}
+                {r.is_pro_booking && r.payment_status !== "not_required" && (
+                  <p className={`text-xs mt-1 font-bold ${r.payment_status === "confirmed" ? "text-emerald-700" : "text-amber-700"}`}>
+                    Payment: {r.payment_status.replace("_", " ")}{r.amount_inr ? ` (₹${r.amount_inr})` : ""}
+                  </p>
+                )}
+                <div className="flex flex-wrap gap-3 mt-2">
+                  {r.is_pro_booking && ["pending", "claimed_paid"].includes(r.payment_status) && (
+                    <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => manageBooking(r.id, "confirm_payment_received"))} className="text-xs font-bold text-emerald-700 underline">Mark payment received</button>
+                  )}
+                  {r.status === "pending" && (
+                    <>
+                      <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
+                      <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "declined"))} className="text-xs font-bold text-rose-700 underline">Decline</button>
+                    </>
+                  )}
+                  {r.status === "confirmed" && (
+                    <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "completed"))} className="text-xs font-bold text-slate-600 underline">Mark completed</button>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+
+      {err && <p className="text-sm font-semibold text-rose-700 mt-4">{err}</p>}
+    </div>
+  );
+}
+
 export default function VakilCardPage() {
   const navigate = useNavigate();
   const { username: routeUsername } = useParams(); // set on /:username/dashboard
@@ -135,6 +378,8 @@ export default function VakilCardPage() {
   const [installPrompt, setInstallPrompt] = useState(null); // Android beforeinstallprompt
   const [publishing, setPublishing] = useState(false);
   const [savingTheme, setSavingTheme] = useState(false);
+  const [savingCardTheme, setSavingCardTheme] = useState(false);
+  const [savingBranding, setSavingBranding] = useState(false);
   const [ent, setEnt] = useState(null); // entitlements from GET /me
   const [upgradeFeature, setUpgradeFeature] = useState(null); // null | feature key
 
@@ -309,6 +554,28 @@ export default function VakilCardPage() {
       setProfile((p) => ({ ...p, theme_preference: theme }));
     } finally {
       setSavingTheme(false);
+    }
+  };
+
+  // Pro-only — server-side me.js 402s these for Free (ADD/CHANGE-only guard),
+  // but the buttons are only reachable when `pro` is already true here.
+  const setCardTheme = async (card_theme) => {
+    setSavingCardTheme(true);
+    try {
+      await saveFull({ card_theme, is_published: profile.is_published === true });
+      setProfile((p) => ({ ...p, card_theme }));
+    } finally {
+      setSavingCardTheme(false);
+    }
+  };
+
+  const setHideBranding = async (hide_branding) => {
+    setSavingBranding(true);
+    try {
+      await saveFull({ hide_branding, is_published: profile.is_published === true });
+      setProfile((p) => ({ ...p, hide_branding }));
+    } finally {
+      setSavingBranding(false);
     }
   };
 
@@ -492,6 +759,28 @@ export default function VakilCardPage() {
             </div>
           </div>
 
+          {/* Pro tools — every capability visible Free or Pro; locked rows
+              open the one UpgradeSheet, never hidden, never a dead tap. */}
+          <div className={panel}>
+            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Pro tools</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PRO_TOOLS.map((tool) => (
+                <ProToolRow key={tool.key} tool={tool} pro={pro} onLocked={setUpgradeFeature} />
+              ))}
+            </div>
+          </div>
+
+          {/* Booking & Reviews — Free gets real windows-based booking today;
+              Pro-only rows (calendar sync, review link) render locked. */}
+          <BookingPanel
+            pro={pro}
+            onUpgrade={() => setUpgradeFeature("booking")}
+            onSaveReviewLink={async (link) => {
+              await saveFull({ google_review_link: link });
+              await load();
+            }}
+          />
+
           {/* share + theme side-by-side on xl — halves page scroll */}
           <div className="grid gap-6 xl:grid-cols-2">
           <div className={panel}>
@@ -540,18 +829,57 @@ export default function VakilCardPage() {
               ))}
             </div>
             <p className="text-xs text-slate-500 mt-3 text-left hyphens-none">How your public card appears to clients.</p>
-            {/* premium themes — Pro */}
-            <button
-              type="button"
-              onClick={() => (pro ? null : setUpgradeFeature("premium_themes"))}
-              className={`mt-4 w-full rounded-2xl border p-4 text-left transition-colors ${pro ? "border-slate-200 bg-slate-50 cursor-default" : "border-slate-200 bg-white hover:border-[#635BFF]/50"}`}
-            >
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-black text-slate-900">Premium themes</p>
-                <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>
+
+            {/* premium card themes — Pro, real (default/midnight/ivory) */}
+            <div className="mt-4">
+              <div className="flex items-center justify-between mb-2">
+                <p className="text-sm font-black text-slate-900">Card theme</p>
+                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
               </div>
-              <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">{pro ? "Coming to your plan first — new looks land here." : "Exclusive looks for your public card."}</p>
-            </button>
+              {!pro ? (
+                <button type="button" onClick={() => setUpgradeFeature("premium_themes")} className="w-full rounded-2xl border border-slate-200 bg-white hover:border-[#635BFF]/50 transition-colors p-4 text-left">
+                  <p className="text-xs text-slate-500 hyphens-none">Exclusive card looks for your public VakilCard.</p>
+                </button>
+              ) : (
+                <div className="flex flex-wrap gap-2">
+                  {["default", "midnight", "ivory"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setCardTheme(t)}
+                      disabled={savingCardTheme}
+                      className={`rounded-full px-4 py-2 text-sm font-bold border transition-colors capitalize ${
+                        (profile.card_theme || "default") === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* branding — Pro, real toggle (defaults to hidden-for-Pro
+                unless the owner explicitly overrides it) */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-black text-slate-900">Vakilpedia branding</p>
+                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+              </div>
+              {!pro ? (
+                <button type="button" onClick={() => setUpgradeFeature("remove_branding")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to remove it →</button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setHideBranding(!(profile.hide_branding !== false))}
+                  disabled={savingBranding}
+                  className={`mt-2 rounded-full px-4 py-2 text-sm font-bold border transition-colors ${
+                    profile.hide_branding !== false ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {profile.hide_branding !== false ? "Branding removed" : "Show branding"}
+                </button>
+              )}
+            </div>
           </div>
 
           </div>

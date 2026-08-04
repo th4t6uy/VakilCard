@@ -97,6 +97,12 @@ const EMPTY = {
   office: { chamber_name: "", address: "", maps_url: "", timings: "" },
   payment: { upi_id: "", upi_qr_url: "", consultation_fee: "", show_upi: true },
   social_links: {},
+  // Phase 5 fields — not yet editable from the wizard itself (set from the
+  // dashboard's Booking & Reviews / Theme panels), but MUST round-trip
+  // through every save (me.js rebuilds the whole row from the body) or a
+  // save from any step that doesn't know about them would silently wipe a
+  // Pro owner's review link / theme / branding choice / booking windows.
+  google_review_link: "", card_theme: "default", hide_branding: null, booking_windows: [],
 };
 
 export function profileToForm(p) {
@@ -122,6 +128,10 @@ export function profileToForm(p) {
       consultation_fee: pay.consultation_fee ?? "", show_upi: pay.show_upi !== false,
     },
     social_links: p.social_links || {},
+    google_review_link: p.google_review_link || "",
+    card_theme: p.card_theme || "default",
+    hide_branding: typeof p.hide_branding === "boolean" ? p.hide_branding : null,
+    booking_windows: Array.isArray(p.booking_windows) ? p.booking_windows : [],
   };
 }
 

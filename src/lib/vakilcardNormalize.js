@@ -288,5 +288,9 @@ export function formToDsProfile(f) {
     social: socialDisplayList(f.social_links),
     firm: chamber || `${firmShort} Law Chambers`,
     address: [addrParts.slice(0, mid).join(", "), addrParts.slice(mid).join(", ")],
+    // Mirrors profile.js: Pro shows "Leave a Review" once a link is set,
+    // Free/no-link falls back to "View Reviews" (reuses the office's Maps
+    // listing) — preview interactions are visual-only either way.
+    reviewLabel: f.google_review_link ? "Leave a Review" : "View Reviews",
   };
 }

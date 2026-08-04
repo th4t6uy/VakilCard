@@ -1,8 +1,11 @@
 # VakilCard API
 
-Serverless (Vercel), dependency-free Node. Data: Supabase `hrdghcwddwghifmmrrgt`
-(VakilCard's own, isolated project — split off from CaseLinx's shared `hxvnsywaplmzpyxyuuxl`
-to stay on Supabase's free tier; NOT the same database, do not confuse the two)
+Serverless (Vercel), dependency-free Node. Data: Supabase `hxvnsywaplmzpyxyuuxl`
+(the shared Vakilpedia platform database — being renamed "Vakilpedia"; VakilCard
+briefly had its own isolated project, `hrdghcwddwghifmmrrgt`, but that split was
+reverted 2026-08-02: two Supabase projects meant two separate `auth.users` tables,
+which broke a single identity being shared across VakilCard/CaseLinx. Do not
+recreate a separate VakilCard project.)
 via PostgREST with the service-role key — every `vakilcard_*` / identity table is
 RLS **deny-all**; nothing is readable with the anon key.
 

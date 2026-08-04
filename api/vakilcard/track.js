@@ -8,6 +8,7 @@ const PROFILE_EVENTS = new Set([
   "view", "share", "call", "whatsapp", "email", "pay", "directions",
   "save_contact", "appointment", "website", "qr_download", "social_click",
   "draft_created", "profile_25", "profile_50", "profile_75", "published",
+  "nfc_tap", "google_review", "payment_claimed",
 ]);
 const FUNNEL_EVENTS = new Set(["cta_click", "otp_started", "otp_verified"]);
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

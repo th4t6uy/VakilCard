@@ -3,7 +3,7 @@
 // here. Explains value, never dead-ends, never force-charges: Cancel always
 // returns the user to where they were.
 import React, { useEffect, useState } from "react";
-import { BadgeCheck, Banknote, BarChart3, CalendarClock, Globe2, Loader2, Palette, Sparkles, X } from "lucide-react";
+import { BadgeCheck, Banknote, BarChart3, CalendarClock, Globe2, Loader2, Palette, Sparkles, Star, X } from "lucide-react";
 import { checkoutPro, getSubscription } from "../lib/vakilcardApi";
 
 const FEATURES = [
@@ -14,6 +14,7 @@ const FEATURES = [
   [BarChart3, "Analytics", "Views, calls, WhatsApp, payments"],
   [Palette, "Premium Themes", "Stand out with exclusive looks"],
   [Sparkles, "Remove Vakilpedia Branding", "Your card, only your name"],
+  [Star, "Get More Reviews", "One-tap link straight to your Google review form"],
 ];
 
 /**

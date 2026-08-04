@@ -175,6 +175,22 @@ export const setUsernamePhone = () =>
 export const linkGoogle = (id_token) =>
   call("account", { method: "POST", body: { action: "link_google", id_token } });
 
+// Booking (Free + Pro; owner-side calls, all authed)
+export const getBookingConfig = () => call("booking");
+export const saveBookingWindows = (windows) =>
+  call("booking", { method: "POST", body: { action: "save_windows", windows } });
+export const manageBooking = (request_id, op) =>
+  call("booking", { method: "POST", body: { action: "manage", request_id, op } });
+export const setBookingStatus = (request_id, status) =>
+  call("booking", { method: "POST", body: { action: "manage", request_id, status } });
+// Google Calendar connect is a plain browser redirect (OAuth), not a JSON
+// call — see api/vakilcard/calendar.js. Disconnect is a normal authed POST.
+export const googleCalendarConnectUrl = async () => {
+  const bearer = await getBearer();
+  return `/api/vakilcard/calendar?action=start&token=${encodeURIComponent(bearer || "")}`;
+};
+export const disconnectGoogleCalendar = () => call("calendar", { method: "POST", body: { action: "disconnect" } });
+
 // Subscription (Free vs Pro)
 export const getSubscription = () => call("subscription");
 export const checkoutPro = () =>

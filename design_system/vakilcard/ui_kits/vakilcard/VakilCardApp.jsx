@@ -43,6 +43,7 @@ const Icons = {
   x: (p) => <Svg s={p} d={<path fill="currentColor" stroke="none" d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24h-6.657l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231ZM17.083 19.77h1.833L7.084 4.126H5.117Z"/>} />,
   threads: (p) => <Svg s={p} d={<g><circle cx="12" cy="12" r="9"/><path d="M8.8 9.6c.6-1.2 1.8-2 3.2-2 2 0 3.3 1.2 3.5 3.2.9.4 1.7 1.2 1.7 2.5 0 1.9-1.6 3.2-4 3.2-2.7 0-4.4-1.5-4.4-3.4 0-1.7 1.4-2.9 3.5-2.9.6 0 1.2.1 1.7.3"/></g>} />,
   tg: (p) => <Svg s={p} d={<path d="M21 4 3 11l5.5 2L10 19l3-3.5L18 19l3-15ZM8.5 13 18 6.5"/>} />,
+  star: (p) => <Svg s={p} d={<path d="M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6-4.4-4.2 6-.8Z"/>} />,
 };
 
 /* ---- Real vendored brand/action icons (background-removed PNGs) for the
@@ -362,6 +363,12 @@ function VakilCardApp({ profile = defaultProfile }) {
     { i: <GMapsPin size={26} />, l: 'Directions', t: 'violet', bg: mapTileBg, k: 'directions' },
     { i: <IconImg src="/icons/actions/email.png" invert={darkIcon} fallback={Icons.mail(24)} />, l: 'Email', t: 'violet', k: 'email' },
     { i: <IconImg src="/icons/actions/website.png" invert={darkIcon} fallback={Icons.globe(24)} />, l: 'Website', t: 'info', k: 'website' },
+    // Free: "View Reviews" opens the office's Google Maps listing (reuses
+    // office.maps_url — no separate field needed). Pro: "Leave a Review"
+    // deep-links straight to the owner's google_review_link. Which label +
+    // destination applies is decided server-side (profile.js `actions`/
+    // `links.review*`) — this tile is purely data-driven, never hides.
+    { i: <IconImg src="/icons/actions/review.png" invert={darkIcon} fallback={Icons.star(24)} />, l: profile.reviewLabel || 'Reviews', t: 'gold', k: 'reviews' },
     { i: Icons.contact(24), l: 'Save', s: 'Contact', t: 'neutral' },
   ];
 

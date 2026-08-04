@@ -321,6 +321,66 @@ async function trackEvent(profileId, eventType, referrer) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// Booking (Phase 3/4) — shared between me.js (owner saves windows) and
+// booking.js (owner reads windows, visitors request slots against them).
+// Windows are a small recurring weekly pattern, not a real calendar — see
+// api/vakilcard/booking.js's header comment for the Free/Pro split.
+
+const TIME_RE = /^([01]\d|2[0-3]):[0-5]\d$/;
+
+/** Validate + normalize the owner's weekly availability windows. */
+function sanitizeBookingWindows(input) {
+  if (!Array.isArray(input)) return [];
+  return input
+    .filter((w) => w && TIME_RE.test(w.start) && TIME_RE.test(w.end) && w.start < w.end)
+    .map((w) => ({
+      day: Math.max(0, Math.min(6, Math.round(+w.day) || 0)), // 0=Sun..6=Sat
+      start: w.start,
+      end: w.end,
+      slot_minutes: [15, 30, 45, 60].includes(+w.slot_minutes) ? +w.slot_minutes : 30,
+    }))
+    .slice(0, 21);
+}
+
+/**
+ * Expand the recurring weekly windows into concrete {start,end} ISO slots
+ * over the next `days` days. `busy` (Pro only) is an array of {start,end}
+ * ISO ranges from Google Calendar freebusy — any generated slot overlapping
+ * a busy range is dropped. Free callers pass busy=[] (no calendar check by
+ * design — overlapping placeholder bookings are the documented Free
+ * behaviour, not a bug).
+ */
+function expandBookingSlots(windows, { days = 14, busy = [], now = new Date() } = {}) {
+  const slots = [];
+  const busyRanges = busy
+    .map((b) => ({ s: new Date(b.start).getTime(), e: new Date(b.end).getTime() }))
+    .filter((b) => Number.isFinite(b.s) && Number.isFinite(b.e));
+  const overlapsBusy = (s, e) => busyRanges.some((b) => s < b.e && e > b.s);
+
+  for (let d = 0; d < days; d++) {
+    const day = new Date(now);
+    day.setHours(0, 0, 0, 0);
+    day.setDate(day.getDate() + d);
+    const dow = day.getDay();
+    for (const w of windows) {
+      if (w.day !== dow) continue;
+      const [sh, sm] = w.start.split(":").map(Number);
+      const [eh, em] = w.end.split(":").map(Number);
+      const windowStart = new Date(day); windowStart.setHours(sh, sm, 0, 0);
+      const windowEnd = new Date(day); windowEnd.setHours(eh, em, 0, 0);
+      for (let t = windowStart.getTime(); t + w.slot_minutes * 60000 <= windowEnd.getTime(); t += w.slot_minutes * 60000) {
+        const s = new Date(t), e = new Date(t + w.slot_minutes * 60000);
+        if (s <= now) continue; // never offer a slot already in the past
+        if (overlapsBusy(s.getTime(), e.getTime())) continue;
+        slots.push({ start: s.toISOString(), end: e.toISOString() });
+      }
+    }
+  }
+  slots.sort((a, b) => a.start.localeCompare(b.start));
+  return slots.slice(0, 200); // hard cap — a 14-day/15-min-slot pathological config never blows up the response
+}
+
 module.exports = {
   db,
   bearer,
@@ -335,4 +395,6 @@ module.exports = {
   resolveProfileOrAlias,
   resolveAccount,
   trackEvent,
+  sanitizeBookingWindows,
+  expandBookingSlots,
 };

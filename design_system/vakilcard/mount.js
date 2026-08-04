@@ -105,10 +105,24 @@
       else if (label.indexOf("directions") === 0) { go = links.maps; ev = "directions"; newTab = true; }
       else if (label.indexOf("email") === 0) { go = links.mailto; ev = "email"; }
       else if (label.indexOf("website") === 0) { go = links.website; ev = "website"; newTab = true; }
+      // Reviews tile: Pro deep-links straight to the owner's Google review
+      // form (links.review, Pro-only per entitlements). Free reuses the
+      // office's Google Maps listing to let visitors read existing reviews
+      // (links.reviewView) — never a dead tap either way, and never showing
+      // a "leave a review" action Free hasn't unlocked.
+      else if (label.indexOf("review") === 0) {
+        if (links.review) { go = links.review; ev = "google_review"; newTab = true; }
+        else if (links.reviewView) { go = links.reviewView; newTab = true; }
+      }
       // Vakilpedia CONNECT tile — replaces the old duplicate Pay tile,
       // always sends to the VakilCard marketing/upgrade page (no dedicated
       // pricing page exists yet in this repo — flagged in the report).
       else if (label.indexOf("vakilpedia") === 0) { go = "/vakilcard"; newTab = true; }
+      // Premium-upsell banner's "Upgrade" button — previously dead (no
+      // handler at all). Same destination as the Vakilpedia tile: no
+      // dedicated pricing page exists yet, so this lands on the VakilCard
+      // marketing/dashboard entry point rather than a broken tap.
+      else if (label.indexOf("upgrade") === 0) { go = "https://vakilcard.vakilpedia.com/"; newTab = true; }
       else if (label.indexOf("save") === 0 && links.vcf) { go = links.vcf; ev = "save_contact"; }
       if (go) {
         if (ev) track(ev);
@@ -361,25 +375,165 @@
   }
 
   /* ---------- Book Appointment ----------
-     Pro: booking flow (coming-soon sheet until the scheduling backend
-     ships). Free: direct WhatsApp — never a dead button either way. */
+     Free: pick one of the owner's fixed weekly windows, submit name+phone —
+     no calendar check, no payment (documented Free behaviour; overlapping
+     placeholder requests are expected, not a bug).
+     Pro: same slot list but Google-Calendar-aware (server excludes busy
+     ranges), then a Consultation-fee-vs-Custom-amount choice, a native UPI
+     app chooser for payment, and an honest two-step "I've paid" self-report
+     — there is no gateway webhook for upi:// deep links, so the owner
+     confirms receipt manually from their dashboard afterward.
+     Any fetch failure, or a profile with no windows configured, falls back
+     to WhatsApp/Call — a booking sheet must never be a dead end. */
 
   function showBookSheet() {
-    if (!boot.pro) {
-      if (links.whatsapp) window.open(links.whatsapp, "_blank", "noopener");
-      else if (links.tel) window.location.href = links.tel;
-      return;
-    }
     var actionIcon = function (name) {
       return '<img src="/icons/actions/' + name + '.png" alt="" loading="lazy" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.remove()">';
     };
-    var body =
-      '<div style="font-size:13px;color:var(--text-low);line-height:1.5">Online appointment booking is <b style="color:var(--text-hi)">coming soon</b>. Until then, message directly — it\'s the fastest way to get a slot.</div>' +
-      (links.whatsapp
-        ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center">' + actionIcon("whatsapp") + "Message on WhatsApp</a>"
-        : "") +
+    var fallbackBody =
+      '<div style="font-size:13px;color:var(--text-low);line-height:1.5">Online booking isn\'t set up yet. Message directly — it\'s the fastest way to get a slot.</div>' +
+      (links.whatsapp ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center">' + actionIcon("whatsapp") + "Message on WhatsApp</a>" : "") +
       (links.tel ? '<a href="' + links.tel + '" style="' + sheetBtnCss + ';justify-content:center">' + actionIcon("call") + "Call instead</a>" : "");
-    openSheet("Book an appointment", body);
+    var showFallback = function () { openSheet("Book an appointment", fallbackBody); };
+
+    var username = (boot.profile && boot.profile.username) || "";
+    if (!username || !boot.profileId) { showFallback(); return; }
+
+    fetch("/api/vakilcard/booking?action=public_slots&username=" + encodeURIComponent(username))
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (data) {
+        if (!data || !Array.isArray(data.slots) || !data.slots.length) { showFallback(); return; }
+        renderSlotPicker(data);
+      })
+      .catch(showFallback);
+  }
+
+  function renderSlotPicker(data) {
+    var slots = data.slots;
+    var fmt = function (iso) {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) +
+        " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    };
+    var body =
+      '<div style="font-size:12px;color:var(--text-low);margin-bottom:8px">Pick a time — you\'ll confirm your details next.</div>' +
+      '<div style="display:flex;flex-direction:column;gap:6px;max-height:280px;overflow-y:auto">' +
+      slots.map(function (s, i) {
+        return '<button data-slot-i="' + i + '" style="' + sheetBtnCss + ';justify-content:space-between">' + fmt(s.start) + '<span style="opacity:.5">›</span></button>';
+      }).join("") +
+      "</div>";
+    var s = openSheet("Book an appointment", body);
+    s.panel.querySelectorAll("[data-slot-i]").forEach(function (btn) {
+      btn.addEventListener("click", function () {
+        renderRequestForm(data, slots[+btn.getAttribute("data-slot-i")]);
+      });
+    });
+  }
+
+  function renderRequestForm(data, slot) {
+    var fmt = function (iso) {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) +
+        " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    };
+    var pro = !!data.pro;
+    var payReq = pro && data.payment && data.payment.required;
+    var body =
+      '<div style="font-size:12.5px;font-weight:700;color:var(--text-hi);margin-bottom:10px">' + fmt(slot.start) + "</div>" +
+      '<input id="vc-bk-name" placeholder="Your name" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px">' +
+      '<input id="vc-bk-phone" placeholder="Phone number" type="tel" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px">' +
+      '<textarea id="vc-bk-purpose" placeholder="What\'s this about? (optional)" rows="2" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px;resize:vertical"></textarea>';
+
+    if (payReq) {
+      var fee = data.payment.consultation_fee;
+      body +=
+        '<div style="display:flex;gap:8px;margin:4px 0 8px">' +
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);font-size:12.5px;color:var(--text-hi)"><input type="radio" name="vc-bk-type" value="consultation" checked>Consultation' + (fee ? " (₹" + fee + ")" : "") + "</label>" +
+        '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);font-size:12.5px;color:var(--text-hi)"><input type="radio" name="vc-bk-type" value="custom">Other amount</label>' +
+        "</div>" +
+        '<input id="vc-bk-amount" placeholder="Amount (₹)" type="number" min="1" style="display:none;width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px">';
+    }
+    body += '<button id="vc-bk-submit" style="' + sheetBtnCss + ';justify-content:center;margin-top:4px">Request this slot</button>' +
+      '<div id="vc-bk-err" style="font-size:11.5px;color:var(--danger,#f66);margin-top:6px;display:none"></div>';
+
+    var s = openSheet("Confirm your details", body);
+    var amountInput = s.panel.querySelector("#vc-bk-amount");
+    if (payReq) {
+      s.panel.querySelectorAll('input[name="vc-bk-type"]').forEach(function (r) {
+        r.addEventListener("change", function () { amountInput.style.display = r.value === "custom" && r.checked ? "block" : "none"; });
+      });
+    }
+    s.panel.querySelector("#vc-bk-submit").addEventListener("click", function () {
+      var name = s.panel.querySelector("#vc-bk-name").value.trim();
+      var phone = s.panel.querySelector("#vc-bk-phone").value.trim();
+      var errEl = s.panel.querySelector("#vc-bk-err");
+      if (!name || !phone) {
+        errEl.textContent = "Name and phone are required.";
+        errEl.style.display = "block";
+        return;
+      }
+      var bookingType = payReq ? (s.panel.querySelector('input[name="vc-bk-type"]:checked') || {}).value || "consultation" : "consultation";
+      var amount = bookingType === "custom" ? +(amountInput && amountInput.value) : undefined;
+      fetch("/api/vakilcard/booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "request",
+          username: (boot.profile && boot.profile.username) || "",
+          client_name: name,
+          client_phone: phone,
+          purpose: s.panel.querySelector("#vc-bk-purpose").value.trim(),
+          start: slot.start,
+          end: slot.end,
+          booking_type: bookingType,
+          amount_inr: amount,
+        }),
+      })
+        .then(function (r) { return r.json(); })
+        .then(function (d) {
+          track("appointment");
+          if (!d || !d.ok) {
+            errEl.textContent = "Couldn't send your request — please try again or message directly.";
+            errEl.style.display = "block";
+            return;
+          }
+          if (d.payment_status === "pending" && d.pay_link) renderPaymentStep(d);
+          else renderRequestDone("Request sent! You'll be confirmed shortly.");
+        })
+        .catch(function () {
+          errEl.textContent = "Couldn't send your request — please try again or message directly.";
+          errEl.style.display = "block";
+        });
+    });
+  }
+
+  function renderPaymentStep(reqResult) {
+    var q = reqResult.pay_link.split("?")[1] || "";
+    var apps = upiLauncherApps(q, reqResult.pay_link);
+    var body =
+      '<div style="font-size:12.5px;color:var(--text-low);margin-bottom:8px">Pay <b style="color:var(--text-hi)">₹' + reqResult.amount_inr + '</b> to confirm — your slot is held until then.</div>' +
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;justify-items:center;padding:6px 0 10px">' +
+      apps.map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
+      "</div>" +
+      '<button id="vc-bk-paid" style="' + sheetBtnCss + ';justify-content:center">I\'ve paid</button>' +
+      '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">Paid directly via UPI — no gateway in between. The lawyer confirms receipt before your appointment is finalised.</div>';
+    var s = openSheet("Complete payment", body);
+    s.panel.querySelector("#vc-bk-paid").addEventListener("click", function () {
+      fetch("/api/vakilcard/booking", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "confirm_payment", request_id: reqResult.id }),
+      })
+        .then(function () { renderRequestDone("Thanks! Your payment is noted — you'll be confirmed once it's verified."); })
+        .catch(function () { renderRequestDone("Noted. If confirmation doesn't arrive, message directly."); });
+    });
+  }
+
+  function renderRequestDone(message) {
+    var body = '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 4px;text-align:center">' +
+      '<div style="width:44px;height:44px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">✓</div>' +
+      '<div style="font-size:13.5px;color:var(--text-hi);line-height:1.5">' + message + "</div></div>";
+    openSheet("All set", body);
   }
 
   /* Auto showcase (demo only): after 3.5s of initial idleness, glide the

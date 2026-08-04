@@ -16,6 +16,7 @@ const {
   resolveAccount,
   validateUsername,
   isReservedUsername,
+  sanitizeBookingWindows,
 } = require("./_lib");
 const { sign } = require("./_jwt");
 const { entitlementsFor, isProActive, requirePro } = require("./_entitlements");
@@ -147,6 +148,25 @@ module.exports = async function handler(req, res) {
       if (!pro && newWebsite && newWebsite !== (profile && profile.website)) {
         return json(res, 402, { error: "pro_required", feature: "website" });
       }
+      // Same ADD/CHANGE-only guard for the two other Pro-gated fields that
+      // live on the profile row. Clearing or leaving unchanged never 402s —
+      // autosave always resends the full profile, so a hard "no writes at
+      // all while Free" would 402 every save for a Free user.
+      const newReviewLink = str(b.google_review_link, 500);
+      if (!pro && newReviewLink && newReviewLink !== (profile && profile.google_review_link)) {
+        return json(res, 402, { error: "pro_required", feature: "google_review" });
+      }
+      const newTheme = ["default", "midnight", "ivory"].includes(b.card_theme) ? b.card_theme : "default";
+      if (!pro && newTheme !== "default" && newTheme !== (profile && profile.card_theme)) {
+        return json(res, 402, { error: "pro_required", feature: "premium_themes" });
+      }
+      const newHideBranding = typeof b.hide_branding === "boolean" ? b.hide_branding : null;
+      if (!pro && newHideBranding !== null && newHideBranding !== (profile && profile.hide_branding)) {
+        return json(res, 402, { error: "pro_required", feature: "remove_branding" });
+      }
+      // Booking windows are Free-tier from day one (fixed-window, one-way
+      // booking is a Free feature per product spec) — no entitlement guard.
+      const bookingWindows = sanitizeBookingWindows(b.booking_windows);
 
       if (!accountId) return json(res, 401, { error: "unauthenticated" });
 
@@ -182,6 +202,10 @@ module.exports = async function handler(req, res) {
         theme_preference: ["light", "dark", "system"].includes(b.theme_preference)
           ? b.theme_preference
           : "system",
+        google_review_link: newReviewLink || null,
+        card_theme: newTheme,
+        hide_branding: newHideBranding,
+        booking_windows: bookingWindows,
       };
 
       const [saved] = await db("vakilcard_profiles?on_conflict=account_id", {

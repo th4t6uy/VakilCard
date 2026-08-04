@@ -118,6 +118,7 @@ function toDsProfile(p) {
       "Litigation · Advisory · Drafting",
     title: "ADVOCATE",
     name: p.full_name,
+    username: p.username,
     photoUrl: p.photo_url || "",
     contacts,
     about: p.bio || "",
@@ -132,6 +133,10 @@ function toDsProfile(p) {
       addrParts.slice(0, mid).join(", "),
       addrParts.slice(mid).join(", "),
     ],
+    // card_theme (default/midnight/ivory) is exposed for the component/CSS
+    // layer to consume; the DS's visual theme variants themselves are a
+    // separate design-system task — see the phase report's open items.
+    cardTheme: p.card_theme || "default",
   };
 }
 
@@ -179,6 +184,12 @@ function buildLinks(p, pro = false) {
         : null),
     website: pro ? safeWebsite(p.website) : null, // website is Pro-only
     vcf: `/api/vakilcard/vcf?username=${encodeURIComponent(p.username)}`,
+    // Reviews: Pro gets a direct "Leave a Review" deep link to their own
+    // Google review form (google_review_link, Pro-gated at write time in
+    // me.js). Free reuses the office's Maps listing so visitors can still
+    // read existing reviews — never a dead tile either way.
+    review: pro && p.google_review_link ? p.google_review_link : null,
+    reviewView: office.maps_url || null,
   };
 }
 
@@ -217,8 +228,14 @@ function renderPage(p, themeOverride, mode = "live") {
       directions: !!links.maps,
       email: !!links.mailto,
       website: !!links.website,
+      reviews: !!(links.review || links.reviewView),
     };
+    dsProfile.reviewLabel = links.review ? "Leave a Review" : links.reviewView ? "View Reviews" : "Reviews";
   }
+  // Branding: hide_branding is null (auto — hides iff Pro, the original
+  // behaviour) unless the owner explicitly overrode it (Pro-only write,
+  // guarded in me.js). true/false always win over the plan default.
+  const hideBranding = demo ? true : typeof p.hide_branding === "boolean" ? p.hide_branding : pro;
   const boot = demo
     ? { demo: true, theme, pro: true }
     : {
@@ -316,7 +333,7 @@ html, body { overflow: hidden; height: 100%; }
 </head>
 <body>
 <div id="root"></div>
-${pro ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">Powered by Vakilpedia</a>`}
+${hideBranding ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">Powered by Vakilpedia</a>`}
 <script>window.__VAKILCARD_BOOT__ = ${JSON.stringify(boot).replace(/</g, "\\u003c")};</script>
 <script src="/ds/react.production.min.js"></script>
 <script src="/ds/react-dom.production.min.js"></script>

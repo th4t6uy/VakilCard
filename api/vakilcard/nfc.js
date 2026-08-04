@@ -12,7 +12,7 @@
 // Design note: the tag itself is written+locked once, at manufacturing time,
 // with this opaque code and nothing else. Nothing here ever touches the
 // physical chip again — "reassigning" a card is only ever this table.
-const { db, esc, jsStr, readJsonBody, resolveAccount } = require("./_lib");
+const { db, esc, jsStr, readJsonBody, resolveAccount, trackEvent } = require("./_lib");
 
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js/profile.js.
 // (The public card itself stays on the root marketing domain — see SITE in
@@ -53,7 +53,7 @@ async function loadCard(code) {
 
 async function profileForAccount(accountId) {
   const rows = await db(
-    `vakilcard_profiles?account_id=eq.${accountId}&select=username,is_published`
+    `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,is_published`
   );
   return rows[0] || null;
 }
@@ -167,6 +167,10 @@ module.exports = async function handler(req, res) {
       if (card.status === "bound" && card.account_id) {
         const profile = await profileForAccount(card.account_id);
         if (profile) {
+          // Fire-and-forget: this is the one place a real physical tap is
+          // distinguishable from a QR scan or a typed-in URL — record it
+          // before redirecting so a slow/failed insert never delays the tap.
+          trackEvent(profile.id, "nfc_tap", null).catch(() => {});
           res.statusCode = 302; // not cached long-lived: a rebind must take effect immediately
           res.setHeader("Location", profile.is_published ? `/${profile.username}` : DASHBOARD_SITE);
           res.setHeader("Cache-Control", "no-store");

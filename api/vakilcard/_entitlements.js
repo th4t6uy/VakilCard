@@ -21,6 +21,7 @@ const PRO_FEATURES = [
   "analytics",
   "premium_themes",
   "remove_branding",
+  "google_review",
 ];
 
 function isProActive(profile) {
