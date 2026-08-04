@@ -353,13 +353,16 @@ function VakilCardApp({ profile = defaultProfile }) {
     'linear-gradient(150deg, #33415c 0%, #263349 55%, #1b273c 100%)';
   // `k` is the availability key (see profile.actions from the SSR layer). A
   // tile whose action has no real target renders disabled/greyed. Tiles with
-  // no `k` (Appointment, Vakilpedia, Save) are always available.
+  // no `k` (Appointment, Save) are always available.
+  // Vakilpedia tile removed by founder request (2026-08-04) — the CONNECT
+  // grid is client-facing real estate, not a place for Vakilpedia's own
+  // self-promotion. That upsell still lives in the "Premium upsell" banner
+  // below and the footer's "Powered by Vakilpedia" link.
   const actions = profile.actions || null; // null (demo) => everything live
   const tiles = [
     { i: <IconImg src="/icons/actions/call.png" invert={darkIcon} fallback={Icons.phone(24)} />, l: 'Call', t: 'success', k: 'call' },
     { i: <IconImg src="/icons/actions/whatsapp.png" invert={darkIcon} fallback={Icons.wa(24)} />, l: 'WhatsApp', t: 'success', k: 'whatsapp' },
     { i: <IconImg src="/icons/actions/book.png" invert={darkIcon} fallback={Icons.cal(24)} />, l: 'Appointment', t: 'violet' },
-    { i: <IconImg src="../../assets/logos/vakilpedia.png" fallback={Icons.crown(24)} />, l: 'Vakilpedia', t: 'gold' },
     { i: <GMapsPin size={26} />, l: 'Directions', t: 'violet', bg: mapTileBg, k: 'directions' },
     { i: <IconImg src="/icons/actions/email.png" invert={darkIcon} fallback={Icons.mail(24)} />, l: 'Email', t: 'violet', k: 'email' },
     { i: <IconImg src="/icons/actions/website.png" invert={darkIcon} fallback={Icons.globe(24)} />, l: 'Website', t: 'info', k: 'website' },

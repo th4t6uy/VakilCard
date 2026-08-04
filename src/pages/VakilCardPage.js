@@ -40,11 +40,19 @@ const pwMsg = (e) => PW_ERRORS[e && e.code] || "Couldn't update your password. P
 const CARD_ORIGIN = "https://www.vakilpedia.com";
 const btn = "rounded-full bg-white border border-slate-200 hover:border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 inline-flex items-center gap-1.5 transition-colors";
 const panel = "bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[2rem] p-6 sm:p-8";
+// Compact variant for tiles that don't need full panel padding (Share,
+// Theme) — same visual language, smaller footprint, less scroll.
+const panelSm = "bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[1.5rem] p-4 sm:p-5";
+// Compact button variant to match panelSm — used in the shrunk Share panel.
+const btnSm = "rounded-full bg-white border border-slate-200 hover:border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 inline-flex items-center gap-1 transition-colors";
 
+// Short labels by design — these render in a 4-across grid inside a
+// half-width panel, so anything longer wraps/hyphenates badly at common
+// widths (the bug report that prompted this).
 const EVENT_LABELS = [
   ["view", "Views"], ["share", "Shares"], ["call", "Calls"],
-  ["whatsapp", "WhatsApp"], ["pay", "Payments started"], ["directions", "Directions"],
-  ["save_contact", "Contacts saved"], ["qr_download", "QR scans/downloads"],
+  ["whatsapp", "WhatsApp"], ["pay", "Payments"], ["directions", "Directions"],
+  ["save_contact", "Contacts"], ["qr_download", "QR scans"],
 ];
 
 // Vakilpedia ecosystem cross-promotion (dashboard right rail). VakilCard is
@@ -53,16 +61,20 @@ const EVENT_LABELS = [
 // marketing homepage), not text links, so it reads as "a Vakilpedia
 // product" rather than a bolted-on directory. CaseLinx is the featured
 // upsell (matches Home.js's hero-card treatment, just compact).
+// VakilCard is deployed on its own subdomain (vakilcard.vakilpedia.com), so
+// a root-relative href like "/caselinx" resolves to a page on THIS domain
+// (404 — VakilCard has no such route) instead of the main site. Every
+// cross-sell link must be absolute to CARD_ORIGIN.
 const CASELINX = {
   name: "CaseLinx", tag: "the Litigation OS.", badge: "Beta Open",
   desc: "Case diary, cause lists, billing and e-signing — everything your VakilCard clients need you to run in the background.",
-  href: "/caselinx", icon: "/caselinx_icon_v2.png", cta: "Explore CaseLinx",
+  href: `${CARD_ORIGIN}/caselinx`, icon: "/caselinx_icon_v2.png", cta: "Explore CaseLinx",
 };
 const ECOSYSTEM = [
-  ["IPC / BNS Converter", "Old-to-new criminal law sections, instantly.", "/ipc-to-bns-converter", null, "/ipc_bns_converter_icon.png"],
-  ["EvidenceHash", "SHA-256 hashing for digital evidence.", "/evidence-hash-sha256", null, "/evidencehash_icon.png"],
-  ["Vakilnama", "The Vakilpedia publication for lawyers.", "/vakilnama", null, "/Vakilnama_cover.png"],
-  ["CourtQue", "Display-board alerts on WhatsApp.", "/courtque", "New", "/courtque_icon_v3.png"],
+  ["IPC / BNS Converter", "Old-to-new criminal law sections, instantly.", `${CARD_ORIGIN}/ipc-to-bns-converter`, null, "/ipc_bns_converter_icon.png"],
+  ["EvidenceHash", "SHA-256 hashing for digital evidence.", `${CARD_ORIGIN}/evidence-hash-sha256`, null, "/evidencehash_icon.png"],
+  ["Vakilnama", "The Vakilpedia publication for lawyers.", `${CARD_ORIGIN}/vakilnama`, null, "/Vakilnama_cover.png"],
+  ["CourtQue", "Display-board alerts on WhatsApp.", `${CARD_ORIGIN}/courtque`, "New", "/courtque_icon_v3.png"],
 ];
 
 function EcosystemRail({ compactGrid = false }) {
@@ -776,155 +788,6 @@ export default function VakilCardPage() {
             </button>
           )}
 
-          {/* edit sections — each opens directly, never replays onboarding */}
-          <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Edit your card</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {EDIT_SECTIONS.map(([key, label, Icon]) => (
-                <button
-                  key={key}
-                  onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
-                  className="rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
-                >
-                  <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
-                  <p className="text-sm font-bold text-slate-800 hyphens-none">{label}</p>
-                </button>
-              ))}
-              <button
-                onClick={() => navigate("/setup")}
-                className="rounded-2xl bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
-              >
-                <span className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>
-                <p className="text-sm font-bold hyphens-none">Guided walkthrough</p>
-              </button>
-            </div>
-          </div>
-
-          {/* Pro tools — every capability visible Free or Pro; locked rows
-              open the one UpgradeSheet, never hidden, never a dead tap. */}
-          <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Pro tools</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {PRO_TOOLS.map((tool) => (
-                <ProToolRow key={tool.key} tool={tool} pro={pro} onLocked={setUpgradeFeature} />
-              ))}
-            </div>
-          </div>
-
-          {/* Booking & Reviews — Free gets real windows-based booking today;
-              Pro-only rows (calendar sync, review link) render locked. */}
-          <BookingPanel
-            pro={pro}
-            onUpgrade={() => setUpgradeFeature("booking")}
-            onSaveReviewLink={async (link) => {
-              await saveFull({ google_review_link: link });
-              await load();
-            }}
-          />
-
-          {/* share + theme side-by-side on xl — halves page scroll */}
-          <div className="grid gap-6 xl:grid-cols-2">
-          <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Share</h2>
-            <div className="flex flex-wrap gap-2">
-              <button onClick={copy} className={btn}>{copied ? <Check className="h-4 w-4 text-emerald-700" /> : <Copy className="h-4 w-4" />}{copied ? "Copied" : "Copy link"}</button>
-              <button onClick={share} className={btn}><Share2 className="h-4 w-4" />Share</button>
-              {qrUrl && (
-                <a href={qrUrl} download={`${profile.username}-vakilcard-qr.gif`} onClick={() => track("qr_download", profile.id)} className={btn + " no-underline"}>
-                  <Download className="h-4 w-4" />Download QR
-                </a>
-              )}
-              <button onClick={() => setShowA2HS((s) => !s)} className={btn}><Smartphone className="h-4 w-4" />Add to Home Screen</button>
-            </div>
-            {showA2HS && (
-              <div className="mt-4 text-sm text-slate-600 space-y-2.5 text-left hyphens-none">
-                {installPrompt && (
-                  <button onClick={doInstall} className="w-full rounded-2xl bg-emerald-600 hover:bg-emerald-700 text-white font-black px-4 py-3 flex items-center justify-center gap-2 transition-colors">
-                    <Smartphone className="h-4 w-4" /> Add to Home Screen — one tap
-                  </button>
-                )}
-                <p><b className="text-slate-900">iPhone:</b> open your card in Safari → Share → "Add to Home Screen".</p>
-                {!installPrompt && <p><b className="text-slate-900">Android:</b> open your card in Chrome → ⋮ menu → "Add to Home screen".</p>}
-              </div>
-            )}
-            <p className="text-xs text-slate-500 mt-4 text-left hyphens-none">
-              Print the QR on your letterhead, visiting card or chamber board — anyone who scans it lands on your card.
-            </p>
-          </div>
-
-          {/* theme */}
-          <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Theme</h2>
-            <div className="flex flex-wrap gap-2">
-              {["system", "dark", "light"].map((t) => (
-                <button
-                  key={t}
-                  onClick={() => setTheme(t)}
-                  disabled={savingTheme}
-                  className={`rounded-full px-5 py-2.5 text-sm font-bold border transition-colors capitalize ${
-                    theme === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
-                  }`}
-                >
-                  {t === "system" ? "Match device" : t}
-                </button>
-              ))}
-            </div>
-            <p className="text-xs text-slate-500 mt-3 text-left hyphens-none">How your public card appears to clients.</p>
-
-            {/* premium card themes — Pro, real (default/midnight/ivory) */}
-            <div className="mt-4">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-black text-slate-900">Card theme</p>
-                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
-              </div>
-              {!pro ? (
-                <button type="button" onClick={() => setUpgradeFeature("premium_themes")} className="w-full rounded-2xl border border-slate-200 bg-white hover:border-[#635BFF]/50 transition-colors p-4 text-left">
-                  <p className="text-xs text-slate-500 hyphens-none">Exclusive card looks for your public VakilCard.</p>
-                </button>
-              ) : (
-                <div className="flex flex-wrap gap-2">
-                  {["default", "midnight", "ivory"].map((t) => (
-                    <button
-                      key={t}
-                      onClick={() => setCardTheme(t)}
-                      disabled={savingCardTheme}
-                      className={`rounded-full px-4 py-2 text-sm font-bold border transition-colors capitalize ${
-                        (profile.card_theme || "default") === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
-                      }`}
-                    >
-                      {t}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            {/* branding — Pro, real toggle (defaults to hidden-for-Pro
-                unless the owner explicitly overrides it) */}
-            <div className="mt-4 pt-4 border-t border-slate-200">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-black text-slate-900">Vakilpedia branding</p>
-                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
-              </div>
-              {!pro ? (
-                <button type="button" onClick={() => setUpgradeFeature("remove_branding")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to remove it →</button>
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setHideBranding(!(profile.hide_branding !== false))}
-                  disabled={savingBranding}
-                  className={`mt-2 rounded-full px-4 py-2 text-sm font-bold border transition-colors ${
-                    profile.hide_branding !== false ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
-                  }`}
-                >
-                  {profile.hide_branding !== false ? "Branding removed" : "Show branding"}
-                </button>
-              )}
-            </div>
-          </div>
-
-          </div>
-
           {/* analytics + account side-by-side on xl */}
           <div className="grid gap-6 xl:grid-cols-2">
           <div className={panel}>
@@ -935,7 +798,7 @@ export default function VakilCardPage() {
                   {EVENT_LABELS.map(([k, label]) => (
                     <div key={k} className="text-center">
                       <p className="text-2xl font-black text-slate-900">··</p>
-                      <p className="text-xs font-bold text-slate-500">{label}</p>
+                      <p className="text-[11px] font-bold text-slate-500 hyphens-none leading-tight">{label}</p>
                     </div>
                   ))}
                 </div>
@@ -952,7 +815,7 @@ export default function VakilCardPage() {
                 {EVENT_LABELS.map(([k, label]) => (
                   <div key={k} className="text-center">
                     <p className="text-2xl font-black text-slate-900">{counts[k] || 0}</p>
-                    <p className="text-xs font-bold text-slate-500">{label}</p>
+                    <p className="text-[11px] font-bold text-slate-500 hyphens-none leading-tight">{label}</p>
                   </div>
                 ))}
               </div>
@@ -1055,6 +918,155 @@ export default function VakilCardPage() {
                 )}
               </div>
             )}
+          </div>
+
+          </div>
+
+          {/* edit sections — each opens directly, never replays onboarding */}
+          <div className={panel}>
+            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Edit your card</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {EDIT_SECTIONS.map(([key, label, Icon]) => (
+                <button
+                  key={key}
+                  onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
+                  className="rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
+                >
+                  <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
+                  <p className="text-sm font-bold text-slate-800 hyphens-none">{label}</p>
+                </button>
+              ))}
+              <button
+                onClick={() => navigate("/setup")}
+                className="rounded-2xl bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
+              >
+                <span className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>
+                <p className="text-sm font-bold hyphens-none">Guided walkthrough</p>
+              </button>
+            </div>
+          </div>
+
+          {/* Pro tools — every capability visible Free or Pro; locked rows
+              open the one UpgradeSheet, never hidden, never a dead tap. */}
+          <div className={panel}>
+            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Pro tools</h2>
+            <div className="grid gap-3 sm:grid-cols-2">
+              {PRO_TOOLS.map((tool) => (
+                <ProToolRow key={tool.key} tool={tool} pro={pro} onLocked={setUpgradeFeature} />
+              ))}
+            </div>
+          </div>
+
+          {/* Booking & Reviews — Free gets real windows-based booking today;
+              Pro-only rows (calendar sync, review link) render locked. */}
+          <BookingPanel
+            pro={pro}
+            onUpgrade={() => setUpgradeFeature("booking")}
+            onSaveReviewLink={async (link) => {
+              await saveFull({ google_review_link: link });
+              await load();
+            }}
+          />
+
+          {/* share + theme side-by-side on xl — compact tiles, halves page scroll */}
+          <div className="grid gap-4 xl:grid-cols-2">
+          <div className={panelSm}>
+            <h2 className="text-base font-black tracking-tight text-slate-900 mb-2.5">Share</h2>
+            <div className="flex flex-wrap gap-1.5">
+              <button onClick={copy} className={btnSm}>{copied ? <Check className="h-3.5 w-3.5 text-emerald-700" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy link"}</button>
+              <button onClick={share} className={btnSm}><Share2 className="h-3.5 w-3.5" />Share</button>
+              {qrUrl && (
+                <a href={qrUrl} download={`${profile.username}-vakilcard-qr.gif`} onClick={() => track("qr_download", profile.id)} className={btnSm + " no-underline"}>
+                  <Download className="h-3.5 w-3.5" />QR
+                </a>
+              )}
+              <button onClick={() => setShowA2HS((s) => !s)} className={btnSm}><Smartphone className="h-3.5 w-3.5" />Add to Home Screen</button>
+            </div>
+            {showA2HS && (
+              <div className="mt-3 text-xs text-slate-600 space-y-2 text-left hyphens-none">
+                {installPrompt && (
+                  <button onClick={doInstall} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-2 flex items-center justify-center gap-2 transition-colors text-xs">
+                    <Smartphone className="h-3.5 w-3.5" /> Add to Home Screen — one tap
+                  </button>
+                )}
+                <p><b className="text-slate-900">iPhone:</b> Safari → Share → "Add to Home Screen".</p>
+                {!installPrompt && <p><b className="text-slate-900">Android:</b> Chrome → ⋮ menu → "Add to Home screen".</p>}
+              </div>
+            )}
+            <p className="text-[11px] text-slate-500 mt-2.5 text-left hyphens-none">
+              Print the QR on your letterhead or chamber board — anyone who scans it lands on your card.
+            </p>
+          </div>
+
+          {/* theme */}
+          <div className={panelSm}>
+            <h2 className="text-base font-black tracking-tight text-slate-900 mb-2.5">Theme</h2>
+            <div className="flex flex-wrap gap-1.5">
+              {["system", "dark", "light"].map((t) => (
+                <button
+                  key={t}
+                  onClick={() => setTheme(t)}
+                  disabled={savingTheme}
+                  className={`rounded-full px-3 py-1.5 text-xs font-bold border transition-colors capitalize ${
+                    theme === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                  }`}
+                >
+                  {t === "system" ? "Match device" : t}
+                </button>
+              ))}
+            </div>
+            <p className="text-[11px] text-slate-500 mt-2 text-left hyphens-none">How your public card appears to clients.</p>
+
+            {/* premium card themes — Pro, real (default/midnight/ivory) */}
+            <div className="mt-3">
+              <div className="flex items-center justify-between mb-1.5">
+                <p className="text-xs font-black text-slate-900">Card theme</p>
+                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+              </div>
+              {!pro ? (
+                <button type="button" onClick={() => setUpgradeFeature("premium_themes")} className="w-full rounded-xl border border-slate-200 bg-white hover:border-[#635BFF]/50 transition-colors p-3 text-left">
+                  <p className="text-[11px] text-slate-500 hyphens-none">Exclusive card looks for your public VakilCard.</p>
+                </button>
+              ) : (
+                <div className="flex flex-wrap gap-1.5">
+                  {["default", "midnight", "ivory"].map((t) => (
+                    <button
+                      key={t}
+                      onClick={() => setCardTheme(t)}
+                      disabled={savingCardTheme}
+                      className={`rounded-full px-3 py-1.5 text-xs font-bold border transition-colors capitalize ${
+                        (profile.card_theme || "default") === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      {t}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* branding — Pro, real toggle (defaults to hidden-for-Pro
+                unless the owner explicitly overrides it) */}
+            <div className="mt-4 pt-4 border-t border-slate-200">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-black text-slate-900">Vakilpedia branding</p>
+                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+              </div>
+              {!pro ? (
+                <button type="button" onClick={() => setUpgradeFeature("remove_branding")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to remove it →</button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setHideBranding(!(profile.hide_branding !== false))}
+                  disabled={savingBranding}
+                  className={`mt-2 rounded-full px-4 py-2 text-sm font-bold border transition-colors ${
+                    profile.hide_branding !== false ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+                  }`}
+                >
+                  {profile.hide_branding !== false ? "Branding removed" : "Show branding"}
+                </button>
+              )}
+            </div>
           </div>
 
           </div>
