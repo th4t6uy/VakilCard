@@ -23,6 +23,10 @@ const messaging = require("./_messaging");
 const { hashPassword, verifyPassword, passwordPolicyError } = require("./_password");
 
 const SITE = "https://www.vakilpedia.com";
+// Owner dashboard's own domain (cut over 2026-08-04). Separate from SITE:
+// the public card stays on the root marketing domain, the dashboard is its
+// own deployment/subdomain — see Apps/VakilCard/README.md.
+const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -193,7 +197,7 @@ module.exports = async function handler(req, res) {
         username: profile ? profile.username : null,
         published: profile ? profile.is_published === true : false,
         card_url: profile ? `${SITE}/${profile.username}` : null,
-        setup_url: `${SITE}/vakilcard`,
+        setup_url: DASHBOARD_SITE,
       });
     }
 
@@ -257,7 +261,7 @@ module.exports = async function handler(req, res) {
         username: profile ? profile.username : null,
         published: profile ? profile.is_published === true : false,
         card_url: profile ? `${SITE}/${profile.username}` : null,
-        setup_url: `${SITE}/vakilcard`,
+        setup_url: DASHBOARD_SITE,
       });
     }
 

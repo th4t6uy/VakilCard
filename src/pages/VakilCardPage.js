@@ -125,7 +125,7 @@ const EDIT_SECTIONS = [
 
 export default function VakilCardPage() {
   const navigate = useNavigate();
-  const { username: routeUsername } = useParams(); // set on /vakilcard/:username/dashboard
+  const { username: routeUsername } = useParams(); // set on /:username/dashboard
   const [profile, setProfile] = useState(undefined); // undefined=loading, null=none
   const [counts, setCounts] = useState(null);
   const [loadError, setLoadError] = useState(false);
@@ -186,16 +186,16 @@ export default function VakilCardPage() {
     getAccount().then((a) => setHasPassword(!!a.has_password)).catch(() => {});
   }, [authed]);
 
-  // Keep the dashboard URL canonical: /vakilcard/:username/dashboard. Runs once
+  // Keep the dashboard URL canonical: /:username/dashboard. Runs once
   // the signed-in owner's profile is known.
-  //  • /vakilcard (no username) → the owner's dashboard URL
+  //  • / (no username) → the owner's dashboard URL
   //  • a stale/mismatched username in the URL → the owner's own dashboard
   // Deep links and refreshes keep working: auth is re-established on load and
   // this effect re-runs with the resolved profile.
   useEffect(() => {
     if (!authed || !profile || !profile.username) return;
     if (routeUsername !== profile.username) {
-      navigate(`/vakilcard/${profile.username}/dashboard`, { replace: true });
+      navigate(`/${profile.username}/dashboard`, { replace: true });
     }
   }, [authed, profile, routeUsername, navigate]);
 
@@ -336,7 +336,7 @@ export default function VakilCardPage() {
           title="VakilCard | Free Digital Business Card for Indian Advocates"
           description="Create your free digital chamber card. Share office location, directions, contact info, practice areas, and receive UPI payments instantly."
           keywords="VakilCard, digital business card lawyers India, chamber card advocates, digital profile advocates, UPI payments lawyers"
-          canonicalUrl="https://www.vakilpedia.com/vakilcard"
+          canonicalUrl="https://vakilcard.vakilpedia.com/"
           imageUrl="https://www.vakilpedia.com/logo.png"
         />
         <SignupPage />
@@ -386,7 +386,7 @@ export default function VakilCardPage() {
       <SEOHead 
         title="VakilCard | Dashboard"
         description="Manage your VakilCard profile, view analytics, download QR, and share your digital chamber card."
-        canonicalUrl="https://www.vakilpedia.com/vakilcard"
+        canonicalUrl="https://vakilcard.vakilpedia.com/"
         imageUrl="https://www.vakilpedia.com/logo.png"
       />
       {/* Vakilpedia product lockup — this is a Vakilpedia product page, not
@@ -475,7 +475,7 @@ export default function VakilCardPage() {
               {EDIT_SECTIONS.map(([key, label, Icon]) => (
                 <button
                   key={key}
-                  onClick={() => navigate(`/vakilcard/setup?s=${key}&from=dashboard`)}
+                  onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
                   className="rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
                 >
                   <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
@@ -483,7 +483,7 @@ export default function VakilCardPage() {
                 </button>
               ))}
               <button
-                onClick={() => navigate("/vakilcard/setup")}
+                onClick={() => navigate("/setup")}
                 className="rounded-2xl bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
               >
                 <span className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>

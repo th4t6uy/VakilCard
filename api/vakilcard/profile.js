@@ -18,6 +18,8 @@ const { verify: verifyJwt } = require("./_jwt");
 const { isProActive } = require("./_entitlements");
 
 const SITE = "https://www.vakilpedia.com";
+// Owner dashboard's own domain (cut over 2026-08-04) — see auth.js.
+const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 
 function jsonLd(p, url) {
   const office = p.offices[0] || {};
@@ -188,7 +190,7 @@ function buildLinks(p, pro = false) {
 function renderPage(p, themeOverride, mode = "live") {
   const demo = mode === "demo";
   const theme = themeOverride === "light" ? "light" : "dark"; // DS is dark-first
-  const url = demo ? `${SITE}/vakilcard` : `${SITE}/${p.username}`;
+  const url = demo ? DASHBOARD_SITE : `${SITE}/${p.username}`;
   const title = demo
     ? "VakilCard — Interactive Demo | Vakilpedia"
     : `${p.full_name}${p.designation ? " — " + p.designation : ""} | VakilCard`;
@@ -314,7 +316,7 @@ html, body { overflow: hidden; height: 100%; }
 </head>
 <body>
 <div id="root"></div>
-${pro ? "" : `<a href="${SITE}/vakilcard" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">Powered by Vakilpedia</a>`}
+${pro ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">Powered by Vakilpedia</a>`}
 <script>window.__VAKILCARD_BOOT__ = ${JSON.stringify(boot).replace(/</g, "\\u003c")};</script>
 <script src="/ds/react.production.min.js"></script>
 <script src="/ds/react-dom.production.min.js"></script>
@@ -374,7 +376,7 @@ module.exports = async function handler(req, res) {
       res.statusCode = 404;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       res.end(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not found | VakilCard</title><meta name="robots" content="noindex"></head><body style="font-family:system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(120deg,#CDEFFB,#FDEECB)"><div style="text-align:center"><h1 style="font-weight:900">Card not found</h1><p>No VakilCard exists at @${esc(username)}.</p><p><a href="${SITE}/vakilcard" style="color:#635BFF;font-weight:700">Claim this username →</a></p></div></body></html>`
+        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not found | VakilCard</title><meta name="robots" content="noindex"></head><body style="font-family:system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(120deg,#CDEFFB,#FDEECB)"><div style="text-align:center"><h1 style="font-weight:900">Card not found</h1><p>No VakilCard exists at @${esc(username)}.</p><p><a href="${DASHBOARD_SITE}" style="color:#635BFF;font-weight:700">Claim this username →</a></p></div></body></html>`
       );
       return;
     }

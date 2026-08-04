@@ -14,7 +14,11 @@
 // physical chip again — "reassigning" a card is only ever this table.
 const { db, esc, jsStr, readJsonBody, resolveAccount } = require("./_lib");
 
-const SITE = "https://www.vakilpedia.com";
+// Owner dashboard's own domain (cut over 2026-08-04) — see auth.js/profile.js.
+// (The public card itself stays on the root marketing domain — see SITE in
+// profile.js/auth.js — nfc.js never needs that constant since every
+// redirect here targets either a relative /:username or the dashboard.)
+const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 const CODE_RE = /^[a-z0-9]{6,16}$/;
 
 function json(res, status, data) {
@@ -98,6 +102,7 @@ function claimPage(code) {
 <script>
 (function(){
   var CODE = ${jsStr(code)};
+  var DASHBOARD_FALLBACK = ${jsStr(DASHBOARD_SITE)};
   var phone = "";
   function show(id){ document.querySelectorAll(".step").forEach(function(s){ s.classList.remove("active"); }); document.getElementById(id).classList.add("active"); }
   function setErr(id, msg){ document.getElementById(id).textContent = msg || ""; }
@@ -132,7 +137,7 @@ function claimPage(code) {
           .then(function(bindRes){
             if (!bindRes.ok) { btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", bindRes.d.error === "already_claimed" ? "This card is already linked to another account." : "Couldn't activate this card. Contact support."); return; }
             show("step-done");
-            var dest = bindRes.d.redirect || bindRes.auth.card_url || bindRes.auth.setup_url || "/vakilcard";
+            var dest = bindRes.d.redirect || bindRes.auth.card_url || bindRes.auth.setup_url || DASHBOARD_FALLBACK;
             setTimeout(function(){ window.location.href = dest; }, 900);
           });
       })
@@ -156,7 +161,7 @@ module.exports = async function handler(req, res) {
         const profile = await profileForAccount(card.account_id);
         if (profile) {
           res.statusCode = 302; // not cached long-lived: a rebind must take effect immediately
-          res.setHeader("Location", profile.is_published ? `/${profile.username}` : `${SITE}/vakilcard`);
+          res.setHeader("Location", profile.is_published ? `/${profile.username}` : DASHBOARD_SITE);
           res.setHeader("Cache-Control", "no-store");
           res.end();
           return;
@@ -189,7 +194,7 @@ module.exports = async function handler(req, res) {
       if (card.status === "bound") {
         if (card.account_id === who.accountId) {
           const profile = await profileForAccount(who.accountId);
-          return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `/${profile.username}` : `${SITE}/vakilcard` });
+          return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `/${profile.username}` : DASHBOARD_SITE });
         }
         return json(res, 409, { error: "already_claimed" });
       }
@@ -201,7 +206,7 @@ module.exports = async function handler(req, res) {
       });
 
       const profile = await profileForAccount(who.accountId);
-      return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `/${profile.username}` : `${SITE}/vakilcard` });
+      return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `/${profile.username}` : DASHBOARD_SITE });
     } catch (e) {
       return json(res, 500, { error: "server_error" });
     }

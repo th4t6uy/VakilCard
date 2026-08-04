@@ -1,5 +1,5 @@
 // VakilCard operational admin dashboard — founder-only.
-// Route: /vakilcard/admin. Server-gated (frontend/api/vakilcard/admin.js
+// Route: /admin. Server-gated (api/vakilcard/admin.js
 // checks the caller's verified phone against VAKILCARD_ADMIN_PHONES) — this
 // page renders optimistically and simply shows "Not authorized" on a 403,
 // it never decides admin-ness itself.

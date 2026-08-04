@@ -468,11 +468,11 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
       }
       // Routing rule: an existing owner NEVER replays onboarding — their
       // dashboard opens directly. Only a brand-new account goes to welcome.
-      // (Hard navigation: this component is rendered BY /vakilcard when
-      // signed out, so a soft navigate to the same path wouldn't re-render
-      // the now-authenticated dashboard.)
+      // (Hard navigation: this component is rendered BY / when signed out,
+      // so a soft navigate to the same path wouldn't re-render the
+      // now-authenticated dashboard.)
       if (!data.created) {
-        window.location.assign("/vakilcard");
+        window.location.assign("/");
         return;
       }
       setStep("welcome");
@@ -493,7 +493,7 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
     try {
       await apiLoginPassword(phone, password);
       track("password_login");
-      window.location.assign("/vakilcard");
+      window.location.assign("/");
     } catch (e) {
       setError(msg(e));
     } finally {
@@ -518,7 +518,7 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
     try {
       await apiSetPassword(pw1);
       track("password_set");
-      if (nextStep === "dashboard") window.location.assign("/vakilcard");
+      if (nextStep === "dashboard") window.location.assign("/");
       else setStep(nextStep);
     } catch (e) {
       setError(msg(e));
@@ -573,7 +573,7 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
       } else {
         await setUsernameAuto(fullName.trim());
       }
-      navigate("/vakilcard/setup");
+      navigate("/setup");
     } catch (e) {
       if (isProRequired(e)) {
         setShowUpgrade(true);
@@ -700,7 +700,7 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
           <button className={primaryBtn + " mt-6"} onClick={() => { setPw1(""); setPw2(""); setStep("createpw"); }}>
             Build My VakilCard <ArrowRight className="h-5 w-5" />
           </button>
-          <button className={secondaryBtn + " mt-3"} onClick={() => window.location.assign("/vakilcard")}>Skip for now</button>
+          <button className={secondaryBtn + " mt-3"} onClick={() => window.location.assign("/")}>Skip for now</button>
         </div>
       )}
 

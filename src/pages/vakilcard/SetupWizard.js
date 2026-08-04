@@ -188,7 +188,7 @@ export default function SetupWizard() {
     setLoadError(false);
     try {
       const r = await getMe();
-      if (!r.profile) return navigate("/vakilcard");
+      if (!r.profile) return navigate("/");
       profileId.current = r.profile.id;
       originalUsername.current = r.profile.username || "";
       setPublished(r.profile.is_published === true);
@@ -204,7 +204,7 @@ export default function SetupWizard() {
         setStep(Number.isInteger(saved) && saved >= 0 && saved < STEPS.length ? saved : firstIncompleteStep(form));
       }
     } catch (e) {
-      if (e instanceof ApiError && e.status === 401) return navigate("/vakilcard");
+      if (e instanceof ApiError && e.status === 401) return navigate("/");
       setLoadError(true);
     }
   }, [navigate, sectionMode]);
@@ -286,7 +286,7 @@ export default function SetupWizard() {
     setSaving(true);
     try {
       await persist();
-      navigate(f.username ? `/vakilcard/${f.username}/dashboard` : "/vakilcard");
+      navigate(f.username ? `/${f.username}/dashboard` : "/");
     } catch {
       setError("Couldn't save. Check your connection and try again.");
       setSaving(false);
@@ -340,7 +340,7 @@ export default function SetupWizard() {
       track("published", profileId.current);
       track("quick_onboard_done", profileId.current);
       try { localStorage.removeItem(stepKey(profileId.current)); } catch {}
-      navigate(f.username ? `/vakilcard/${f.username}/dashboard` : "/vakilcard");
+      navigate(f.username ? `/${f.username}/dashboard` : "/");
     } catch {
       setError("Couldn't save. Check your connection and try again.");
       setSaving(false);
@@ -772,7 +772,7 @@ export default function SetupWizard() {
         <QaBadge />
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px] lg:gap-8 xl:gap-10 lg:items-start">
           <div>
-            <button className="mb-5 text-sm font-bold text-slate-500 inline-flex items-center gap-1.5" onClick={() => navigate(f.username ? `/vakilcard/${f.username}/dashboard` : "/vakilcard")}>
+            <button className="mb-5 text-sm font-bold text-slate-500 inline-flex items-center gap-1.5" onClick={() => navigate(f.username ? `/${f.username}/dashboard` : "/")}>
               <ArrowLeft className="h-4 w-4" />Back to dashboard
             </button>
             {stepBody}

@@ -2,11 +2,11 @@ import React, { Suspense, lazy } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 
-// Routes and paths below are copied verbatim from
-// Apps/Vakilpedia-website/frontend/src/App.js's VakilCard section — same
-// public URLs, same redirect behaviour. This app is not yet independently
-// deployed; production traffic still flows through Vakilpedia-website until
-// a separate deployment-cutover step (see Apps/VakilCard/README.md).
+// Cut over 2026-08-04: this app is now its own deployment on
+// vakilcard.vakilpedia.com, so routes no longer carry a "/vakilcard" path
+// prefix — the subdomain itself is that namespace. The public card
+// (www.vakilpedia.com/:username, server-rendered by api/vakilcard/profile.js)
+// stays on the root marketing domain and is unaffected by anything here.
 const VakilCardPage = lazy(() => import("./pages/VakilCardPage"));
 const VakilCardSetup = lazy(() => import("./pages/vakilcard/SetupWizard"));
 const VakilCardAdmin = lazy(() => import("./pages/vakilcard/AdminPage"));
@@ -20,22 +20,19 @@ function App() {
     <div className="App">
       <BrowserRouter>
         <Routes>
-          {/* Convenience only for standalone dev/preview — production's "/"
-              is still Vakilpedia-website's marketing Home until cutover. */}
-          <Route path="/" element={<Navigate to="/vakilcard" replace />} />
-
-          <Route path="/vakilcard" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
+          {/* single public entry point on this subdomain */}
+          <Route path="/" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
           {/* Owner dashboard lives at a per-username URL. VakilCardPage
-              canonicalises /vakilcard -> /vakilcard/:username/dashboard once
-              the owner is known, and redirects a mismatched username to the
-              owner's own dashboard. */}
-          <Route path="/vakilcard/:username/dashboard" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
-          {/* single public entry point — the old signup URL redirects forever */}
-          <Route path="/vakilcard/signup" element={<Navigate to="/vakilcard" replace />} />
-          <Route path="/vakilcard/setup" element={<Suspense fallback={<Loading />}><VakilCardSetup /></Suspense>} />
+              canonicalises / -> /:username/dashboard once the owner is
+              known, and redirects a mismatched username to the owner's
+              own dashboard. */}
+          <Route path="/:username/dashboard" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
+          {/* legacy signup URL redirects forever */}
+          <Route path="/signup" element={<Navigate to="/" replace />} />
+          <Route path="/setup" element={<Suspense fallback={<Loading />}><VakilCardSetup /></Suspense>} />
           {/* Founder-only — api/vakilcard/admin.js is the real gate, this
               route just lazy-loads the dashboard shell. */}
-          <Route path="/vakilcard/admin" element={<Suspense fallback={<Loading />}><VakilCardAdmin /></Suspense>} />
+          <Route path="/admin" element={<Suspense fallback={<Loading />}><VakilCardAdmin /></Suspense>} />
         </Routes>
       </BrowserRouter>
     </div>
