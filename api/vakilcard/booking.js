@@ -25,14 +25,139 @@
 // (payment_status: "confirmed") before the booking can be marked confirmed.
 // This is never faked as automatic verification.
 const { db, readJsonBody, resolveAccount, trackEvent, sanitizeBookingWindows, expandBookingSlots } = require("./_lib");
-const { isProActive } = require("./_entitlements");
-const { freeBusy, configured: calendarConfigured } = require("./calendar");
+const { isProActive, requirePro } = require("./_entitlements");
+const { sign, verify } = require("./_jwt");
 
 function json(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
   res.setHeader("Cache-Control", "no-store");
   res.end(JSON.stringify(data));
+}
+
+// ---------------------------------------------------------------------------
+// Google Calendar (Pro's "Smart" booking) — folded into this file rather than
+// its own api/vakilcard/calendar.js endpoint: Vercel's Hobby plan caps a
+// deployment at 12 Serverless Functions, and this project already sits at
+// that ceiling. A standalone calendar.js was the 13th function and broke
+// production ("No more than 12 Serverless Functions..."). Every other
+// multi-action concern in this API (auth, admin, account) already lives in
+// one file dispatched by `action` — this follows the same convention.
+//
+// INERT BY DEFAULT: every branch below 503s with a clear message until
+// GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_OAUTH_REDIRECT_URI
+// are set. No fake/simulated connection is ever created. Scope is the
+// minimum needed to read free/busy — never full calendar read/write.
+const GCAL_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
+const GCAL_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
+const GCAL_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || "";
+const GCAL_DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
+const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
+
+function calendarConfigured() {
+  return !!(GCAL_CLIENT_ID && GCAL_CLIENT_SECRET && GCAL_REDIRECT_URI);
+}
+
+function notConfigured(res) {
+  return json(res, 503, {
+    error: "calendar_not_configured",
+    message: "Google Calendar isn't set up on this deployment yet. Contact the founder to enable it.",
+  });
+}
+
+async function gcalExchangeCode(code) {
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      code,
+      client_id: GCAL_CLIENT_ID,
+      client_secret: GCAL_CLIENT_SECRET,
+      redirect_uri: GCAL_REDIRECT_URI,
+      grant_type: "authorization_code",
+    }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error_description || data.error || "token_exchange_failed");
+  return data;
+}
+
+async function gcalRefreshAccessToken(refreshToken) {
+  const r = await fetch("https://oauth2.googleapis.com/token", {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      refresh_token: refreshToken,
+      client_id: GCAL_CLIENT_ID,
+      client_secret: GCAL_CLIENT_SECRET,
+      grant_type: "refresh_token",
+    }),
+  });
+  const data = await r.json();
+  if (!r.ok) throw new Error(data.error_description || data.error || "token_refresh_failed");
+  return data;
+}
+
+/** Valid access token for a profile's stored connection, or null if not
+ *  connected. Refreshes + persists when expired. Never throws — a Google
+ *  outage degrades to windows-only availability, never a broken booking page. */
+async function gcalValidAccessToken(profileId) {
+  if (!calendarConfigured()) return null;
+  const rows = await db(`vakilcard_calendar_connections?profile_id=eq.${profileId}&select=*`);
+  const conn = rows[0];
+  if (!conn) return null;
+  if (new Date(conn.token_expires_at).getTime() > Date.now() + 60000) return conn.access_token;
+  if (!conn.refresh_token) return null;
+  try {
+    const t = await gcalRefreshAccessToken(conn.refresh_token);
+    const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
+    await db(`vakilcard_calendar_connections?profile_id=eq.${profileId}`, {
+      method: "PATCH",
+      body: { access_token: t.access_token, token_expires_at: expires_at },
+      prefer: "return=minimal",
+    });
+    return t.access_token;
+  } catch {
+    return null;
+  }
+}
+
+/** Free/busy ranges for the next `days` days, or [] on any failure/absence
+ *  — treated identically to "not connected" (windows-only). */
+async function freeBusy(profileId, { days = 14 } = {}) {
+  const token = await gcalValidAccessToken(profileId);
+  if (!token) return [];
+  const rows = await db(`vakilcard_calendar_connections?profile_id=eq.${profileId}&select=calendar_id`);
+  const calendarId = (rows[0] && rows[0].calendar_id) || "primary";
+  const timeMin = new Date().toISOString();
+  const timeMax = new Date(Date.now() + days * 86400000).toISOString();
+  try {
+    const r = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+      body: JSON.stringify({ timeMin, timeMax, items: [{ id: calendarId }] }),
+    });
+    const data = await r.json();
+    if (!r.ok) return [];
+    const busy = (data.calendars && data.calendars[calendarId] && data.calendars[calendarId].busy) || [];
+    return busy.map((b) => ({ start: b.start, end: b.end }));
+  } catch {
+    return [];
+  }
+}
+
+// "gcal_start" is reached via a plain top-level browser navigation (the
+// OAuth consent redirect can't be triggered from a fetch() with a custom
+// Authorization header), so it accepts the access token as a query param
+// too — a one-time GET the owner triggers themselves. Every other action
+// on this handler stays header-only.
+async function resolveAccountForGcalStart(req) {
+  const viaHeader = await resolveAccount(req);
+  if (viaHeader) return viaHeader;
+  const token = String(req.query.token || "");
+  if (!token) return null;
+  const claims = verify(token);
+  return claims && claims.sub ? { accountId: claims.sub } : null;
 }
 
 const str = (v, max = 500) => (typeof v === "string" && v.trim() ? v.trim().slice(0, max) : null);
@@ -78,6 +203,85 @@ function upiDeepLink({ upiId, name, amountInr, note }) {
 module.exports = async function handler(req, res) {
   try {
     const action = String(req.query.action || "");
+
+    // ---- GET ?action=gcal_start — owner auth (header or query token), Pro
+    if (req.method === "GET" && action === "gcal_start") {
+      if (!calendarConfigured()) return notConfigured(res);
+      const who = await resolveAccountForGcalStart(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(
+        `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,subscription_plan,subscription_status,subscription_expires_at`
+      );
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+      if (!requirePro(res, gprofile, "booking")) return;
+      const state = sign({ pid: gprofile.id, typ: "gcal_state" }, { expiresInSec: 600 });
+      const url =
+        "https://accounts.google.com/o/oauth2/v2/auth?" +
+        new URLSearchParams({
+          client_id: GCAL_CLIENT_ID,
+          redirect_uri: GCAL_REDIRECT_URI,
+          response_type: "code",
+          access_type: "offline",
+          prompt: "consent",
+          scope: GCAL_SCOPE,
+          state,
+        });
+      res.statusCode = 302;
+      res.setHeader("Location", url);
+      res.end();
+      return;
+    }
+
+    // ---- GET ?action=gcal_callback — Google's own redirect, no auth ------
+    if (req.method === "GET" && action === "gcal_callback") {
+      if (!calendarConfigured()) return notConfigured(res);
+      const redirectBack = (ok, msg) => {
+        res.statusCode = 302;
+        res.setHeader("Location", `${GCAL_DASHBOARD_SITE}/setup?s=payment&gcal=${ok ? "connected" : "error"}${msg ? "&msg=" + encodeURIComponent(msg) : ""}`);
+        res.end();
+      };
+      try {
+        const claims = verify(String(req.query.state || ""));
+        if (!claims || claims.typ !== "gcal_state" || !claims.pid) return redirectBack(false, "expired_state");
+        const code = String(req.query.code || "");
+        if (!code) return redirectBack(false, req.query.error || "no_code");
+        const t = await gcalExchangeCode(code);
+        if (!t.refresh_token) {
+          return redirectBack(false, "no_refresh_token_reconnect_required");
+        }
+        const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
+        await db("vakilcard_calendar_connections?on_conflict=profile_id", {
+          method: "POST",
+          body: {
+            profile_id: claims.pid,
+            provider: "google",
+            access_token: t.access_token,
+            refresh_token: t.refresh_token,
+            token_expires_at: expires_at,
+            calendar_id: "primary",
+          },
+          prefer: "resolution=merge-duplicates,return=minimal",
+        });
+        return redirectBack(true);
+      } catch (e) {
+        return redirectBack(false, "exchange_failed");
+      }
+    }
+
+    // ---- POST {action:"gcal_disconnect"} — owner auth --------------------
+    if (req.method === "POST" && action === "gcal_disconnect") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(`vakilcard_profiles?account_id=eq.${who.accountId}&select=id`);
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+      await db(`vakilcard_calendar_connections?profile_id=eq.${gprofile.id}`, {
+        method: "DELETE",
+        prefer: "return=minimal",
+      });
+      return json(res, 200, { ok: true });
+    }
 
     // ---- GET ?action=public_slots — no auth, visitor-facing -------------
     if (req.method === "GET" && action === "public_slots") {

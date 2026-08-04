@@ -303,6 +303,12 @@ const Icons = {
     d: /*#__PURE__*/React.createElement("path", {
       d: "M21 4 3 11l5.5 2L10 19l3-3.5L18 19l3-15ZM8.5 13 18 6.5"
     })
+  }),
+  star: p => /*#__PURE__*/React.createElement(Svg, {
+    s: p,
+    d: /*#__PURE__*/React.createElement("path", {
+      d: "M12 3.5l2.6 5.5 6 .8-4.4 4.2 1.1 6-5.3-2.9-5.3 2.9 1.1-6-4.4-4.2 6-.8Z"
+    })
   })
 };
 
@@ -1101,6 +1107,21 @@ function VakilCardApp({
     l: 'Website',
     t: 'info',
     k: 'website'
+  },
+  // Free: "View Reviews" opens the office's Google Maps listing (reuses
+  // office.maps_url — no separate field needed). Pro: "Leave a Review"
+  // deep-links straight to the owner's google_review_link. Which label +
+  // destination applies is decided server-side (profile.js `actions`/
+  // `links.review*`) — this tile is purely data-driven, never hides.
+  {
+    i: /*#__PURE__*/React.createElement(IconImg, {
+      src: "/icons/actions/review.png",
+      invert: darkIcon,
+      fallback: Icons.star(24)
+    }),
+    l: profile.reviewLabel || 'Reviews',
+    t: 'gold',
+    k: 'reviews'
   }, {
     i: Icons.contact(24),
     l: 'Save',

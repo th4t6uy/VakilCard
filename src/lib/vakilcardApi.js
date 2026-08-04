@@ -184,12 +184,15 @@ export const manageBooking = (request_id, op) =>
 export const setBookingStatus = (request_id, status) =>
   call("booking", { method: "POST", body: { action: "manage", request_id, status } });
 // Google Calendar connect is a plain browser redirect (OAuth), not a JSON
-// call — see api/vakilcard/calendar.js. Disconnect is a normal authed POST.
+// call — folded into booking.js (action=gcal_start/gcal_callback/
+// gcal_disconnect) rather than its own endpoint file, since Vercel's Hobby
+// plan caps a deployment at 12 Serverless Functions and this project was
+// already at that ceiling.
 export const googleCalendarConnectUrl = async () => {
   const bearer = await getBearer();
-  return `/api/vakilcard/calendar?action=start&token=${encodeURIComponent(bearer || "")}`;
+  return `/api/vakilcard/booking?action=gcal_start&token=${encodeURIComponent(bearer || "")}`;
 };
-export const disconnectGoogleCalendar = () => call("calendar", { method: "POST", body: { action: "disconnect" } });
+export const disconnectGoogleCalendar = () => call("booking", { method: "POST", body: { action: "gcal_disconnect" } });
 
 // Subscription (Free vs Pro)
 export const getSubscription = () => call("subscription");
