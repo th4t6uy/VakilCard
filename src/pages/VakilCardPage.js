@@ -19,6 +19,7 @@ import {
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
   googleCalendarConnectUrl, disconnectGoogleCalendar,
+  linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
 import LiveCardPreview from "../components/LiveCardPreview";
@@ -441,6 +442,15 @@ export default function VakilCardPage() {
   // password" (no current one yet) vs "Change password".
   const [hasPassword, setHasPassword] = useState(null);
   const [pwOpen, setPwOpen] = useState(false);
+
+  // Add-phone nudge (Google-only signups) — unlocks WhatsApp booking alerts.
+  // Optional and skippable; nothing else in the dashboard depends on it.
+  const [phoneOpen, setPhoneOpen] = useState(false);
+  const [phoneStep, setPhoneStep] = useState("enter"); // enter | code
+  const [phoneInput, setPhoneInput] = useState("");
+  const [phoneCode, setPhoneCode] = useState("");
+  const [phoneBusy, setPhoneBusy] = useState(false);
+  const [phoneErr, setPhoneErr] = useState("");
   const [curPw, setCurPw] = useState("");
   const [newPw1, setNewPw1] = useState("");
   const [newPw2, setNewPw2] = useState("");
@@ -448,10 +458,36 @@ export default function VakilCardPage() {
   const [pwErr, setPwErr] = useState("");
   const [pwDone, setPwDone] = useState(false);
 
-  // Phone (WhatsApp OTP) is the only supported identity — Google/Firebase
-  // auth was removed. hasPhoneSession() reads localStorage synchronously,
-  // so no async "auth state resolving" placeholder is needed here.
+  // Phone (WhatsApp OTP) session check. hasPhoneSession() reads localStorage
+  // synchronously, so no async "auth state resolving" placeholder is needed
+  // here. Google sign-in issues the exact same session (see auth.js
+  // action=google_signin) — it just arrives via a different front door, so
+  // this one check still covers both.
   const authed = hasPhoneSession();
+
+  // ?auth=google — an inbound link from the marketing site's own "Sign in
+  // with Google" button (Apps/Vakilpedia-code, PR #11). That button can't
+  // authenticate anything itself (no shared session/secret between the two
+  // origins — see SignupPage.js's Google sign-in comments), so it just
+  // drops the visitor here with a hint to open Google immediately instead
+  // of making them click twice. Captured once via a lazy initializer so a
+  // later param strip (below) can't un-set it mid-session; ignored entirely
+  // when already signed in, per the acceptance criteria.
+  const [autoGoogleSignIn] = useState(() => {
+    if (typeof window === "undefined") return false;
+    return new URLSearchParams(window.location.search).get("auth") === "google";
+  });
+  useEffect(() => {
+    if (!autoGoogleSignIn) return;
+    // Strip immediately — not gated on whether the prompt actually fires —
+    // so a refresh or back-navigation never re-triggers it. `from` is
+    // attribution-only per the handoff and isn't read for any logic; it's
+    // dropped here too so the visible URL just goes clean.
+    const url = new URL(window.location.href);
+    url.searchParams.delete("auth");
+    url.searchParams.delete("from");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+  }, [autoGoogleSignIn]);
 
   useEffect(() => {
     document.title = "VakilCard — One Link. Everything Your Client Needs. | Vakilpedia";
@@ -547,6 +583,41 @@ export default function VakilCardPage() {
       setPwErr(pwMsg(e));
     } finally {
       setPwSaving(false);
+    }
+  };
+
+  const sendPhoneCode = async () => {
+    setPhoneErr("");
+    if (!phoneInput.trim()) return;
+    setPhoneBusy(true);
+    try {
+      await linkPhoneStart(phoneInput.trim());
+      setPhoneStep("code");
+    } catch (e) {
+      setPhoneErr(e && e.code === "invalid_phone" ? "That doesn't look like a valid mobile number." : "Couldn't send a code — please try again.");
+    } finally {
+      setPhoneBusy(false);
+    }
+  };
+  const verifyPhoneCode = async () => {
+    setPhoneErr("");
+    if (!phoneCode.trim()) return;
+    setPhoneBusy(true);
+    try {
+      await linkPhoneVerify(phoneInput.trim(), phoneCode.trim());
+      setPhoneOpen(false);
+      setPhoneStep("enter");
+      setPhoneInput("");
+      setPhoneCode("");
+      load(); // refresh profile.phone so the nudge disappears and WhatsApp alerts activate
+    } catch (e) {
+      setPhoneErr(
+        e && e.code === "phone_already_linked"
+          ? "That number is already linked to a different VakilCard account."
+          : "That code didn't match — please try again."
+      );
+    } finally {
+      setPhoneBusy(false);
     }
   };
 
@@ -659,7 +730,7 @@ export default function VakilCardPage() {
           canonicalUrl="https://vakilcard.vakilpedia.com/"
           imageUrl="https://www.vakilpedia.com/logo.png"
         />
-        <SignupPage />
+        <SignupPage autoGoogleSignIn={autoGoogleSignIn} />
       </>
     );
   }
@@ -828,7 +899,7 @@ export default function VakilCardPage() {
           <div className={panel}>
             <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Account</h2>
             <p className="text-sm text-slate-600 text-left hyphens-none mb-2">
-              Signed in {profile.phone ? <>as <b className="text-slate-900">{profile.phone}</b></> : "with Google"} · verified on WhatsApp.
+              {profile.phone ? <>Signed in as <b className="text-slate-900">{profile.phone}</b> · verified on WhatsApp.</> : "Signed in with Google."}
             </p>
             <p className="text-sm text-slate-600 text-left hyphens-none mb-4">
               Plan: <b className="text-slate-900">{pro ? "VakilCard Pro" : "Free"}</b>
@@ -840,6 +911,71 @@ export default function VakilCardPage() {
               <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
               <button onClick={remove} className="rounded-full bg-white border border-rose-200 hover:border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 inline-flex items-center gap-1.5"><Trash2 className="h-4 w-4" />Delete card</button>
             </div>
+
+            {/* Add-phone nudge — only for Google-only accounts. Optional,
+                skippable, unlocks WhatsApp booking alerts once added. */}
+            {!profile.phone && (
+              <div className="mt-5 pt-5 border-t border-slate-200">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-sm font-black text-slate-900">Add your phone number</h3>
+                  {!phoneOpen && (
+                    <button type="button" onClick={() => { setPhoneOpen(true); setPhoneErr(""); }} className="text-sm font-bold text-[#635BFF]">
+                      Add number
+                    </button>
+                  )}
+                </div>
+                {!phoneOpen && (
+                  <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">
+                    Optional — get a WhatsApp alert whenever someone books an appointment with you.
+                  </p>
+                )}
+                {phoneOpen && (
+                  <div className="mt-3 space-y-3 max-w-sm">
+                    {phoneStep === "enter" ? (
+                      <>
+                        <input
+                          type="tel"
+                          value={phoneInput}
+                          onChange={(e) => setPhoneInput(e.target.value)}
+                          placeholder="+91 98765 43210"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          autoFocus
+                        />
+                        {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={sendPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {phoneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
+                            Send code
+                          </button>
+                          <button type="button" onClick={() => setPhoneOpen(false)} className="rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700">Cancel</button>
+                        </div>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-500 hyphens-none">Enter the 6-digit code sent to {phoneInput} on WhatsApp.</p>
+                        <input
+                          type="text"
+                          inputMode="numeric"
+                          value={phoneCode}
+                          onChange={(e) => setPhoneCode(e.target.value)}
+                          placeholder="123456"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          autoFocus
+                        />
+                        {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
+                        <div className="flex gap-2">
+                          <button onClick={verifyPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                            {phoneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
+                            Verify
+                          </button>
+                          <button type="button" onClick={() => { setPhoneOpen(false); setPhoneStep("enter"); }} className="rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700">Cancel</button>
+                        </div>
+                      </>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* password — phone stays primary identity; password is the
                 free, instant login credential (OTP costs money per send) */}

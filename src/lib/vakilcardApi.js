@@ -152,6 +152,26 @@ export const loginPassword = async (phone, password) => {
   setTokens(data);
   return data;
 };
+
+// Google sign-in — full alternative to phone (no OTP required). Creates a
+// new account on first sign-in (Google-only, no phone attached yet) or logs
+// an existing Google-linked account straight in. `id_token` is the GIS
+// credential JWT from the browser; verified server-side against Google.
+export const googleSignIn = async (id_token) => {
+  const data = await call("auth", { method: "POST", body: { action: "google_signin", id_token }, authed: false });
+  setTokens(data);
+  return data;
+};
+
+// Attach + verify a phone number on an ALREADY-authenticated account (e.g.
+// a Google-only signup adding a number later for WhatsApp booking alerts).
+// Distinct from startVerification/verifyCode, which create a brand-new
+// account — these two never touch account creation.
+export const linkPhoneStart = (phone) =>
+  call("auth", { method: "POST", body: { action: "link_phone_start", phone } });
+export const linkPhoneVerify = (phone, code) =>
+  call("auth", { method: "POST", body: { action: "link_phone_verify", phone, code } });
+
 export const setPassword = (password) =>
   call("auth", { method: "POST", body: { action: "set_password", password } });
 export const changePassword = (current_password, new_password) =>

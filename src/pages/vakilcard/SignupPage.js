@@ -20,14 +20,17 @@ import {
   startVerification, resendVerification, verifyCode, checkUsername,
   changeUsername, setUsernameAuto, setUsernamePhone, isProRequired, track,
   loginPassword as apiLoginPassword, setPassword as apiSetPassword,
+  googleSignIn,
 } from "../../lib/vakilcardApi";
 import UpgradeSheet from "../../components/UpgradeSheet";
 import { isQaPhone, startQaSession, QaBadge } from "../../lib/vakilcardQa";
 
-// Google auth is not live yet. Flip this single flag to bring the buttons
-// back — every Google entry point is gated on it (no disabled buttons, no
-// placeholders in the meantime).
-export const GOOGLE_AUTH_ENABLED = false;
+// Google sign-in is live (full alternative to phone — see auth.js
+// action=google_signin). Every entry point stays gated on this flag so it
+// can be switched off instantly (e.g. if REACT_APP_GOOGLE_SIGNIN_CLIENT_ID
+// isn't set on a given deployment, the buttons just don't render — no
+// crash, no placeholder).
+export const GOOGLE_AUTH_ENABLED = true;
 
 const inputCls =
   "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base text-slate-900 placeholder-slate-400 focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 transition-colors";
@@ -354,7 +357,7 @@ const PERFECT_FOR = [
 
 /* ---------------- page ---------------- */
 
-export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) {
+export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   const navigate = useNavigate();
   const [step, setStep] = useState("phone"); // phone | code | welcome | createpw | username | resetpw
   const [manage, setManage] = useState(false); // legacy OTP-manage copy (login view supersedes it)
@@ -381,6 +384,96 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
   const [uname, setUname] = useState("");
   const [unameStatus, setUnameStatus] = useState("");
   const unameTimer = useRef();
+
+  // ---- Google sign-in (full alternative to phone) --------------------
+  // Self-contained: loads the Google Identity Services script once, then
+  // renders Google's own button into whichever slot is currently mounted
+  // (the two entry points below use separate refs since only one is ever
+  // in the DOM at a time depending on step/view).
+  const [googleSigningIn, setGoogleSigningIn] = useState(false);
+  const googleBtnHero = useRef(null);
+  const googleBtnLogin = useRef(null);
+  // ?auth=google inbound from the marketing site — fire the One Tap prompt
+  // exactly once. A ref (not state) survives the effect below re-running as
+  // step/view change without ever re-arming the trigger.
+  const autoPromptFiredRef = useRef(false);
+
+  const handleGoogleCredential = useCallback(async (response) => {
+    setError("");
+    setGoogleSigningIn(true);
+    try {
+      const data = await googleSignIn(response.credential);
+      track("google_signin");
+      if (!data.created) {
+        // Existing owner — dashboard opens directly, same rule as phone login.
+        window.location.assign("/");
+        return;
+      }
+      if (data.full_name && data.full_name !== "Advocate") setFullName(data.full_name);
+      track("draft_created", null);
+      setSession(data);
+      setStep("welcome");
+    } catch (e) {
+      setError(msg(e));
+    } finally {
+      setGoogleSigningIn(false);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  useEffect(() => {
+    if (!GOOGLE_AUTH_ENABLED) return;
+    const clientId = process.env.REACT_APP_GOOGLE_SIGNIN_CLIENT_ID;
+    if (!clientId) return; // not configured yet — buttons stay unrendered, no crash
+
+    const renderInto = () => {
+      if (!window.google || !window.google.accounts || !window.google.accounts.id) return;
+      window.google.accounts.id.initialize({ client_id: clientId, callback: handleGoogleCredential });
+
+      // Auto-start path (?auth=google from the marketing site). One Tap is
+      // the only prompt Chrome permits without a prior user gesture — a
+      // popup here would just get blocked. Fire-once via the ref; wrapped
+      // defensively since a URL param must never surface an error banner —
+      // if GIS rejects this for any reason (blocked, no eligible session,
+      // FedCM disabled), the rendered button below is still the fallback,
+      // identical to today's manual-click behavior.
+      if (autoGoogleSignIn && !autoPromptFiredRef.current) {
+        autoPromptFiredRef.current = true;
+        try {
+          window.google.accounts.id.prompt();
+        } catch {
+          /* silent — button fallback covers this */
+        }
+      }
+
+      [googleBtnHero.current, googleBtnLogin.current].forEach((node) => {
+        if (node && !node.dataset.rendered) {
+          window.google.accounts.id.renderButton(node, {
+            theme: "outline", size: "large", width: 280, text: "continue_with",
+          });
+          node.dataset.rendered = "1";
+        }
+      });
+    };
+
+    if (window.google && window.google.accounts && window.google.accounts.id) {
+      renderInto();
+      return;
+    }
+    const existing = document.getElementById("google-identity-script");
+    if (existing) {
+      existing.addEventListener("load", renderInto);
+      return () => existing.removeEventListener("load", renderInto);
+    }
+    const s = document.createElement("script");
+    s.id = "google-identity-script";
+    s.src = "https://accounts.google.com/gsi/client";
+    s.async = true;
+    s.defer = true;
+    s.onload = renderInto;
+    document.head.appendChild(s);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [step, view, handleGoogleCredential, autoGoogleSignIn]);
 
   useEffect(() => {
     document.title = "VakilCard — Claim your Digital Chamber | Vakilpedia";
@@ -647,15 +740,11 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
             >
               Sign In to My VakilCard
             </button>
-            {GOOGLE_AUTH_ENABLED && onGoogleSignIn && (
-              <button
-                type="button"
-                onClick={onGoogleSignIn}
-                disabled={googleSigningIn}
-                className="mt-3 text-xs font-bold text-white/80 hover:text-white"
-              >
-                {googleSigningIn ? "Signing in…" : "Have a Google-linked card? Sign in with Google"}
-              </button>
+            {GOOGLE_AUTH_ENABLED && (
+              <div className="mt-3 flex flex-col items-center">
+                <p className="text-xs font-bold text-white/80 mb-2">Or sign in with Google</p>
+                <div ref={googleBtnHero} className={googleSigningIn ? "opacity-50 pointer-events-none" : ""} />
+              </div>
             )}
           </div>
         </>
@@ -950,15 +1039,10 @@ export default function SignupPage({ onGoogleSignIn, googleSigningIn = false }) 
             >
               <MessageCircle className="h-5 w-5" /> Continue with OTP
             </button>
-            {GOOGLE_AUTH_ENABLED && onGoogleSignIn && (
-              <button
-                type="button"
-                onClick={onGoogleSignIn}
-                disabled={googleSigningIn}
-                className="w-full text-xs font-bold text-slate-500 hover:text-slate-700 mt-3"
-              >
-                {googleSigningIn ? "Signing in…" : "Continue with Google"}
-              </button>
+            {GOOGLE_AUTH_ENABLED && (
+              <div className="mt-3 flex justify-center">
+                <div ref={googleBtnLogin} className={googleSigningIn ? "opacity-50 pointer-events-none" : ""} />
+              </div>
             )}
             <p className="text-xs text-slate-500 mt-4 text-center hyphens-none">
               Tip: password sign-in is instant — no waiting for a WhatsApp code.

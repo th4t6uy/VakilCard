@@ -21,6 +21,35 @@ const {
 const verification = require("./_verify");
 const messaging = require("./_messaging");
 const { hashPassword, verifyPassword, passwordPolicyError } = require("./_password");
+const { generateAutoUsername } = require("./_usernames");
+
+// Google sign-in (full alternative to phone — no OTP required at signup).
+// A SEPARATE Google Cloud OAuth client from the Calendar-sync one in
+// booking.js: this is a "Sign in with Google" (Google Identity Services)
+// client scoped to the browser's origin, not an offline-access OAuth flow.
+// Client ID only — there is no client secret for GIS ID-token verification,
+// the token is verified by checking its signature via Google's tokeninfo
+// endpoint, matching the dependency-free style of the rest of this file.
+const GOOGLE_SIGNIN_CLIENT_ID = process.env.GOOGLE_SIGNIN_CLIENT_ID || "";
+
+async function verifyGoogleIdToken(idToken) {
+  if (!GOOGLE_SIGNIN_CLIENT_ID) return { ok: false, error: "google_signin_not_configured" };
+  if (!idToken) return { ok: false, error: "missing_id_token" };
+  let r;
+  try {
+    r = await fetch(
+      `https://oauth2.googleapis.com/tokeninfo?id_token=${encodeURIComponent(idToken)}`
+    );
+  } catch {
+    return { ok: false, error: "google_unreachable" };
+  }
+  if (!r.ok) return { ok: false, error: "invalid_id_token" };
+  const claims = await r.json().catch(() => null);
+  if (!claims || claims.aud !== GOOGLE_SIGNIN_CLIENT_ID) return { ok: false, error: "invalid_id_token" };
+  if (String(claims.email_verified) !== "true") return { ok: false, error: "email_not_verified" };
+  if (!claims.sub) return { ok: false, error: "invalid_id_token" };
+  return { ok: true, claims };
+}
 
 const SITE = "https://www.vakilpedia.com";
 // Owner dashboard's own domain (cut over 2026-08-04). Separate from SITE:
@@ -156,6 +185,76 @@ async function ensureAccountForPhone(phoneE164, ip) {
   return { accountId: account.id, profile, created: true };
 }
 
+/** Find or create the account + DRAFT profile for a verified Google identity.
+ *  Idempotent on provider_uid. No phone is attached — phone stays fully
+ *  optional and is added later via link_phone_start/verify if the owner
+ *  wants WhatsApp booking alerts. */
+async function ensureAccountForGoogle({ sub, email, name }, ip) {
+  const existing = await db(
+    `account_oauth_identities?provider=eq.google&provider_uid=eq.${encodeURIComponent(sub)}&select=account_id`
+  );
+  if (existing.length) {
+    const accountId = existing[0].account_id;
+    const profiles = await db(
+      `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,full_name,is_published`
+    );
+    return { accountId, profile: profiles[0] || null, created: false };
+  }
+
+  const [account] = await db("vakilpedia_accounts", {
+    method: "POST",
+    body: { registration_source: "vakilcard_google" },
+    prefer: "return=representation",
+  });
+  await db("account_oauth_identities", {
+    method: "POST",
+    body: {
+      account_id: account.id,
+      provider: "google",
+      provider_uid: sub,
+      email: email || null,
+      display_name: name || null,
+    },
+    prefer: "return=minimal",
+  });
+
+  const fullName = String(name || "").slice(0, 120) || "Advocate";
+  const uname = await generateAutoUsername(fullName, null, async (candidate) => {
+    const clash = await db(`vakilcard_profiles?username=eq.${encodeURIComponent(candidate)}&select=id`);
+    if (clash.length) return true;
+    const aliasClash = await db(`vakilcard_aliases?alias=eq.${encodeURIComponent(candidate)}&select=profile_id`);
+    return aliasClash.length > 0;
+  });
+
+  // DRAFT card: URL + username reserved now; public only after publish.
+  const [profile] = await db("vakilcard_profiles", {
+    method: "POST",
+    body: {
+      account_id: account.id,
+      username: uname,
+      created_username: uname,
+      full_name: fullName,
+      email: email || null,
+      is_published: false,
+    },
+    prefer: "return=representation",
+  });
+  await db("vakilcard_aliases", {
+    method: "POST",
+    body: { alias: uname, profile_id: profile.id, kind: "custom", is_primary: true },
+    prefer: "return=minimal",
+  });
+  await verification.audit("account_created", {
+    accountId: account.id,
+    ip,
+    meta: { profile_id: profile.id, username: uname, draft: true, source: "google" },
+  });
+  // No WhatsApp welcome here — no phone attached yet. The dashboard nudges
+  // the owner to add one later (unlocks WhatsApp booking alerts).
+
+  return { accountId: account.id, profile, created: true };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "method_not_allowed" });
   const body = await readJsonBody(req);
@@ -199,6 +298,80 @@ module.exports = async function handler(req, res) {
         card_url: profile ? `${SITE}/${profile.username}` : null,
         setup_url: DASHBOARD_SITE,
       });
+    }
+
+    if (action === "google_signin") {
+      const v = await verifyGoogleIdToken(String(body.id_token || ""));
+      if (!v.ok) return json(res, v.error === "google_signin_not_configured" ? 503 : 401, { error: v.error });
+      const { sub, email, name } = v.claims;
+
+      const { accountId, profile, created } = await ensureAccountForGoogle({ sub, email, name }, ip);
+      const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
+      await touchLogin(accountId);
+      await verification.audit(created ? "account_created" : "google_login_success", { accountId, ip, meta: { source: "google" } });
+      return json(res, 200, {
+        ok: true,
+        token: access,
+        access_token: access,
+        refresh_token: refresh,
+        expires_in: ACCESS_TTL_SEC,
+        account_id: accountId,
+        created,
+        username: profile ? profile.username : null,
+        full_name: profile ? profile.full_name : name || null,
+        published: profile ? profile.is_published === true : false,
+        card_url: profile ? `${SITE}/${profile.username}` : null,
+        setup_url: DASHBOARD_SITE,
+      });
+    }
+
+    // ── Link phone to an already-authenticated account (e.g. a Google-only
+    //    signup adding a number later for WhatsApp booking alerts). Reuses
+    //    the same OTP pipeline as signup, but never creates a new account —
+    //    it always attaches to the caller's existing account. ────────────
+    if (action === "link_phone_start") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const r = await verification.sendVerification({
+        phone: body.phone,
+        ip,
+        userAgent: req.headers["user-agent"],
+        deviceFingerprint: body.device_fingerprint,
+      });
+      if (!r.ok)
+        return json(res, r.error === "rate_limited" || r.error === "cooldown" ? 429 : 400, r);
+      return json(res, 200, { ok: true, phone: r.phoneE164 });
+    }
+
+    if (action === "link_phone_verify") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const r = await verification.verify({ phone: body.phone, code: body.code, ip });
+      if (!r.ok) return json(res, r.error === "locked" ? 429 : 400, r);
+
+      const claimedBy = await db(
+        `account_phone_identities?phone_e164=eq.${encodeURIComponent(r.phoneE164)}&select=account_id`
+      );
+      if (claimedBy.length && claimedBy[0].account_id !== who.accountId) {
+        return json(res, 409, { error: "phone_already_linked" });
+      }
+      if (!claimedBy.length) {
+        await db("account_phone_identities", {
+          method: "POST",
+          body: { account_id: who.accountId, phone_e164: r.phoneE164, verified_at: new Date().toISOString(), is_primary: true },
+          prefer: "return=minimal",
+        });
+      }
+      // Keep the profile's phone/whatsapp columns in sync — booking alerts
+      // and every other WhatsApp-send path reads from here, not the
+      // identities table directly.
+      await db(`vakilcard_profiles?account_id=eq.${who.accountId}`, {
+        method: "PATCH",
+        body: { phone: r.phoneE164, whatsapp: r.phoneE164 },
+        prefer: "return=minimal",
+      });
+      await verification.audit("phone_linked", { accountId: who.accountId, phoneE164: r.phoneE164, ip });
+      return json(res, 200, { ok: true, phone: r.phoneE164 });
     }
 
     // ── Password credential ────────────────────────────────────────────
