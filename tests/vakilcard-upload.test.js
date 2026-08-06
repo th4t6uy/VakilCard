@@ -9,6 +9,7 @@ const path = require("path");
 const assert = require("assert");
 
 process.env.SUPABASE_SERVICE_ROLE_KEY = "test-service-key";
+process.env.SUPABASE_URL = "https://example.supabase.co";
 
 /* ---------- stubs ---------- */
 const store = { vakilcard_profiles: [{ id: "prof-1", account_id: "acc-1", photo_url: null }] };

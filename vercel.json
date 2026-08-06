@@ -1,6 +1,7 @@
 {
   "version": 2,
   "rewrites": [
+    { "source": "/api/vakilcard/track", "destination": "/api/vakilcard/profile" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
     { "source": "/nfc/:code([a-z0-9]{6,16})", "destination": "/api/vakilcard/nfc?code=:code" },
     { "source": "/", "destination": "/index.html" },

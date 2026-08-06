@@ -1046,7 +1046,11 @@ function VakilCardApp({
   const mapTileBg = 'repeating-linear-gradient(90deg, rgba(147,169,204,.14) 0 1.5px, transparent 1.5px 22px),' + 'repeating-linear-gradient(0deg, rgba(147,169,204,.10) 0 1.5px, transparent 1.5px 26px),' + 'linear-gradient(150deg, #33415c 0%, #263349 55%, #1b273c 100%)';
   // `k` is the availability key (see profile.actions from the SSR layer). A
   // tile whose action has no real target renders disabled/greyed. Tiles with
-  // no `k` (Appointment, Vakilpedia, Save) are always available.
+  // no `k` (Appointment, Save) are always available.
+  // Vakilpedia tile removed by founder request (2026-08-04) — the CONNECT
+  // grid is client-facing real estate, not a place for Vakilpedia's own
+  // self-promotion. That upsell still lives in the "Premium upsell" banner
+  // below and the footer's "Powered by Vakilpedia" link.
   const actions = profile.actions || null; // null (demo) => everything live
   const tiles = [{
     i: /*#__PURE__*/React.createElement(IconImg, {
@@ -1074,13 +1078,6 @@ function VakilCardApp({
     }),
     l: 'Appointment',
     t: 'violet'
-  }, {
-    i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "../../assets/logos/vakilpedia.png",
-      fallback: Icons.crown(24)
-    }),
-    l: 'Vakilpedia',
-    t: 'gold'
   }, {
     i: /*#__PURE__*/React.createElement(GMapsPin, {
       size: 26

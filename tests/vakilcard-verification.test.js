@@ -331,6 +331,50 @@ test("preview token renders draft via the production renderer; bad token stays 4
   assert.equal(res3.statusCode, 404, "access tokens cannot be used as preview tokens");
 });
 
+test("consolidated profile tracking handler (profile.js POST)", async () => {
+  const profilePath = path.resolve(__dirname, "../api/vakilcard/profile.js");
+  const trackCalls = [];
+  const fakeTrackEvent = async (profileId, eventType, referrer) => {
+    trackCalls.push({ profileId, eventType, referrer });
+  };
+  const saved = require.cache[libPath].exports;
+  const bundle = { id: "11111111-2222-3333-4444-555555555555", username: "9876543210", full_name: "Advocate Test", designation: null, bio: null, photo_url: null, email: null, phone: "+919876543210", whatsapp: null, website: null, show_email: true, show_phone: true, theme_preference: "system", languages: [], practice_areas: [], offices: [], payment: null, social_links: {}, is_published: true };
+
+  require.cache[libPath].exports = {
+    ...saved,
+    trackEvent: fakeTrackEvent,
+    resolveProfileOrAlias: async () => ({ profile: bundle }),
+  };
+  delete require.cache[profilePath];
+  const handler = require(profilePath);
+
+  // 1. Profile view track event (GET with user-agent, auto-tracked on render)
+  const resGet = fakeRes();
+  await handler({ method: "GET", query: { username: "9876543210" }, headers: { "user-agent": "Mozilla", "referer": "https://google.com" } }, resGet);
+  assert.equal(resGet.statusCode, 200);
+  assert.equal(trackCalls.length, 1);
+  assert.equal(trackCalls[0].profileId, "11111111-2222-3333-4444-555555555555");
+  assert.equal(trackCalls[0].eventType, "view");
+  assert.equal(trackCalls[0].referrer, "https://google.com");
+
+  // 2. Explicit post track event (POST, like a sendBeacon call)
+  const resPost = fakeRes();
+  trackCalls.length = 0;
+  await handler({
+    method: "POST",
+    headers: { "referer": "https://facebook.com" },
+    body: { profile_id: "11111111-2222-3333-4444-555555555555", event_type: "share" }
+  }, resPost);
+  assert.equal(resPost.statusCode, 204);
+  assert.equal(trackCalls.length, 1);
+  assert.equal(trackCalls[0].profileId, "11111111-2222-3333-4444-555555555555");
+  assert.equal(trackCalls[0].eventType, "share");
+  assert.equal(trackCalls[0].referrer, "https://facebook.com");
+
+  // Cleanup stub
+  require.cache[libPath].exports = saved;
+});
+
 /* ---------- runner ---------- */
 (async () => {
   let failed = 0;

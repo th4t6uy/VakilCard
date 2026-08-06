@@ -13,6 +13,7 @@ const {
   cleanPhone,
   resolveProfileOrAlias,
   trackEvent,
+  readJsonBody,
 } = require("./_lib");
 const { verify: verifyJwt } = require("./_jwt");
 const { isProActive } = require("./_entitlements");
@@ -345,6 +346,34 @@ ${hideBranding ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="posit
 }
 
 module.exports = async function handler(req, res) {
+  if (req.method === "POST") {
+    const PROFILE_EVENTS = new Set([
+      "view", "share", "call", "whatsapp", "email", "pay", "directions",
+      "save_contact", "appointment", "website", "qr_download", "social_click",
+      "draft_created", "profile_25", "profile_50", "profile_75", "published",
+      "nfc_tap", "google_review", "payment_claimed",
+    ]);
+    const FUNNEL_EVENTS = new Set(["cta_click", "otp_started", "otp_verified"]);
+    const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    try {
+      const body = await readJsonBody(req);
+      const pid = body.profile_id ? String(body.profile_id) : null;
+      const ev = String(body.event_type || "");
+      const referrer = req.headers["referer"];
+      if (pid && UUID_RE.test(pid) && PROFILE_EVENTS.has(ev)) {
+        await trackEvent(pid, ev, referrer);
+      } else if (!pid && FUNNEL_EVENTS.has(ev)) {
+        await trackEvent(null, ev, referrer);
+      }
+      res.statusCode = 204;
+      res.end();
+    } catch (e) {
+      res.statusCode = 500;
+      res.end();
+    }
+    return;
+  }
+
   // Interactive product demo: the DS's own showcase profile, no DB round-trip.
   if (req.query.demo === "1") {
     res.statusCode = 200;
