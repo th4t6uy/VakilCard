@@ -57,6 +57,13 @@ const ERRORS = {
   too_many_attempts: "Too many attempts. Please wait 15 minutes or sign in with a WhatsApp code.",
   password_too_short: "Password must be at least 8 characters.",
   missing_password: "Please enter your password.",
+  // Google sign-in — surface the REAL cause instead of the generic fallback,
+  // so a missing server-side GOOGLE_SIGNIN_CLIENT_ID reads as what it is.
+  google_signin_not_configured: "Google sign-in isn't switched on yet. Please sign in with your phone number instead.",
+  missing_id_token: "Google didn't complete that sign-in. Please try again.",
+  invalid_id_token: "Google didn't confirm that sign-in. Please try again.",
+  email_not_verified: "That Google account's email isn't verified. Use another account or sign in with your phone.",
+  google_unreachable: "We couldn't reach Google just now. Please try again in a moment.",
 };
 const msg = (e) => ERRORS[e && e.code] || "We couldn't complete that just now. Please try again in a moment.";
 
@@ -449,7 +456,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
       [googleBtnHero.current, googleBtnLogin.current].forEach((node) => {
         if (node && !node.dataset.rendered) {
           window.google.accounts.id.renderButton(node, {
-            theme: "outline", size: "large", width: 280, text: "continue_with",
+            theme: "outline", size: "large", width: 280, text: "continue_with", shape: "pill",
           });
           node.dataset.rendered = "1";
         }
