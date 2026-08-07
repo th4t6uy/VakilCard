@@ -233,37 +233,162 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    // ---- GET ?action=google_business_start — owner auth, Pro
+    if (req.method === "GET" && action === "google_business_start") {
+      if (!calendarConfigured()) return notConfigured(res);
+      const who = await resolveAccountForGcalStart(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(
+        `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,subscription_plan,subscription_status,subscription_expires_at`
+      );
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+      if (!requirePro(res, gprofile, "google_business_embed")) return;
+      const state = sign({ pid: gprofile.id, typ: "gmb_state" }, { expiresInSec: 600 });
+      const url =
+        "https://accounts.google.com/o/oauth2/v2/auth?" +
+        new URLSearchParams({
+          client_id: GCAL_CLIENT_ID,
+          redirect_uri: GCAL_REDIRECT_URI,
+          response_type: "code",
+          access_type: "offline",
+          prompt: "consent",
+          scope: "https://www.googleapis.com/auth/business.manage",
+          state,
+        });
+      res.statusCode = 302;
+      res.setHeader("Location", url);
+      res.end();
+      return;
+    }
+
     // ---- GET ?action=gcal_callback — Google's own redirect, no auth ------
     if (req.method === "GET" && action === "gcal_callback") {
       if (!calendarConfigured()) return notConfigured(res);
+      let claims;
+      try {
+        claims = verify(String(req.query.state || ""));
+      } catch (e) {
+        claims = null;
+      }
+      const isGmb = claims && claims.typ === "gmb_state";
+      let username = null;
+      if (claims && claims.pid) {
+        try {
+          const profileRows = await db(`vakilcard_profiles?id=eq.${claims.pid}&select=username`);
+          username = profileRows[0]?.username || null;
+        } catch (dbErr) {}
+      }
       const redirectBack = (ok, msg) => {
         res.statusCode = 302;
-        res.setHeader("Location", `${GCAL_DASHBOARD_SITE}/setup?s=payment&gcal=${ok ? "connected" : "error"}${msg ? "&msg=" + encodeURIComponent(msg) : ""}`);
+        const page = username ? `${username}/dashboard` : "setup";
+        const paramName = isGmb ? "gmb" : "gcal";
+        const search = `?s=payment&${paramName}=${ok ? "connected" : "error"}${msg ? "&msg=" + encodeURIComponent(msg) : ""}`;
+        res.setHeader("Location", `${GCAL_DASHBOARD_SITE}/${page}${search}`);
         res.end();
       };
+      if (!claims || !claims.pid || !["gcal_state", "gmb_state"].includes(claims.typ)) {
+        return redirectBack(false, "expired_state");
+      }
+      const code = String(req.query.code || "");
+      if (!code) return redirectBack(false, req.query.error || "no_code");
+
       try {
-        const claims = verify(String(req.query.state || ""));
-        if (!claims || claims.typ !== "gcal_state" || !claims.pid) return redirectBack(false, "expired_state");
-        const code = String(req.query.code || "");
-        if (!code) return redirectBack(false, req.query.error || "no_code");
         const t = await gcalExchangeCode(code);
-        if (!t.refresh_token) {
-          return redirectBack(false, "no_refresh_token_reconnect_required");
-        }
         const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
-        await db("vakilcard_calendar_connections?on_conflict=profile_id", {
-          method: "POST",
-          body: {
-            profile_id: claims.pid,
-            provider: "google",
-            access_token: t.access_token,
-            refresh_token: t.refresh_token,
-            token_expires_at: expires_at,
-            calendar_id: "primary",
-          },
-          prefer: "resolution=merge-duplicates,return=minimal",
-        });
-        return redirectBack(true);
+
+        if (isGmb) {
+          // Fetch Google My Business Accounts
+          const accountsRes = await fetch("https://mybusinessbusinessinformation.googleapis.com/v1/accounts", {
+            headers: { "Authorization": `Bearer ${t.access_token}` }
+          });
+          if (!accountsRes.ok) {
+            const errText = await accountsRes.text();
+            throw new Error(`GMB accounts fetch failed: ${errText}`);
+          }
+          const accountsData = await accountsRes.json();
+          const accounts = accountsData.accounts || [];
+          if (accounts.length === 0) {
+            return redirectBack(false, "gmb_no_accounts");
+          }
+
+          // Fetch Locations for first account
+          const accountName = accounts[0].name;
+          const locationsRes = await fetch(`https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,metadata`, {
+            headers: { "Authorization": `Bearer ${t.access_token}` }
+          });
+          if (!locationsRes.ok) {
+            const errText = await locationsRes.text();
+            throw new Error(`GMB locations fetch failed: ${errText}`);
+          }
+          const locationsData = await locationsRes.json();
+          const locations = locationsData.locations || [];
+          if (locations.length === 0) {
+            return redirectBack(false, "gmb_no_locations");
+          }
+
+          const location = locations[0];
+          const businessName = location.title;
+          const mapsUri = location.metadata?.mapsUri || "";
+          const newReviewUrl = location.metadata?.newReviewUrl || "";
+
+          // Construct maps embed
+          let embedUrl = null;
+          if (mapsUri) {
+            const match = mapsUri.match(/[?&]cid=(\d+)/);
+            if (match && match[1]) {
+              embedUrl = `https://maps.google.com/maps?q=cid:${match[1]}&output=embed`;
+            }
+          }
+          if (!embedUrl && businessName) {
+            embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(businessName)}&output=embed`;
+          }
+
+          // Store GMB connection details
+          await db("vakilcard_google_business_connections?on_conflict=profile_id", {
+            method: "POST",
+            body: {
+              profile_id: claims.pid,
+              access_token: t.access_token,
+              refresh_token: t.refresh_token || null,
+              token_expires_at: expires_at,
+              business_account_id: accounts[0].name,
+              business_location_id: location.name,
+              business_name: businessName,
+            },
+            prefer: "resolution=merge-duplicates,return=minimal",
+          });
+
+          // Update profile with fetched map embed & reviews link
+          await db(`vakilcard_profiles?id=eq.${claims.pid}`, {
+            method: "PATCH",
+            body: {
+              google_business_embed: embedUrl,
+              google_review_link: newReviewUrl || null,
+            },
+            prefer: "return=minimal",
+          });
+
+          return redirectBack(true);
+        } else {
+          // Calendar connection
+          if (!t.refresh_token) {
+            return redirectBack(false, "no_refresh_token_reconnect_required");
+          }
+          await db("vakilcard_calendar_connections?on_conflict=profile_id", {
+            method: "POST",
+            body: {
+              profile_id: claims.pid,
+              provider: "google",
+              access_token: t.access_token,
+              refresh_token: t.refresh_token,
+              token_expires_at: expires_at,
+              calendar_id: "primary",
+            },
+            prefer: "resolution=merge-duplicates,return=minimal",
+          });
+          return redirectBack(true);
+        }
       } catch (e) {
         return redirectBack(false, "exchange_failed");
       }
@@ -280,6 +405,31 @@ module.exports = async function handler(req, res) {
         method: "DELETE",
         prefer: "return=minimal",
       });
+      return json(res, 200, { ok: true });
+    }
+
+    // ---- POST {action:"google_business_disconnect"} — owner auth -----------
+    if (req.method === "POST" && action === "google_business_disconnect") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(`vakilcard_profiles?account_id=eq.${who.accountId}&select=id`);
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+
+      await db(`vakilcard_google_business_connections?profile_id=eq.${gprofile.id}`, {
+        method: "DELETE",
+        prefer: "return=minimal",
+      });
+
+      await db(`vakilcard_profiles?id=eq.${gprofile.id}`, {
+        method: "PATCH",
+        body: {
+          google_business_embed: null,
+          google_review_link: null,
+        },
+        prefer: "return=minimal",
+      });
+
       return json(res, 200, { ok: true });
     }
 
@@ -392,10 +542,13 @@ module.exports = async function handler(req, res) {
     const pro = isProActive(profile);
 
     if (req.method === "GET") {
-      const [requests, connRows] = await Promise.all([
+      const [requests, connRows, connGBRows] = await Promise.all([
         db(`vakilcard_appointment_requests?profile_id=eq.${profile.id}&select=*&order=created_at.desc&limit=100`),
         pro
           ? db(`vakilcard_calendar_connections?profile_id=eq.${profile.id}&select=profile_id`)
+          : Promise.resolve([]),
+        pro
+          ? db(`vakilcard_google_business_connections?profile_id=eq.${profile.id}&select=business_name`)
           : Promise.resolve([]),
       ]);
       return json(res, 200, {
@@ -403,6 +556,8 @@ module.exports = async function handler(req, res) {
         windows: sanitizeBookingWindows(profile.booking_windows),
         calendar_platform_configured: calendarConfigured(),
         calendar_connected: connRows.length > 0,
+        google_business_connected: connGBRows.length > 0,
+        google_business_name: connGBRows[0]?.business_name || null,
         requests,
       });
     }

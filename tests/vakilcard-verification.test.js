@@ -464,6 +464,148 @@ test("Google Business Profile map embed serialization and fallback generation", 
   require.cache[libPath].exports = saved;
 });
 
+test("Google Business Profile OAuth flow integration", async () => {
+  const bookingPath = path.resolve(__dirname, "../api/vakilcard/booking.js");
+  const savedDb = require.cache[libPath].exports;
+
+  const oldClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
+  const oldClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  const oldRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
+
+  process.env.GOOGLE_OAUTH_CLIENT_ID = "mock-client-id";
+  process.env.GOOGLE_OAUTH_CLIENT_SECRET = "mock-client-secret";
+  process.env.GOOGLE_OAUTH_REDIRECT_URI = "http://localhost:3000/api/vakilcard/booking?action=gcal_callback";
+
+  // Mock profile
+  const testProfile = {
+    id: "11111111-2222-3333-4444-555555555555",
+    username: "gmb_owner",
+    subscription_plan: "PRO",
+    subscription_status: "ACTIVE",
+    google_business_embed: null,
+    google_review_link: null,
+  };
+
+  // Setup DB stub
+  require.cache[libPath].exports = {
+    ...savedDb,
+    db: async (q, opts) => {
+      if (q.startsWith("vakilcard_profiles?account_id")) {
+        return [testProfile];
+      }
+      if (q.startsWith("vakilcard_profiles?id=eq.11111111-2222-3333-4444-555555555555")) {
+        if (opts && opts.method === "PATCH") {
+          Object.assign(testProfile, opts.body);
+          return [];
+        }
+        return [testProfile];
+      }
+      if (q.startsWith("vakilcard_profiles?id=")) {
+        return [testProfile];
+      }
+      if (q.startsWith("vakilcard_google_business_connections")) {
+        if (opts && opts.method === "DELETE") return [];
+        return [];
+      }
+      return [];
+    },
+    resolveAccount: async () => ({ accountId: "acc-123" }),
+  };
+
+  delete require.cache[bookingPath];
+  const handler = require(bookingPath);
+
+  // 1. Test google_business_start redirects
+  let res = fakeRes();
+  const reqStart = {
+    method: "GET",
+    query: { action: "google_business_start" },
+    headers: { authorization: "Bearer some-token" }
+  };
+  await handler(reqStart, res);
+  assert.equal(res.statusCode, 302);
+  const location = res.headers["Location"];
+  assert.match(location, /https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
+  assert.match(location, /scope=https%3A%2F%2Fwww\.googleapis\.com%2Fauth%2Fbusiness\.manage/);
+
+  // Extract the signed state from the redirect URL
+  const stateUrlParam = new URL(location).searchParams.get("state");
+
+  // Stub global fetch for OAuth token exchange and GMB API calls
+  const originalFetch = global.fetch;
+  global.fetch = async (url, fetchOpts) => {
+    if (url === "https://oauth2.googleapis.com/token") {
+      return {
+        ok: true,
+        json: async () => ({ access_token: "mock-access-token", expires_in: 3600, refresh_token: "mock-refresh-token" })
+      };
+    }
+    if (url === "https://mybusinessbusinessinformation.googleapis.com/v1/accounts") {
+      return {
+        ok: true,
+        json: async () => ({ accounts: [{ name: "accounts/acc-gmb-123", accountName: "My GMB Account" }] })
+      };
+    }
+    if (url === "https://mybusinessbusinessinformation.googleapis.com/v1/accounts/acc-gmb-123/locations?readMask=name,title,metadata") {
+      return {
+        ok: true,
+        json: async () => ({
+          locations: [{
+            name: "accounts/acc-gmb-123/locations/loc-456",
+            title: "Test Law Chambers",
+            metadata: {
+              mapsUri: "https://maps.google.com/?cid=9988776655",
+              newReviewUrl: "https://search.google.com/local/writereview?placeid=ChIJmock123"
+            }
+          }]
+        })
+      };
+    }
+    throw new Error(`Unexpected fetch URL: ${url}`);
+  };
+
+  // 2. Test Callback fetches locations and updates profile
+  let resCallback = fakeRes();
+  const reqCallback = {
+    method: "GET",
+    query: { action: "gcal_callback", code: "mock-auth-code", state: stateUrlParam }
+  };
+
+  try {
+    await handler(reqCallback, resCallback);
+    assert.equal(resCallback.statusCode, 302);
+    assert.match(resCallback.headers["Location"], /gmb=connected/);
+    assert.equal(testProfile.google_business_embed, "https://maps.google.com/maps?q=cid:9988776655&output=embed");
+    assert.equal(testProfile.google_review_link, "https://search.google.com/local/writereview?placeid=ChIJmock123");
+  } finally {
+    global.fetch = originalFetch;
+  }
+
+  // 3. Test Disconnect
+  let resDisconnect = fakeRes();
+  const reqDisconnect = {
+    method: "POST",
+    query: { action: "google_business_disconnect" },
+    headers: { authorization: "Bearer some-token" }
+  };
+  await handler(reqDisconnect, resDisconnect);
+  assert.equal(resDisconnect.statusCode, 200);
+  assert.equal(testProfile.google_business_embed, null);
+  assert.equal(testProfile.google_review_link, null);
+
+  // Restore DB stub
+  require.cache[libPath].exports = savedDb;
+
+  // Restore env
+  if (oldClientId) process.env.GOOGLE_OAUTH_CLIENT_ID = oldClientId;
+  else delete process.env.GOOGLE_OAUTH_CLIENT_ID;
+  if (oldClientSecret) process.env.GOOGLE_OAUTH_CLIENT_SECRET = oldClientSecret;
+  else delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
+  if (oldRedirectUri) process.env.GOOGLE_OAUTH_REDIRECT_URI = oldRedirectUri;
+  else delete process.env.GOOGLE_OAUTH_REDIRECT_URI;
+});
+
+
 /* ---------- runner ---------- */
 (async () => {
   let failed = 0;

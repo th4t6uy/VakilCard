@@ -19,6 +19,7 @@ import {
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
   googleCalendarConnectUrl, disconnectGoogleCalendar,
+  googleBusinessConnectUrl, disconnectGoogleBusiness,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
@@ -216,6 +217,7 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   const [savingEmbed, setSavingEmbed] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
+  const [successMsg, setSuccessMsg] = useState("");
 
   useEffect(() => {
     if (initialReviewLink) setReviewLink(initialReviewLink);
@@ -224,6 +226,54 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   useEffect(() => {
     if (initialBusinessEmbed) setBusinessEmbed(initialBusinessEmbed);
   }, [initialBusinessEmbed]);
+
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const params = new URLSearchParams(window.location.search);
+    const gmb = params.get("gmb");
+    const gcal = params.get("gcal");
+    const msg = params.get("msg");
+    let changed = false;
+
+    if (gmb) {
+      changed = true;
+      if (gmb === "connected") {
+        setSuccessMsg("Successfully connected to Google Business Profile!");
+        setErr("");
+      } else {
+        const errorDetails = msg === "gmb_no_accounts"
+          ? "No Google Business accounts found on this Google account."
+          : msg === "gmb_no_locations"
+          ? "No locations found in your Google Business Profile."
+          : `Failed to connect Google Business Profile: ${msg || "unknown error"}.`;
+        setErr(errorDetails);
+        setSuccessMsg("");
+      }
+      params.delete("gmb");
+    }
+
+    if (gcal) {
+      changed = true;
+      if (gcal === "connected") {
+        setSuccessMsg("Successfully connected Google Calendar!");
+        setErr("");
+      } else {
+        setErr(`Failed to connect Google Calendar: ${msg || "unknown error"}.`);
+        setSuccessMsg("");
+      }
+      params.delete("gcal");
+    }
+
+    if (msg && (gmb || gcal)) {
+      params.delete("msg");
+    }
+
+    if (changed) {
+      const url = new URL(window.location.href);
+      url.search = params.toString();
+      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+    }
+  }, []);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -243,6 +293,7 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   const saveWindows = async () => {
     setSavingWindows(true);
     setErr("");
+    setSuccessMsg("");
     try {
       const flat = flattenGroups(groups.filter((g) => g.days.length));
       const r = await saveBookingWindows(flat);
@@ -258,8 +309,10 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   const saveReviewLink = async () => {
     setSavingReview(true);
     setErr("");
+    setSuccessMsg("");
     try {
       await onSaveReviewLink(reviewLink);
+      setSuccessMsg("Saved Google review link.");
     } catch {
       setErr("Couldn't save your review link.");
     } finally {
@@ -267,11 +320,38 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
     }
   };
 
+  const connectBusiness = async () => {
+    setErr("");
+    setSuccessMsg("");
+    try {
+      window.location.href = await googleBusinessConnectUrl();
+    } catch {
+      setErr("Failed to start Google Business Profile connection flow.");
+    }
+  };
+
+  const disconnectBusiness = async () => {
+    setSavingEmbed(true);
+    setErr("");
+    setSuccessMsg("");
+    try {
+      await disconnectGoogleBusiness();
+      setSuccessMsg("Disconnected Google Business Profile.");
+      load();
+    } catch {
+      setErr("Couldn't disconnect Google Business Profile — please try again.");
+    } finally {
+      setSavingEmbed(false);
+    }
+  };
+
   const saveBusinessEmbed = async () => {
     setSavingEmbed(true);
     setErr("");
+    setSuccessMsg("");
     try {
       await onSaveBusinessEmbed(businessEmbed);
+      setSuccessMsg("Saved Google Business embed URL.");
     } catch {
       setErr("Couldn't save your Google Business embed link.");
     } finally {
@@ -280,10 +360,15 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   };
 
   const connectCalendar = async () => {
+    setErr("");
+    setSuccessMsg("");
     window.location.href = await googleCalendarConnectUrl();
   };
   const disconnectCalendar = async () => {
+    setErr("");
+    setSuccessMsg("");
     await disconnectGoogleCalendar();
+    setSuccessMsg("Disconnected Google Calendar.");
     load();
   };
 
@@ -394,31 +479,55 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
 
       <div className="mt-6 pt-5 border-t border-slate-200">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google Business map embed</p>
+          <p className="text-sm font-bold text-slate-800">Google Business Profile</p>
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
           <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">Upgrade to embed a live interactive Google Maps listing of your business directly on your card.</p>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">Upgrade to connect your Google account and automatically embed your Google Maps office location and reviews button directly on your card.</p>
             <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade →</button>
           </>
         ) : (
-          <>
-            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">
-              Find your office on Google Maps, click <strong>Share</strong>, select <strong>Embed a map</strong>, and paste the URL from the <code>src</code> attribute of the iframe code here.
-            </p>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={businessEmbed}
-                onChange={(e) => setBusinessEmbed(e.target.value)}
-                placeholder="https://www.google.com/maps/embed?pb=..."
-                className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
-              />
-              <button type="button" onClick={saveBusinessEmbed} disabled={savingEmbed} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
-                {savingEmbed ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </>
+          <div className="mt-2 space-y-3">
+            {cfg && cfg.google_business_connected ? (
+              <>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm text-emerald-700 font-bold inline-flex items-center gap-1">
+                    <Check className="h-4 w-4" /> Connected: {cfg.google_business_name || "Google Business Profile"}
+                  </span>
+                  <button type="button" onClick={disconnectBusiness} disabled={savingEmbed} className="text-xs font-bold text-slate-500 underline ml-2">
+                    {savingEmbed ? "Disconnecting…" : "Disconnect"}
+                  </button>
+                </div>
+                {initialBusinessEmbed && (
+                  <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 h-[150px] bg-slate-50">
+                    <iframe
+                      src={initialBusinessEmbed}
+                      width="100%"
+                      height="100%"
+                      style={{ border: 0 }}
+                      allowFullScreen=""
+                      loading="lazy"
+                    />
+                  </div>
+                )}
+                {initialReviewLink && (
+                  <div className="mt-1 text-xs text-slate-600">
+                    <span className="font-semibold text-slate-700">Review Link:</span> <a href={initialReviewLink} target="_blank" rel="noreferrer" className="text-[#635BFF] hover:underline break-all">{initialReviewLink}</a>
+                  </div>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 hyphens-none">
+                  Connect your Google Account to fetch and embed your interactive office map and setup direct client reviews.
+                </p>
+                <button type="button" onClick={connectBusiness} className={btn}>
+                  Connect Google Business
+                </button>
+              </>
+            )}
+          </div>
         )}
       </div>
 
@@ -468,6 +577,7 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
       </div>
 
       {err && <p className="text-sm font-semibold text-rose-700 mt-4">{err}</p>}
+      {successMsg && <p className="text-sm font-semibold text-emerald-700 mt-4">{successMsg}</p>}
     </div>
   );
 }

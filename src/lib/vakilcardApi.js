@@ -214,6 +214,13 @@ export const googleCalendarConnectUrl = async () => {
 };
 export const disconnectGoogleCalendar = () => call("booking", { method: "POST", body: { action: "gcal_disconnect" } });
 
+export const googleBusinessConnectUrl = async () => {
+  const bearer = await getBearer();
+  return `/api/vakilcard/booking?action=google_business_start&token=${encodeURIComponent(bearer || "")}`;
+};
+export const disconnectGoogleBusiness = () => call("booking", { method: "POST", body: { action: "google_business_disconnect" } });
+
+
 // Subscription (Free vs Pro)
 export const getSubscription = () => call("subscription");
 export const checkoutPro = () =>
