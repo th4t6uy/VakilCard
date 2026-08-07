@@ -205,15 +205,25 @@ function flattenGroups(groups) {
 }
 let groupIdSeq = 0;
 
-function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
+function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveReviewLink, onSaveBusinessEmbed, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [reviewLink, setReviewLink] = useState("");
+  const [businessEmbed, setBusinessEmbed] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+  const [savingEmbed, setSavingEmbed] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
+
+  useEffect(() => {
+    if (initialReviewLink) setReviewLink(initialReviewLink);
+  }, [initialReviewLink]);
+
+  useEffect(() => {
+    if (initialBusinessEmbed) setBusinessEmbed(initialBusinessEmbed);
+  }, [initialBusinessEmbed]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -254,6 +264,18 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
       setErr("Couldn't save your review link.");
     } finally {
       setSavingReview(false);
+    }
+  };
+
+  const saveBusinessEmbed = async () => {
+    setSavingEmbed(true);
+    setErr("");
+    try {
+      await onSaveBusinessEmbed(businessEmbed);
+    } catch {
+      setErr("Couldn't save your Google Business embed link.");
+    } finally {
+      setSavingEmbed(false);
     }
   };
 
@@ -367,6 +389,36 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
               {savingReview ? "Saving…" : "Save"}
             </button>
           </div>
+        )}
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-slate-800">Google Business map embed</p>
+          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+        </div>
+        {!pro ? (
+          <>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">Upgrade to embed a live interactive Google Maps listing of your business directly on your card.</p>
+            <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade →</button>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">
+              Find your office on Google Maps, click <strong>Share</strong>, select <strong>Embed a map</strong>, and paste the URL from the <code>src</code> attribute of the iframe code here.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={businessEmbed}
+                onChange={(e) => setBusinessEmbed(e.target.value)}
+                placeholder="https://www.google.com/maps/embed?pb=..."
+                className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
+              />
+              <button type="button" onClick={saveBusinessEmbed} disabled={savingEmbed} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+                {savingEmbed ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -1097,9 +1149,15 @@ export default function VakilCardPage() {
               Pro-only rows (calendar sync, review link) render locked. */}
           <BookingPanel
             pro={pro}
+            initialReviewLink={profile && profile.google_review_link}
+            initialBusinessEmbed={profile && profile.google_business_embed}
             onUpgrade={() => setUpgradeFeature("booking")}
             onSaveReviewLink={async (link) => {
               await saveFull({ google_review_link: link });
+              await load();
+            }}
+            onSaveBusinessEmbed={async (embed) => {
+              await saveFull({ google_business_embed: embed });
               await load();
             }}
           />

@@ -375,6 +375,95 @@ test("consolidated profile tracking handler (profile.js POST)", async () => {
   require.cache[libPath].exports = saved;
 });
 
+test("Google Business Profile map embed serialization and fallback generation", async () => {
+  const profilePath = path.resolve(__dirname, "../api/vakilcard/profile.js");
+  const saved = require.cache[libPath].exports;
+
+  // Case 1: Pro user with custom embed URL
+  const proCustomProfile = {
+    id: "11111111-2222-3333-4444-555555555555",
+    username: "pro_custom",
+    subscription_plan: "PRO",
+    subscription_status: "ACTIVE",
+    google_business_embed: "https://www.google.com/maps/embed?pb=custom_pb_code",
+    full_name: "Advocate Pro Custom",
+    offices: [{ address: "Delhi High Court" }],
+    practice_areas: [],
+    social_links: {},
+    is_published: true
+  };
+
+  require.cache[libPath].exports = {
+    ...saved,
+    resolveProfileOrAlias: async () => ({ profile: proCustomProfile }),
+    trackEvent: async () => {},
+  };
+  delete require.cache[profilePath];
+  let handler = require(profilePath);
+
+  let res = fakeRes();
+  await handler({ method: "GET", query: { username: "pro_custom" }, headers: { "user-agent": "Mozilla" } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /"googleBusinessEmbed":"https:\/\/www\.google\.com\/maps\/embed\?pb=custom_pb_code"/);
+
+  // Case 2: Pro user without custom embed URL but with office address -> should fallback to search-based map embed
+  const proFallbackProfile = {
+    id: "11111111-2222-3333-4444-555555555555",
+    username: "pro_fallback",
+    subscription_plan: "PRO",
+    subscription_status: "ACTIVE",
+    google_business_embed: null,
+    full_name: "Advocate Pro Fallback",
+    offices: [{ address: "123 Chambers, Delhi" }],
+    practice_areas: [],
+    social_links: {},
+    is_published: true
+  };
+
+  require.cache[libPath].exports = {
+    ...saved,
+    resolveProfileOrAlias: async () => ({ profile: proFallbackProfile }),
+    trackEvent: async () => {},
+  };
+  delete require.cache[profilePath];
+  handler = require(profilePath);
+
+  res = fakeRes();
+  await handler({ method: "GET", query: { username: "pro_fallback" }, headers: { "user-agent": "Mozilla" } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /"googleBusinessEmbed":"https:\/\/maps\.google\.com\/maps\?q=123%20Chambers%2C%20Delhi&t=&z=14&ie=UTF8&iwloc=&output=embed"/);
+
+  // Case 3: Free user with custom embed URL in database -> googleBusinessEmbed must be null (gated)
+  const freeProfile = {
+    id: "11111111-2222-3333-4444-555555555555",
+    username: "free_user",
+    subscription_plan: "FREE",
+    subscription_status: "ACTIVE",
+    google_business_embed: "https://www.google.com/maps/embed?pb=custom_pb_code",
+    full_name: "Advocate Free",
+    offices: [{ address: "123 Chambers, Delhi" }],
+    practice_areas: [],
+    social_links: {},
+    is_published: true
+  };
+
+  require.cache[libPath].exports = {
+    ...saved,
+    resolveProfileOrAlias: async () => ({ profile: freeProfile }),
+    trackEvent: async () => {},
+  };
+  delete require.cache[profilePath];
+  handler = require(profilePath);
+
+  res = fakeRes();
+  await handler({ method: "GET", query: { username: "free_user" }, headers: { "user-agent": "Mozilla" } }, res);
+  assert.equal(res.statusCode, 200);
+  assert.match(res.body, /"googleBusinessEmbed":null/);
+
+  // Cleanup stub
+  require.cache[libPath].exports = saved;
+});
+
 /* ---------- runner ---------- */
 (async () => {
   let failed = 0;

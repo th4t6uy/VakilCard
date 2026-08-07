@@ -156,6 +156,10 @@ module.exports = async function handler(req, res) {
       if (!pro && newReviewLink && newReviewLink !== (profile && profile.google_review_link)) {
         return json(res, 402, { error: "pro_required", feature: "google_review" });
       }
+      const newBusinessEmbed = str(b.google_business_embed, 1000);
+      if (!pro && newBusinessEmbed && newBusinessEmbed !== (profile && profile.google_business_embed)) {
+        return json(res, 402, { error: "pro_required", feature: "google_business_embed" });
+      }
       const newTheme = ["default", "midnight", "ivory"].includes(b.card_theme) ? b.card_theme : "default";
       if (!pro && newTheme !== "default" && newTheme !== (profile && profile.card_theme)) {
         return json(res, 402, { error: "pro_required", feature: "premium_themes" });
@@ -203,6 +207,7 @@ module.exports = async function handler(req, res) {
           ? b.theme_preference
           : "system",
         google_review_link: newReviewLink || null,
+        google_business_embed: newBusinessEmbed || null,
         card_theme: newTheme,
         hide_branding: newHideBranding,
         booking_windows: bookingWindows,

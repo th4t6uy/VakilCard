@@ -138,6 +138,9 @@ function toDsProfile(p) {
     // layer to consume; the DS's visual theme variants themselves are a
     // separate design-system task — see the phase report's open items.
     cardTheme: p.card_theme || "default",
+    googleBusinessEmbed: isProActive(p)
+      ? (p.google_business_embed || (office.address ? `https://maps.google.com/maps?q=${encodeURIComponent(office.address)}&t=&z=14&ie=UTF8&iwloc=&output=embed` : null))
+      : null,
   };
 }
 

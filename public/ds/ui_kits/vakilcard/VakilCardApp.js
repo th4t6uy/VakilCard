@@ -1584,7 +1584,28 @@ function VakilCardApp({
       fontSize: 11,
       fontWeight: 700
     }
-  }, Icons.ext(13), " Open in Maps")))), /*#__PURE__*/React.createElement("div", {
+  }, Icons.ext(13), " Open in Maps")))), profile.googleBusinessEmbed && /*#__PURE__*/React.createElement(Section, {
+    eyebrow: "Google Business Profile"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      width: '100%',
+      borderRadius: 14,
+      overflow: 'hidden',
+      border: '1px solid var(--hairline)',
+      height: 240,
+      background: 'var(--bg-card)'
+    }
+  }, /*#__PURE__*/React.createElement("iframe", {
+    src: profile.googleBusinessEmbed,
+    width: "100%",
+    height: "100%",
+    style: {
+      border: 0
+    },
+    allowFullScreen: "",
+    loading: "lazy",
+    referrerPolicy: "no-referrer-when-downgrade"
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',

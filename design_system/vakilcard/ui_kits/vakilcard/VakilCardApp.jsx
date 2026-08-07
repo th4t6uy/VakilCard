@@ -506,6 +506,22 @@ function VakilCardApp({ profile = defaultProfile }) {
           </div>
         </Section>
 
+        {profile.googleBusinessEmbed && (
+          <Section eyebrow="Google Business Profile">
+            <div style={{ width: '100%', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--hairline)', height: 240, background: 'var(--bg-card)' }}>
+              <iframe
+                src={profile.googleBusinessEmbed}
+                width="100%"
+                height="100%"
+                style={{ border: 0 }}
+                allowFullScreen=""
+                loading="lazy"
+                referrerPolicy="no-referrer-when-downgrade"
+              ></iframe>
+            </div>
+          </Section>
+        )}
+
         {/* Footer — every element is a real link (brand → vakilpedia.com,
             icons → Vakilpedia's own LinkedIn / YouTube / Facebook). */}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 4px 0' }}>
