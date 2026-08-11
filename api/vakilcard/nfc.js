@@ -15,9 +15,11 @@
 const { db, esc, jsStr, readJsonBody, resolveAccount, trackEvent } = require("./_lib");
 
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js/profile.js.
-// (The public card itself stays on the root marketing domain — see SITE in
-// profile.js/auth.js — nfc.js never needs that constant since every
-// redirect here targets either a relative /:username or the dashboard.)
+// The public card itself lives on the root marketing domain (same SITE
+// constant as profile.js/auth.js) — every published-card redirect must be
+// absolute, or it resolves against vakilcard.vakilpedia.com (the dashboard
+// host) and lands on the wrong site.
+const SITE = "https://www.vakilpedia.com";
 const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 const CODE_RE = /^[a-z0-9]{6,16}$/;
 
@@ -172,7 +174,7 @@ module.exports = async function handler(req, res) {
           // before redirecting so a slow/failed insert never delays the tap.
           trackEvent(profile.id, "nfc_tap", null).catch(() => {});
           res.statusCode = 302; // not cached long-lived: a rebind must take effect immediately
-          res.setHeader("Location", profile.is_published ? `/${profile.username}` : DASHBOARD_SITE);
+          res.setHeader("Location", profile.is_published ? `${SITE}/${profile.username}` : DASHBOARD_SITE);
           res.setHeader("Cache-Control", "no-store");
           res.end();
           return;
@@ -205,7 +207,7 @@ module.exports = async function handler(req, res) {
       if (card.status === "bound") {
         if (card.account_id === who.accountId) {
           const profile = await profileForAccount(who.accountId);
-          return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `/${profile.username}` : DASHBOARD_SITE });
+          return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `${SITE}/${profile.username}` : DASHBOARD_SITE });
         }
         return json(res, 409, { error: "already_claimed" });
       }
@@ -217,7 +219,7 @@ module.exports = async function handler(req, res) {
       });
 
       const profile = await profileForAccount(who.accountId);
-      return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `/${profile.username}` : DASHBOARD_SITE });
+      return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `${SITE}/${profile.username}` : DASHBOARD_SITE });
     } catch (e) {
       return json(res, 500, { error: "server_error" });
     }
