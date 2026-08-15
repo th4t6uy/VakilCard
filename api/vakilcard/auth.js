@@ -5,12 +5,20 @@
 //   POST /api/vakilcard/auth  { action: "status",  phone }
 //   POST /api/vakilcard/auth  { action: "refresh", refresh_token }
 //   POST /api/vakilcard/auth  { action: "logout",  refresh_token }
+//   POST /api/vakilcard/auth  { action: "bridge_from_suite" }         (no body — reads the shared session cookie)
+//   POST /api/vakilcard/auth  { action: "redeem_courtque_beta" }       (Bearer auth required)
 //
 // Successful verification creates the account + a DRAFT VakilCard: the
 // username (phone number) and URL are reserved immediately, but nothing is
 // public or indexable until the lawyer completes and publishes the card.
 // Tokens: 1h access JWT + rotating 60d refresh token (see _jwt.js).
-const { db, readJsonBody, resolveAccount } = require("./_lib");
+const {
+  db,
+  readJsonBody,
+  resolveAccount,
+  readSupabaseAccessTokenFromCookies,
+  resolveSupabaseUser,
+} = require("./_lib");
 const {
   sign,
   newRefreshToken,
@@ -61,6 +69,13 @@ const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard
 // Point this at beta while the bridge is being verified; move it to the
 // production CaseLinx origin only after an end-to-end kiosk test passes.
 const CASELINX_ORIGIN = process.env.CASELINX_ORIGIN || "https://beta.caselinx.vakilpedia.com";
+
+// CourtQue MPHC-kiosk beta coupon (2026-08-15) — see supracore.coupons row
+// 'MPHCBETA' (product_id: courtque, grant_plan: TRIAL, max_redemptions: 33).
+// Kept as an action on this file rather than a new endpoint: VakilCard is
+// already near Vercel Hobby's 12-serverless-function ceiling (see
+// booking.js's Google Calendar comment for the same constraint).
+const COURTQUE_BETA_COUPON_CODE = process.env.COURTQUE_BETA_COUPON_CODE || "MPHCBETA";
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -421,6 +436,101 @@ module.exports = async function handler(req, res) {
         published: profile ? profile.is_published === true : false,
         card_url: profile ? `${SITE}/${profile.username}` : null,
         setup_url: DASHBOARD_SITE,
+      });
+    }
+
+    // ── Silent cross-app SSO (2026-08-15, P0) ──────────────────────────
+    // If the browser already carries a valid Suite/CaseLinx session cookie
+    // (Domain=.vakilpedia.com — see Apps/Suite/src/lib/supabase/middleware.ts),
+    // it is automatically present on this request too; log the same person
+    // into VakilCard without a second sign-in. Called unprompted by App.js on
+    // every signed-out page load, so every failure mode below degrades to
+    // "no session found" (200, found:false), never an error — a missing/
+    // expired/foreign cookie must never disrupt VakilCard's own sign-in flow.
+    if (action === "bridge_from_suite") {
+      const accessToken = readSupabaseAccessTokenFromCookies(req);
+      if (!accessToken) return json(res, 200, { ok: true, found: false });
+
+      const supaUser = await resolveSupabaseUser(accessToken);
+      if (!supaUser || !supaUser.id) return json(res, 200, { ok: true, found: false });
+
+      // 1. The clean case: this Supabase identity IS a VakilCard account,
+      //    because it was created/adopted through the NFC account bridge —
+      //    same uuid on both sides (see ensureAccountForPhone's sharedAccountId).
+      let accountId = null;
+      const direct = await db(`vakilpedia_accounts?id=eq.${supaUser.id}&select=id`);
+      if (direct.length) {
+        accountId = direct[0].id;
+      } else if (supaUser.phone) {
+        // 2. Fallback for accounts that pre-date the bridge: same phone,
+        //    different id on each side. account_phone_identities is shared
+        //    between VakilCard and CaseLinx by design (both write to it) —
+        //    resolve the phone SupraCore has for this identity, then see if
+        //    that phone already has its own (older, unlinked) VakilCard
+        //    account. A phone match is proof-of-ownership grade, same as any
+        //    OTP re-login, so it's safe to sign in on it directly.
+        const rawPhone = String(supaUser.phone);
+        const phoneE164 = rawPhone.startsWith("+") ? rawPhone : `+${rawPhone}`;
+        const viaPhone = await db(
+          `account_phone_identities?phone_e164=eq.${encodeURIComponent(phoneE164)}&select=account_id`
+        );
+        if (viaPhone.length) accountId = viaPhone[0].account_id;
+      }
+
+      if (!accountId) return json(res, 200, { ok: true, found: false });
+
+      const profiles = await db(`vakilcard_profiles?account_id=eq.${accountId}&select=id,username,is_published`);
+      const profile = profiles[0] || null;
+      const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
+      await touchLogin(accountId);
+      verification
+        .audit("bridge_login_from_suite", { accountId, ip, meta: { supabaseUserId: supaUser.id } })
+        .catch(() => {}); // best-effort — never fail a silent login over an audit-log write
+
+      return json(res, 200, {
+        ok: true,
+        found: true,
+        token: access,
+        access_token: access,
+        refresh_token: refresh,
+        expires_in: ACCESS_TTL_SEC,
+        account_id: accountId,
+        username: profile ? profile.username : null,
+        published: profile ? profile.is_published === true : false,
+      });
+    }
+
+    // ── CourtQue MPHC-kiosk beta coupon redemption ─────────────────────
+    // One tap from a signed-in VakilCard session — see COURTQUE_BETA_COUPON_CODE
+    // above and supracore_coupon_redeem (the RPC already existed; this is
+    // its first caller). Fails as a normal {ok:false, error} response, not
+    // an exception, for every expected case (already exhausted, expired,
+    // already redeemed) — only genuine infra failure returns non-200.
+    if (action === "redeem_courtque_beta") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+
+      let result;
+      try {
+        const rpcResult = await db("rpc/supracore_coupon_redeem", {
+          method: "POST",
+          body: { p_account_id: who.accountId, p_code: COURTQUE_BETA_COUPON_CODE, p_actor_id: who.accountId },
+        });
+        result = Array.isArray(rpcResult) ? rpcResult[0] : rpcResult;
+      } catch (e) {
+        console.error("[vakilcard/auth] redeem_courtque_beta RPC failed:", e && (e.message || e));
+        return json(res, 502, { ok: false, error: "redeem_unavailable" });
+      }
+
+      if (!result || result.ok !== true) {
+        return json(res, 200, { ok: false, error: (result && result.error) || "unknown_error" });
+      }
+      return json(res, 200, {
+        ok: true,
+        idempotent: !!result.idempotent,
+        plan: result.plan,
+        limits: result.limits,
+        expiresAt: result.expiresAt,
       });
     }
 

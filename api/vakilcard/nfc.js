@@ -23,6 +23,14 @@ const SITE = "https://www.vakilpedia.com";
 const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 const CODE_RE = /^[a-z0-9]{6,16}$/;
 
+// CourtQue MPHC-kiosk beta offer, shown once right after a fresh card
+// activation — "first touch VakilCard, second touch CourtQue" (2026-08-15).
+// Redemption itself goes through auth.js's redeem_courtque_beta action;
+// this is just the WhatsApp deep link shown on success. Left unset shows a
+// generic "we'll be in touch" message instead of a dead/wrong link — a wrong
+// phone number here is worse than no link at all.
+const COURTQUE_WHATSAPP_URL = process.env.COURTQUE_WHATSAPP_URL || "";
+
 // Shared Vakilpedia/VakilCard lockup for the standalone (non-SPA) pages
 // below — mirrors the header treatment used across the React app (see
 // VakilCardPage.js's "Vakilpedia product lockup"), hand-written in inline
@@ -104,14 +112,22 @@ function claimPage(code) {
     <button id="btn-verify">Verify &amp; activate</button>
   </div>
   <div id="step-done" class="step">
-    <h1>Activated 🎉</h1>
-    <p>Redirecting to your VakilCard…</p>
+    <h1>VakilCard activated 🎉</h1>
+    <p id="done-msg">Setting things up…</p>
+    <div id="courtque-offer" style="display:none;margin-top:6px;padding-top:18px;border-top:1px solid #E2E8F0">
+      <p style="font-weight:800;color:#0f172a;margin:0 0 6px">Try CourtQue free</p>
+      <p>Get a WhatsApp alert the moment your case is coming up at MPHC &mdash; 10 alerts a day, free during our beta.</p>
+      <div class="err" id="err-courtque"></div>
+      <button id="btn-courtque" type="button">Try CourtQue free</button>
+      <button id="btn-continue" type="button" style="background:#fff;color:#635BFF;border:1.5px solid #635BFF;margin-top:10px">Continue to my VakilCard</button>
+    </div>
   </div>
 </div>
 <script>
 (function(){
   var CODE = ${jsStr(code)};
   var DASHBOARD_FALLBACK = ${jsStr(DASHBOARD_SITE)};
+  var COURTQUE_WA = ${jsStr(COURTQUE_WHATSAPP_URL)};
   var phone = "";
   function show(id){ document.querySelectorAll(".step").forEach(function(s){ s.classList.remove("active"); }); document.getElementById(id).classList.add("active"); }
   function setErr(id, msg){ document.getElementById(id).textContent = msg || ""; }
@@ -145,7 +161,6 @@ function claimPage(code) {
           .then(function(r2){ return r2.json().then(function(d2){ return { ok: r2.ok, d: d2, auth: res.d }; }); })
           .then(function(bindRes){
             if (!bindRes.ok) { btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", bindRes.d.error === "already_claimed" ? "This card is already linked to another account." : "Couldn't activate this card. Contact support."); return; }
-            show("step-done");
             var dest;
             if (bindRes.d.published && bindRes.d.redirect) {
               // Published card: the public URL needs no session, land there directly.
@@ -159,7 +174,33 @@ function claimPage(code) {
               // See App.js's fragment-token bootstrap. (2026-08-15 kiosk fix.)
               dest = DASHBOARD_FALLBACK + "/setup#at=" + encodeURIComponent(bindRes.auth.access_token) + "&rt=" + encodeURIComponent(bindRes.auth.refresh_token);
             }
-            setTimeout(function(){ window.location.href = dest; }, 900);
+            document.getElementById("done-msg").textContent = "Your VakilCard is ready.";
+            document.getElementById("courtque-offer").style.display = "block";
+            show("step-done");
+
+            document.getElementById("btn-continue").addEventListener("click", function(){
+              window.location.href = dest;
+            });
+            document.getElementById("btn-courtque").addEventListener("click", function(){
+              var cqBtn = this; cqBtn.disabled = true; cqBtn.textContent = "Activating…";
+              fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + bindRes.auth.access_token }, body: JSON.stringify({ action: "redeem_courtque_beta" }) })
+                .then(function(r3){ return r3.json().then(function(d3){ return { ok: r3.ok, d: d3 }; }); })
+                .then(function(cqRes){
+                  if (!cqRes.ok || !cqRes.d.ok) {
+                    cqBtn.disabled = false; cqBtn.textContent = "Try CourtQue free";
+                    setErr("err-courtque", cqRes.d && cqRes.d.error === "exhausted" ? "This beta offer is fully claimed — sorry!" : cqRes.d && cqRes.d.error === "invalid_code" ? "This offer isn't available right now." : "Couldn't activate CourtQue just now. Try again in a moment.");
+                    return;
+                  }
+                  cqBtn.textContent = "CourtQue activated ✓";
+                  if (COURTQUE_WA) {
+                    window.location.href = COURTQUE_WA;
+                  } else {
+                    setErr("err-courtque", "");
+                    document.getElementById("done-msg").textContent = "CourtQue activated — we'll message you on WhatsApp with next steps.";
+                  }
+                })
+                .catch(function(){ cqBtn.disabled = false; cqBtn.textContent = "Try CourtQue free"; setErr("err-courtque", "Network error, try again."); });
+            });
           });
       })
       .catch(function(){ btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", "Network error, try again."); });

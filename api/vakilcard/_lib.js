@@ -164,6 +164,108 @@ function bearer(req) {
   return h.startsWith("Bearer ") ? h.slice(7) : null;
 }
 
+/**
+ * Read the shared Suite/CaseLinx Supabase Auth session out of the incoming
+ * request's cookies, if present. This is the VakilCard-side half of the
+ * "one sign-in, all apps" bridge (2026-08-15 P0): Suite/CaseLinx set their
+ * `sb-<ref>-auth-token` cookie with Domain=".vakilpedia.com" (see
+ * Apps/Suite/src/lib/supabase/middleware.ts), so it is automatically present
+ * on any request to vakilcard.vakilpedia.com too — VakilCard never has to be
+ * told about it, the browser just sends it.
+ *
+ * @supabase/ssr splits large session cookies into `sb-<ref>-auth-token.0`,
+ * `.1`, ... — reassemble in order before decoding. The value itself is
+ * `base64-` + base64url(JSON.stringify(session)) per @supabase/ssr's own
+ * cookie codec; older/uncommon clients may write plain JSON instead, so both
+ * are tried.
+ *
+ * Returns the raw access_token string, or null if no usable session cookie
+ * is present. Never throws — a malformed/foreign cookie just means "no
+ * session found", not a hard error (this runs on every unauthenticated page
+ * load, it must never be the thing that breaks VakilCard's own flows).
+ */
+function readSupabaseAccessTokenFromCookies(req) {
+  try {
+    const raw = req.headers["cookie"];
+    if (!raw) return null;
+    const jar = {};
+    for (const part of raw.split(";")) {
+      const i = part.indexOf("=");
+      if (i === -1) continue;
+      const name = part.slice(0, i).trim();
+      const value = part.slice(i + 1).trim();
+      if (name) jar[name] = value;
+    }
+    // Find the auth-token cookie family regardless of project ref or chunking.
+    const base = Object.keys(jar).find(
+      (n) => n.startsWith("sb-") && n.includes("-auth-token") && !/\.\d+$/.test(n)
+    );
+    let combined;
+    if (base && jar[base] !== undefined) {
+      combined = jar[base];
+    } else {
+      // Chunked form: sb-<ref>-auth-token.0, .1, ... — sort numerically, not
+      // lexically (".10" must sort after ".9").
+      const chunkPrefix = Object.keys(jar).find((n) => /^sb-.*-auth-token\.0$/.test(n));
+      if (!chunkPrefix) return null;
+      const stem = chunkPrefix.replace(/\.0$/, "");
+      const indices = Object.keys(jar)
+        .map((n) => {
+          const m = new RegExp(`^${stem.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.(\\d+)$`).exec(n);
+          return m ? Number(m[1]) : null;
+        })
+        .filter((n) => n !== null)
+        .sort((a, b) => a - b);
+      if (!indices.length) return null;
+      combined = indices.map((i) => jar[`${stem}.${i}`]).join("");
+    }
+    const decodeUriValue = (v) => {
+      try {
+        return decodeURIComponent(v);
+      } catch {
+        return v;
+      }
+    };
+    let jsonText;
+    const value = decodeUriValue(combined);
+    if (value.startsWith("base64-")) {
+      jsonText = Buffer.from(value.slice(7), "base64").toString("utf8");
+    } else {
+      jsonText = value;
+    }
+    const parsed = JSON.parse(jsonText);
+    // @supabase/ssr has stored the session as either a bare object or a
+    // [access_token, refresh_token, ...] tuple across versions — handle both.
+    if (Array.isArray(parsed)) return parsed[0] || null;
+    return (parsed && (parsed.access_token || parsed.accessToken)) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve a Supabase Auth access token (from readSupabaseAccessTokenFromCookies)
+ * to its user via GoTrue's own /auth/v1/user — the standard way to validate
+ * a user JWT without needing the project's JWT signing secret locally.
+ * `apikey` just needs to be a valid project key; VakilCard's existing
+ * SERVICE_KEY works fine here and avoids provisioning a second secret.
+ * Returns null on any failure (expired token, network error, etc.) — this
+ * must fail closed (no bridge login) rather than throw.
+ */
+async function resolveSupabaseUser(accessToken) {
+  if (!SUPABASE_URL || !SERVICE_KEY || !accessToken) return null;
+  try {
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, {
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${accessToken}` },
+    });
+    if (!r.ok) return null;
+    const data = await r.json().catch(() => null);
+    return data && data.id ? data : null;
+  } catch {
+    return null;
+  }
+}
+
 async function readJsonBody(req) {
   if (req.body && typeof req.body === "object") return req.body;
   const chunks = [];
@@ -394,6 +496,8 @@ module.exports = {
   loadProfileBundle,
   resolveProfileOrAlias,
   resolveAccount,
+  readSupabaseAccessTokenFromCookies,
+  resolveSupabaseUser,
   trackEvent,
   sanitizeBookingWindows,
   expandBookingSlots,
