@@ -57,6 +57,11 @@ const SITE = "https://www.vakilpedia.com";
 // own deployment/subdomain — see Apps/VakilCard/README.md.
 const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 
+// CaseLinx's SupraCore signup endpoint — see createAccountViaCaseLinx() below.
+// Point this at beta while the bridge is being verified; move it to the
+// production CaseLinx origin only after an end-to-end kiosk test passes.
+const CASELINX_ORIGIN = process.env.CASELINX_ORIGIN || "https://beta.caselinx.vakilpedia.com";
+
 function json(res, status, data) {
   res.statusCode = status;
   res.setHeader("Content-Type", "application/json");
@@ -67,6 +72,60 @@ function json(res, status, data) {
 function clientIp(req) {
   const xf = req.headers["x-forwarded-for"];
   return xf ? String(xf).split(",")[0].trim() : req.socket && req.socket.remoteAddress;
+}
+
+/**
+ * Bridge a just-submitted phone+code to CaseLinx's /api/supracore/signup/complete, which is the
+ * ONE code path in the whole platform allowed to create a real auth.users + supracore.accounts
+ * row (see accountCreator.ts "THE CUTOVER"). VakilCard and CaseLinx share the SAME
+ * verification_sessions table by design (otpService.ts: "a code issued by VakilCard must verify
+ * here and vice versa") — so this call is what actually consumes the code the user typed, NOT
+ * VakilCard's own verification.verify().
+ *
+ * Returns:
+ *   { consumed: true,  accountId: <uuid> }  — real SupraCore account created/adopted. Use this id
+ *                                              as the shared id for VakilCard's own account row.
+ *   { consumed: true,  accountId: null }    — the code WAS verified and consumed by CaseLinx (so
+ *                                              calling verification.verify() again would fail on
+ *                                              a spent code), but no shared account was created
+ *                                              (e.g. the public-phone-onboarding flag is off on
+ *                                              CaseLinx). Caller must treat the phone as proven
+ *                                              and fall through to the local-only account path
+ *                                              WITHOUT re-verifying.
+ *   { consumed: false, accountId: null }    — CaseLinx was unreachable, timed out, or itself
+ *                                              rejected the code as invalid/expired — the code is
+ *                                              untouched either way, safe to verify locally as
+ *                                              before. This function NEVER throws; every failure
+ *                                              mode degrades to the pre-bridge behaviour so a
+ *                                              CaseLinx outage can never stall the kiosk queue.
+ */
+async function createAccountViaCaseLinx(phoneE164, code, ip) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 6000);
+  try {
+    const r = await fetch(`${CASELINX_ORIGIN}/api/supracore/signup/complete`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-Forwarded-For": ip || "" },
+      body: JSON.stringify({ phone: phoneE164, code }),
+      signal: controller.signal,
+    });
+    const data = await r.json().catch(() => null);
+    if (!data || typeof data !== "object") return { consumed: false, accountId: null };
+    if (data.status === "completed" || data.status === "signed_in") {
+      return { consumed: true, accountId: data.accountId || null };
+    }
+    if (data.status === "account_creation_required") {
+      // Verified and consumed on CaseLinx's side; no account was made (flag/allowlist gate).
+      return { consumed: true, accountId: null };
+    }
+    // invalid_code / expired / locked / misconfigured / anything else — CaseLinx did not
+    // consume a valid session, so it is still safe (and correct) to verify locally.
+    return { consumed: false, accountId: null };
+  } catch {
+    return { consumed: false, accountId: null };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /** Issue an access+refresh pair; stores only the refresh hash. */
@@ -112,8 +171,16 @@ function phoneUsername(phoneE164) {
   return digits.startsWith("91") && digits.length === 12 ? digits.slice(2) : digits;
 }
 
-/** Find or create the account + DRAFT profile for a verified phone. Idempotent. */
-async function ensureAccountForPhone(phoneE164, ip) {
+/**
+ * Find or create the account + DRAFT profile for a verified phone. Idempotent.
+ *
+ * `sharedAccountId`, when provided, is a real SupraCore `supracore.accounts.id` /
+ * `auth.users.id` obtained from createAccountViaCaseLinx() — VakilCard's own
+ * `vakilpedia_accounts.id` is set to the SAME uuid, so the two tables describe one person under
+ * one id without any FK/schema change. Omitted (undefined) reproduces the exact pre-bridge
+ * behaviour: a fresh, VakilCard-only id.
+ */
+async function ensureAccountForPhone(phoneE164, ip, sharedAccountId) {
   const existing = await db(
     `account_phone_identities?phone_e164=eq.${encodeURIComponent(phoneE164)}&select=account_id`
   );
@@ -125,11 +192,27 @@ async function ensureAccountForPhone(phoneE164, ip) {
     return { accountId, profile: profiles[0] || null, created: false };
   }
 
-  const [account] = await db("vakilpedia_accounts", {
-    method: "POST",
-    body: { registration_source: "vakilcard" },
-    prefer: "return=representation",
-  });
+  let account;
+  if (sharedAccountId) {
+    // Adopt-if-present, same idiom as accountCreator.ts step 3: a retry (or a card tapped twice
+    // before the profile finished) converges on the one row instead of erroring on the PK.
+    const already = await db(`vakilpedia_accounts?id=eq.${sharedAccountId}&select=id`);
+    if (already.length) {
+      account = already[0];
+    } else {
+      [account] = await db("vakilpedia_accounts", {
+        method: "POST",
+        body: { id: sharedAccountId, registration_source: "vakilcard_nfc_bridged" },
+        prefer: "return=representation",
+      });
+    }
+  } else {
+    [account] = await db("vakilpedia_accounts", {
+      method: "POST",
+      body: { registration_source: "vakilcard" },
+      prefer: "return=representation",
+    });
+  }
   await db("account_phone_identities", {
     method: "POST",
     body: { account_id: account.id, phone_e164: phoneE164, verified_at: new Date().toISOString() },
@@ -279,10 +362,26 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === "verify") {
-      const r = await verification.verify({ phone: body.phone, code: body.code, ip });
-      if (!r.ok) return json(res, r.error === "locked" ? 429 : 400, r);
+      // Try the shared verification_sessions row against CaseLinx FIRST — see
+      // createAccountViaCaseLinx() for exactly why the ordering matters (it may consume the
+      // code). Any failure of the bridge itself (not the code) degrades to the untouched,
+      // VakilCard-only flow below.
+      const normalizedPhone = verification.normalizePhone(body.phone);
+      const bridged = normalizedPhone
+        ? await createAccountViaCaseLinx(normalizedPhone, body.code, ip)
+        : { consumed: false, accountId: null };
 
-      const { accountId, profile, created } = await ensureAccountForPhone(r.phoneE164, ip);
+      let r;
+      if (bridged.consumed) {
+        // CaseLinx already proved and consumed this code — verifying again here would fail on
+        // a spent code, so trust CaseLinx's proof instead of re-checking locally.
+        r = { ok: true, phoneE164: normalizedPhone };
+      } else {
+        r = await verification.verify({ phone: body.phone, code: body.code, ip });
+        if (!r.ok) return json(res, r.error === "locked" ? 429 : 400, r);
+      }
+
+      const { accountId, profile, created } = await ensureAccountForPhone(r.phoneE164, ip, bridged.accountId);
       const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
       await touchLogin(accountId);
       return json(res, 200, {

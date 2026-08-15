@@ -91,7 +91,7 @@ function claimPage(code) {
   ${BRAND_HEADER}
   <div id="step-phone" class="step active">
     <h1>Activate this VakilCard</h1>
-    <p>Enter your phone number to link this card to your account. If you don't have a VakilCard yet, this creates one.</p>
+    <p>Enter your phone number to link this card to your account. If you don't have one yet, this creates your VakilCard and your Vakilpedia account &mdash; used to sign in across CaseLinx, CourtQue and other Vakilpedia apps. By continuing you agree to both products' Terms of Use.</p>
     <input id="phone" type="tel" inputmode="tel" placeholder="10-digit mobile number" autocomplete="tel">
     <div class="err" id="err-phone"></div>
     <button id="btn-send">Send code</button>
