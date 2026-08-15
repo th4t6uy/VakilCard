@@ -1,7 +1,7 @@
 import React, { Suspense, lazy, useEffect } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
-import { setTokens } from "./lib/vakilcardApi";
+import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
 
 // Bridge tokens minted just-in-time by the NFC claim flow (api/vakilcard/nfc.js's
 // claimPage) into this SPA's own session store. The claim page is a standalone
@@ -25,6 +25,40 @@ function useFragmentTokenBridge() {
   }, []);
 }
 
+// Silent "one sign-in, all apps" bridge (2026-08-15, P0). Suite/CaseLinx's
+// Supabase session cookie is Domain=".vakilpedia.com" (see
+// Apps/Suite/src/lib/supabase/middleware.ts), so it's already sitting in the
+// browser on this page load too — VakilCard just has to notice and ask its
+// backend to trade it for a VakilCard session (api/vakilcard/auth.js's
+// "bridge_from_suite" action). Only fires when there's no existing VakilCard
+// session and no NFC-claim fragment just arrived (that bridge — above — is
+// the more specific, already-verified case and always wins). Best-effort and
+// silent: on any failure or "no match found" this is a pure no-op, the app
+// just renders its normal signed-out state as before.
+function useSuiteSessionBridge() {
+  useEffect(() => {
+    if (hasPhoneSession()) return;
+    if ((window.location.hash || "").indexOf("at=") !== -1) return;
+    fetch("/api/vakilcard/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      credentials: "include",
+      body: JSON.stringify({ action: "bridge_from_suite" }),
+    })
+      .then((r) => r.json())
+      .then((data) => {
+        if (data && data.found && data.access_token && data.refresh_token) {
+          setTokens(data);
+          // Everything already mounted assumed signed-out; reload once so the
+          // whole app picks up the new session exactly like a normal
+          // already-signed-in page load would.
+          window.location.reload();
+        }
+      })
+      .catch(() => {});
+  }, []);
+}
+
 // Cut over 2026-08-04: this app is now its own deployment on
 // vakilcard.vakilpedia.com, so routes no longer carry a "/vakilcard" path
 // prefix — the subdomain itself is that namespace. The public card
@@ -40,6 +74,7 @@ function Loading() {
 
 function App() {
   useFragmentTokenBridge();
+  useSuiteSessionBridge();
   return (
     <div className="App">
       <BrowserRouter>
