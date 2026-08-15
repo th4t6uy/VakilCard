@@ -10,6 +10,7 @@
 // all render through this single path — no other card renderer exists.
 const {
   esc,
+  jsStr,
   cleanPhone,
   resolveProfileOrAlias,
   trackEvent,
@@ -21,6 +22,108 @@ const { isProActive } = require("./_entitlements");
 const SITE = "https://www.vakilpedia.com";
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js.
 const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
+
+// Self-contained "finish setting up" page for a DRAFT (not-yet-published)
+// card. Reached from: (a) the WhatsApp welcome link sent the moment a kiosk
+// signup creates the account (messaging.sendWelcome — that Meta template's
+// ONE variable is this permanent card URL, so it must always resolve to
+// SOMETHING useful, published or not), and (b) a re-tap of an already-bound
+// but still-draft physical card (nfc.js GET handler).
+// Deliberately NOT tied to this specific profile's phone number: the OTP
+// form below asks the visitor for THEIR OWN phone and signs them into
+// whichever account that phone resolves to (same contract as
+// ensureAccountForPhone). That is what makes this page safe to serve at a
+// guessable/public URL — a stranger who lands here can only ever end up
+// signed into their own account, never this profile's owner's account.
+function finishSetupPage(username) {
+  return `<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Finish setting up your VakilCard</title>
+<meta name="robots" content="noindex">
+<style>
+  body{font-family:system-ui,sans-serif;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;background:linear-gradient(120deg,#CDEFFB,#FDEECB);padding:24px;box-sizing:border-box}
+  .card{background:#fff;border-radius:20px;padding:32px 24px;max-width:380px;width:100%;box-shadow:0 20px 60px rgba(0,0,0,.12)}
+  h1{font-size:20px;font-weight:900;margin:0 0 6px;color:#0f172a}
+  p{color:#475569;font-size:14px;line-height:1.5;margin:0 0 20px}
+  input{width:100%;box-sizing:border-box;padding:12px 14px;border:1.5px solid #E2E8F0;border-radius:10px;font-size:16px;margin-bottom:12px}
+  button{width:100%;padding:13px;border:none;border-radius:10px;background:#635BFF;color:#fff;font-weight:700;font-size:15px;cursor:pointer}
+  button:disabled{opacity:.5;cursor:default}
+  .err{color:#DC2626;font-size:13px;margin:-4px 0 12px;min-height:16px}
+  .step{display:none}
+  .step.active{display:block}
+</style>
+</head>
+<body>
+<div class="card">
+  <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:22px"><img src="/vakilcard-pwa-192.png" alt="" style="height:28px;width:28px;border-radius:8px;object-fit:cover;flex:none;box-shadow:0 2px 6px rgba(0,0,0,.15)"><span style="font-weight:900;letter-spacing:-0.02em;color:#0f172a;font-size:17px">Vakilpedia<sup style="font-size:9px;font-weight:600;margin-left:1px;vertical-align:super">TM</sup></span><span style="border-radius:999px;background:#0f172a;color:#fff;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.08em;padding:4px 9px">VakilCard</span></div>
+  <div id="step-phone" class="step active">
+    <h1>This card isn't public yet</h1>
+    <p>@${esc(username)} is reserved but hasn't been published. Verify your phone number to pick up where you left off and finish setting it up.</p>
+    <input id="phone" type="tel" inputmode="tel" placeholder="10-digit mobile number" autocomplete="tel">
+    <div class="err" id="err-phone"></div>
+    <button id="btn-send">Send code</button>
+  </div>
+  <div id="step-otp" class="step">
+    <h1>Enter the code</h1>
+    <p>We sent a 6-digit code on WhatsApp to <span id="phone-echo"></span>.</p>
+    <input id="otp" type="tel" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code">
+    <div class="err" id="err-otp"></div>
+    <button id="btn-verify">Verify &amp; continue</button>
+  </div>
+  <div id="step-done" class="step">
+    <h1>Verified 🎉</h1>
+    <p>Taking you to setup…</p>
+  </div>
+</div>
+<script>
+(function(){
+  var DASHBOARD = ${jsStr(DASHBOARD_SITE)};
+  var phone = "";
+  function show(id){ document.querySelectorAll(".step").forEach(function(s){ s.classList.remove("active"); }); document.getElementById(id).classList.add("active"); }
+  function setErr(id, msg){ document.getElementById(id).textContent = msg || ""; }
+
+  document.getElementById("btn-send").addEventListener("click", function(){
+    setErr("err-phone", "");
+    phone = document.getElementById("phone").value.trim();
+    if (!phone) { setErr("err-phone", "Enter your phone number."); return; }
+    var btn = this; btn.disabled = true; btn.textContent = "Sending…";
+    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "start", phone: phone }) })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+      .then(function(res){
+        btn.disabled = false; btn.textContent = "Send code";
+        if (!res.ok) { setErr("err-phone", res.d.error === "rate_limited" || res.d.error === "cooldown" ? "Too many attempts, try again shortly." : "Couldn't send the code. Check the number."); return; }
+        document.getElementById("phone-echo").textContent = phone;
+        show("step-otp");
+      })
+      .catch(function(){ btn.disabled = false; btn.textContent = "Send code"; setErr("err-phone", "Network error, try again."); });
+  });
+
+  document.getElementById("btn-verify").addEventListener("click", function(){
+    setErr("err-otp", "");
+    var code = document.getElementById("otp").value.trim();
+    if (!code) { setErr("err-otp", "Enter the code."); return; }
+    var btn = this; btn.disabled = true; btn.textContent = "Verifying…";
+    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", phone: phone, code: code }) })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+      .then(function(res){
+        if (!res.ok) { btn.disabled = false; btn.textContent = "Verify & continue"; setErr("err-otp", "Incorrect or expired code."); return; }
+        show("step-done");
+        // Same fragment-token bridge as the NFC claim flow — see App.js.
+        var dest = (res.d.published && res.d.card_url)
+          ? res.d.card_url
+          : DASHBOARD + "/setup#at=" + encodeURIComponent(res.d.access_token) + "&rt=" + encodeURIComponent(res.d.refresh_token);
+        setTimeout(function(){ window.location.href = dest; }, 700);
+      })
+      .catch(function(){ btn.disabled = false; btn.textContent = "Verify & continue"; setErr("err-otp", "Network error, try again."); });
+  });
+})();
+</script>
+</body>
+</html>`;
+}
 
 function jsonLd(p, url) {
   const office = p.offices[0] || {};
@@ -407,14 +510,16 @@ module.exports = async function handler(req, res) {
         return;
       }
     }
-    // Draft card: URL reserved, nothing public or indexable.
+    // Draft card: URL reserved, nothing public or indexable yet — but this is
+    // also exactly where the WhatsApp welcome link and a re-tap of a still-
+    // draft physical card land, so it must offer a real way forward (verify
+    // your phone, resume setup) rather than a dead end. 2026-08-15 kiosk fix.
     if (hit && hit.draft) {
-      res.statusCode = 404;
+      res.statusCode = 200;
       res.setHeader("Content-Type", "text/html; charset=utf-8");
+      res.setHeader("Cache-Control", "no-store");
       res.setHeader("X-Robots-Tag", "noindex");
-      res.end(
-        `<!doctype html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Not published yet | VakilCard</title><meta name="robots" content="noindex"></head><body style="font-family:system-ui;display:flex;min-height:100vh;align-items:center;justify-content:center;background:linear-gradient(120deg,#CDEFFB,#FDEECB)"><div style="text-align:center;padding:24px"><h1 style="font-weight:900">This card isn&#39;t published yet</h1><p style="color:#475569">The address is reserved. Check back soon.</p></div></body></html>`
-      );
+      res.end(finishSetupPage(username));
       return;
     }
     const p = hit && hit.profile;
