@@ -146,7 +146,19 @@ function claimPage(code) {
           .then(function(bindRes){
             if (!bindRes.ok) { btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", bindRes.d.error === "already_claimed" ? "This card is already linked to another account." : "Couldn't activate this card. Contact support."); return; }
             show("step-done");
-            var dest = bindRes.d.redirect || bindRes.auth.card_url || bindRes.auth.setup_url || DASHBOARD_FALLBACK;
+            var dest;
+            if (bindRes.d.published && bindRes.d.redirect) {
+              // Published card: the public URL needs no session, land there directly.
+              dest = bindRes.d.redirect;
+            } else {
+              // Not published yet: this browser JUST proved phone ownership via the
+              // OTP above, and already holds the freshly-issued tokens (bindRes.auth) —
+              // carry them into the dashboard via a URL FRAGMENT (never sent to the
+              // server, never logged) instead of bouncing to an unauthenticated
+              // dashboard root, which previously dead-ended on the marketing page.
+              // See App.js's fragment-token bootstrap. (2026-08-15 kiosk fix.)
+              dest = DASHBOARD_FALLBACK + "/setup#at=" + encodeURIComponent(bindRes.auth.access_token) + "&rt=" + encodeURIComponent(bindRes.auth.refresh_token);
+            }
             setTimeout(function(){ window.location.href = dest; }, 900);
           });
       })
@@ -174,7 +186,14 @@ module.exports = async function handler(req, res) {
           // before redirecting so a slow/failed insert never delays the tap.
           trackEvent(profile.id, "nfc_tap", null).catch(() => {});
           res.statusCode = 302; // not cached long-lived: a rebind must take effect immediately
-          res.setHeader("Location", profile.is_published ? `${SITE}/${profile.username}` : DASHBOARD_SITE);
+          // Always the public-card URL, published or not — a re-tap of a
+          // still-draft card has no fresh auth proof to carry (this is a
+          // bare GET, no OTP just happened), so it must NOT land on the
+          // dashboard root unauthenticated (that dead-ended on VakilCard's
+          // marketing page — 2026-08-15). profile.js itself now renders a
+          // "finish setting up" OTP prompt for the unpublished case instead
+          // of a dead end, so this single destination is correct either way.
+          res.setHeader("Location", `${SITE}/${profile.username}`);
           res.setHeader("Cache-Control", "no-store");
           res.end();
           return;
@@ -207,7 +226,11 @@ module.exports = async function handler(req, res) {
       if (card.status === "bound") {
         if (card.account_id === who.accountId) {
           const profile = await profileForAccount(who.accountId);
-          return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `${SITE}/${profile.username}` : DASHBOARD_SITE });
+          return json(res, 200, {
+            ok: true,
+            published: !!(profile && profile.is_published),
+            redirect: profile ? `${SITE}/${profile.username}` : DASHBOARD_SITE,
+          });
         }
         return json(res, 409, { error: "already_claimed" });
       }
@@ -219,7 +242,11 @@ module.exports = async function handler(req, res) {
       });
 
       const profile = await profileForAccount(who.accountId);
-      return json(res, 200, { ok: true, redirect: profile && profile.is_published ? `${SITE}/${profile.username}` : DASHBOARD_SITE });
+      return json(res, 200, {
+        ok: true,
+        published: !!(profile && profile.is_published),
+        redirect: profile ? `${SITE}/${profile.username}` : DASHBOARD_SITE,
+      });
     } catch (e) {
       return json(res, 500, { error: "server_error" });
     }
