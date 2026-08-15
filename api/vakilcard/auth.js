@@ -180,6 +180,28 @@ async function touchLogin(accountId) {
   }
 }
 
+/**
+ * Records explicit Terms-of-Use acceptance (2026-08-15) — the NFC signup
+ * flow previously only implied consent via a sentence of body copy, never
+ * a recorded event. `column` is one of the two eula_*_accepted_at columns
+ * on vakilpedia_accounts. Only sets it the FIRST time (the `is.null` filter)
+ * so the timestamp always reflects original consent, not the most recent
+ * login. Best-effort, like touchLogin — a logging failure must never block
+ * signup or a beta redemption.
+ */
+async function stampEulaAcceptance(accountId, column) {
+  if (!accountId) return;
+  try {
+    await db(`vakilpedia_accounts?id=eq.${accountId}&${column}=is.null`, {
+      method: "PATCH",
+      body: { [column]: new Date().toISOString() },
+      prefer: "return=minimal",
+    });
+  } catch {
+    /* non-fatal */
+  }
+}
+
 /** Default public username for a phone: national 10 digits for India, full digits otherwise. */
 function phoneUsername(phoneE164) {
   const digits = phoneE164.replace(/^\+/, "");
@@ -399,6 +421,9 @@ module.exports = async function handler(req, res) {
       const { accountId, profile, created } = await ensureAccountForPhone(r.phoneE164, ip, bridged.accountId);
       const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
       await touchLogin(accountId);
+      if (body.eula_accepted === true) {
+        await stampEulaAcceptance(accountId, "eula_vakilcard_accepted_at");
+      }
       return json(res, 200, {
         ok: true,
         token: access, // back-compat field (Phase 2 clients)
@@ -524,6 +549,9 @@ module.exports = async function handler(req, res) {
 
       if (!result || result.ok !== true) {
         return json(res, 200, { ok: false, error: (result && result.error) || "unknown_error" });
+      }
+      if (body.eula_accepted === true) {
+        await stampEulaAcceptance(who.accountId, "eula_courtque_accepted_at");
       }
       return json(res, 200, {
         ok: true,

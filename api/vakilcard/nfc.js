@@ -92,6 +92,11 @@ function claimPage(code) {
   .err{color:#DC2626;font-size:13px;margin:-4px 0 12px;min-height:16px}
   .step{display:none}
   .step.active{display:block}
+  .agree{display:flex;align-items:flex-start;gap:8px;margin:0 0 14px}
+  .agree input{width:auto;margin:2px 0 0;flex:none}
+  .agree label{font-size:12.5px;color:#475569;line-height:1.4}
+  .agree a{color:#635BFF;font-weight:600;text-decoration:none}
+  button:disabled{opacity:.5;cursor:default}
 </style>
 </head>
 <body>
@@ -101,8 +106,12 @@ function claimPage(code) {
     <h1>Activate this VakilCard</h1>
     <p>Enter your phone number to link this card to your account. If you don't have one yet, this creates your VakilCard and your Vakilpedia account &mdash; used to sign in across CaseLinx, CourtQue and other Vakilpedia apps. By continuing you agree to both products' Terms of Use.</p>
     <input id="phone" type="tel" inputmode="tel" placeholder="10-digit mobile number" autocomplete="tel">
+    <div class="agree">
+      <input type="checkbox" id="agree-vakilcard">
+      <label for="agree-vakilcard">I agree to the <a href="https://www.vakilpedia.com/terms" target="_blank" rel="noopener noreferrer">Vakilpedia Terms of Use</a> for VakilCard.</label>
+    </div>
     <div class="err" id="err-phone"></div>
-    <button id="btn-send">Send code</button>
+    <button id="btn-send" disabled>Send code</button>
   </div>
   <div id="step-otp" class="step">
     <h1>Enter the code</h1>
@@ -117,8 +126,12 @@ function claimPage(code) {
     <div id="courtque-offer" style="display:none;margin-top:6px;padding-top:18px;border-top:1px solid #E2E8F0">
       <p style="font-weight:800;color:#0f172a;margin:0 0 6px">Try CourtQue free</p>
       <p>Get a WhatsApp alert the moment your case is coming up at MPHC &mdash; 10 alerts a day, free during our beta.</p>
+      <div class="agree">
+        <input type="checkbox" id="agree-courtque">
+        <label for="agree-courtque">I agree to the <a href="https://www.vakilpedia.com/terms" target="_blank" rel="noopener noreferrer">Vakilpedia Terms of Use</a> for CourtQue.</label>
+      </div>
       <div class="err" id="err-courtque"></div>
-      <button id="btn-courtque" type="button">Try CourtQue free</button>
+      <button id="btn-courtque" type="button" disabled>Try CourtQue free</button>
       <button id="btn-continue" type="button" style="background:#fff;color:#635BFF;border:1.5px solid #635BFF;margin-top:10px">Continue to my VakilCard</button>
     </div>
   </div>
@@ -132,8 +145,17 @@ function claimPage(code) {
   function show(id){ document.querySelectorAll(".step").forEach(function(s){ s.classList.remove("active"); }); document.getElementById(id).classList.add("active"); }
   function setErr(id, msg){ document.getElementById(id).textContent = msg || ""; }
 
+  var agreeVakilcard = document.getElementById("agree-vakilcard");
+  var btnSendEl = document.getElementById("btn-send");
+  agreeVakilcard.addEventListener("change", function(){ btnSendEl.disabled = !agreeVakilcard.checked; });
+
+  var agreeCourtque = document.getElementById("agree-courtque");
+  document.getElementById("btn-courtque").disabled = true; // re-armed once step-done renders below
+  agreeCourtque.addEventListener("change", function(){ document.getElementById("btn-courtque").disabled = !agreeCourtque.checked; });
+
   document.getElementById("btn-send").addEventListener("click", function(){
     setErr("err-phone", "");
+    if (!agreeVakilcard.checked) { setErr("err-phone", "Please agree to the Terms of Use to continue."); return; }
     phone = document.getElementById("phone").value.trim();
     if (!phone) { setErr("err-phone", "Enter your phone number."); return; }
     var btn = this; btn.disabled = true; btn.textContent = "Sending…";
@@ -153,7 +175,7 @@ function claimPage(code) {
     var code = document.getElementById("otp").value.trim();
     if (!code) { setErr("err-otp", "Enter the code."); return; }
     var btn = this; btn.disabled = true; btn.textContent = "Verifying…";
-    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", phone: phone, code: code }) })
+    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", phone: phone, code: code, eula_accepted: true }) })
       .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
       .then(function(res){
         if (!res.ok) { btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", "Incorrect or expired code."); return; }
@@ -182,8 +204,9 @@ function claimPage(code) {
               window.location.href = dest;
             });
             document.getElementById("btn-courtque").addEventListener("click", function(){
+              if (!agreeCourtque.checked) { setErr("err-courtque", "Please agree to the Terms of Use to continue."); return; }
               var cqBtn = this; cqBtn.disabled = true; cqBtn.textContent = "Activating…";
-              fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + bindRes.auth.access_token }, body: JSON.stringify({ action: "redeem_courtque_beta" }) })
+              fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + bindRes.auth.access_token }, body: JSON.stringify({ action: "redeem_courtque_beta", eula_accepted: true }) })
                 .then(function(r3){ return r3.json().then(function(d3){ return { ok: r3.ok, d: d3 }; }); })
                 .then(function(cqRes){
                   if (!cqRes.ok || !cqRes.d.ok) {
