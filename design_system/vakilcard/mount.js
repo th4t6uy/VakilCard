@@ -217,7 +217,7 @@
      the real PNG loads. */
   function appTile(key, label, color, href, fg) {
     return (
-      '<a href="' + href.replace(/"/g, "&quot;") + '" aria-label="Pay with ' + label + '" ' +
+      '<a href="' + href.replace(/"/g, "&quot;") + '" data-upi-key="' + key + '" aria-label="Pay with ' + label + '" ' +
       'style="display:flex;flex-direction:column;align-items:center;gap:7px;text-decoration:none;padding:6px 2px;border-radius:14px" ' +
       'onfocus="this.style.outline=\'2px solid var(--violet-400)\'" onblur="this.style.outline=\'none\'">' +
       '<span style="position:relative;width:56px;height:56px;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center">' +
@@ -286,6 +286,35 @@
       upiLauncherApps(q).map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
       "</div>"
     );
+  }
+
+  /** Patches an already-rendered launcher grid's tap-target hrefs in place
+   *  (new `am=` amount, same app set) instead of tearing the grid down and
+   *  rebuilding it. 2026-08-16: the Pay Now sheet's Custom-amount flow used
+   *  to call `bodyEl.innerHTML = upiLauncherHtml(...)` on every keystroke —
+   *  destroying and recreating the actual `<a href="tez://…">` /
+   *  `<a href="upi://…">` payment-intent links the payer taps, live, while
+   *  they may be mid-gesture reaching for one. That's the leading suspect
+   *  for reports of GPay appearing to "reopen" the card page unpredictably
+   *  right after typing a custom amount — the tile under the payer's finger
+   *  could be swapped out for a fresh DOM node between their touchstart and
+   *  the click actually resolving. Updating `href` on the SAME elements
+   *  removes that failure mode entirely, in addition to being cheaper.
+   *  Returns false (caller should fall back to a full rebuild) if the grid
+   *  isn't there yet or the app set doesn't match what's currently rendered. */
+  function patchUpiLauncherHrefs(container, q) {
+    var apps = upiLauncherApps(q);
+    var tiles = container.querySelectorAll("a[data-upi-key]");
+    if (!tiles.length || tiles.length !== apps.length) return false;
+    var byKey = {};
+    apps.forEach(function (a) { byKey[a[0]] = a[3]; });
+    var ok = true;
+    tiles.forEach(function (t) {
+      var href = byKey[t.getAttribute("data-upi-key")];
+      if (href == null) { ok = false; return; }
+      t.setAttribute("href", href);
+    });
+    return ok;
   }
 
   /* ---------- iOS-style QR zoom: blur backdrop, fluid center expansion,
@@ -447,7 +476,13 @@
       renderQr(cur);
       var bodyEl = s.panel.querySelector("#vc-pay-body");
       if (isMobile) {
-        bodyEl.innerHTML = upiLauncherHtml(cur.q, cur.uri);
+        // Patch the existing tap targets' hrefs in place when possible —
+        // only fall back to a full rebuild the first time (grid not there
+        // yet) or if the app set itself changed. See
+        // patchUpiLauncherHrefs()'s comment for why this matters: rebuilding
+        // real payment-intent links live, under the payer's finger, is the
+        // leading suspect for "GPay reopens the page" reports.
+        if (!patchUpiLauncherHrefs(bodyEl, cur.q)) bodyEl.innerHTML = upiLauncherHtml(cur.q, cur.uri);
         return;
       }
       // Desktop: Copy UPI ID underneath the shared QR above — no separate
@@ -477,8 +512,16 @@
     };
     if (feeBtn) feeBtn.addEventListener("click", function () { setMode("fee"); });
     customBtn.addEventListener("click", function () { setMode("custom"); });
-    // Regenerate every deep link / the QR as the payer types the amount.
-    amtInput.addEventListener("input", renderBody);
+    // Regenerate every deep link / the QR as the payer types the amount —
+    // debounced (2026-08-16) so a fast typist doesn't fire a DOM
+    // update-and-possible-rebuild on every single digit; combined with
+    // patchUpiLauncherHrefs() above, this means the grid is now touched at
+    // most a few hundred ms after the payer stops typing, never mid-keystroke.
+    var renderBodyTimer;
+    amtInput.addEventListener("input", function () {
+      clearTimeout(renderBodyTimer);
+      renderBodyTimer = setTimeout(renderBody, 300);
+    });
     renderBody();
   }
 
