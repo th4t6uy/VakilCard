@@ -90,7 +90,7 @@ const SOCIAL_META = {
 /* ---- Real inline "Scan & Pay" QR — drawn locally from the vendored
    /ds/qrcode.js (no network), encoding the exact upi:// URI. Never a
    decorative placeholder: with no valid UPI the whole block is absent. ---- */
-function InlineUpiQr({ upi, name, qrUrl }) {
+function InlineUpiQr({ upi, name, qrUrl, size = 92, radius = 12, pad = 6 }) {
   // Prefer the lawyer's OWN uploaded QR (shown + downloaded exactly as
   // uploaded). Only when there's no uploaded image do we draw a valid QR
   // locally from the UPI ID — never a decorative placeholder.
@@ -123,13 +123,13 @@ function InlineUpiQr({ upi, name, qrUrl }) {
       data-qr-caption={`Scan to pay ${upi}`}
       role="button"
       tabIndex={0}
-      aria-label="Tap to enlarge the payment QR"
-      title="Tap to enlarge"
-      style={{ width: 92, height: 92, borderRadius: 12, background: '#fff', padding: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-in' }}
+      aria-label="Payment QR — tap to enlarge, double-tap to download"
+      title="Tap to enlarge · Double-tap to download"
+      style={{ width: size, height: size, borderRadius: radius, background: '#fff', padding: pad, display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'zoom-in', flexShrink: 0 }}
     >
       {dataUrl
-        ? <img src={dataUrl} alt={`UPI QR for ${upi}`} style={{ width: '100%', height: '100%', borderRadius: 6 }} />
-        : <span style={{ color: '#0b0b0b' }}>{Icons.qr(40)}</span>}
+        ? <img src={dataUrl} alt={`UPI QR for ${upi}`} style={{ width: '100%', height: '100%', borderRadius: Math.max(radius - 6, 2) }} />
+        : <span style={{ color: '#0b0b0b' }}>{Icons.qr(Math.round(size * 0.43))}</span>}
     </div>
   );
 }
@@ -194,31 +194,9 @@ function GMapsPin({ size = 32 }) {
   );
 }
 
-/* ---- Stylised vector map backdrop (Office tile) — pure inline SVG, no map
-   API / tiles / screenshots, so it's lightweight and free of Google copyright.
-   Dark premium blue-grey palette with soft roads, water and parks; two layers
-   drift gently at different speeds (see .vp-map-far/.vp-map-near in page.css)
-   for a subtle parallax that keeps the tile from reading as an empty box. ---- */
-function StyledMap({ radius = 14 }) {
-  return (
-    <div aria-hidden="true" style={{ position: 'absolute', inset: 0, borderRadius: radius, overflow: 'hidden', background: 'linear-gradient(160deg, #21324f 0%, #1a2740 55%, #131d31 100%)' }}>
-      <svg className="vp-map-far" viewBox="0 0 240 240" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', inset: '-14%', width: '128%', height: '128%' }}>
-        <g fill="#294a3d" opacity="0.8"><rect x="14" y="150" width="64" height="58" rx="12" /><rect x="158" y="22" width="76" height="54" rx="12" /></g>
-        <path d="M-10 66 C 60 44, 92 112, 152 96 S 250 122, 262 102 L 262 152 C 200 160, 150 138, 100 158 S 18 156, -10 138 Z" fill="#274a68" opacity="0.9" />
-        <g fill="#28374f"><rect x="28" y="28" width="36" height="30" rx="6" /><rect x="82" y="22" width="42" height="26" rx="6" /><rect x="118" y="150" width="48" height="36" rx="7" /></g>
-      </svg>
-      <svg className="vp-map-near" viewBox="0 0 240 240" preserveAspectRatio="xMidYMid slice" style={{ position: 'absolute', inset: '-10%', width: '120%', height: '120%' }}>
-        <g stroke="#93a9cc" strokeWidth="6" strokeLinecap="round" fill="none" opacity="0.9">
-          <path d="M-10 92 H 262" /><path d="M72 -10 V 262" /><path d="M-10 28 C 80 72, 142 40, 262 82" />
-        </g>
-        <g stroke="#3f5378" strokeWidth="3" strokeLinecap="round" fill="none">
-          <path d="M-10 152 H 262" /><path d="M152 -10 V 262" /><path d="M20 202 H 204" />
-        </g>
-      </svg>
-      <div style={{ position: 'absolute', inset: 0, background: 'radial-gradient(120% 90% at 50% 8%, transparent 52%, rgba(8,12,22,0.34))' }} />
-    </div>
-  );
-}
+// StyledMap (decorative Office-tile map backdrop) removed 2026-08-16 fix
+// batch (D4) — the fake-map tile it backed is gone; see the Office section
+// and the merged Google Business listing further down.
 
 function ThemeToggle({ theme, onToggle }) {
   return (
@@ -228,13 +206,18 @@ function ThemeToggle({ theme, onToggle }) {
   );
 }
 
-/* ---- Section wrapper ---- */
+/* ---- Section wrapper ----
+   2026-08-16 fix batch (D1): pad trimmed 20 -> 15 and the eyebrow's bottom
+   margin 14 -> 11 — reclaims real vertical space on mobile without the
+   section reading as cramped; the eyebrow label itself is bumped up in
+   compensation (10.5 -> 11.5 handled at the call sites' font-size, this
+   wrapper only owns the eyebrow strip layout). */
 function Section({ eyebrow, action, children, style }) {
   return (
-    <GlassCard tone="thin" radius="xl" pad={20} style={{ marginBottom: 16, ...style }}>
+    <GlassCard tone="thin" radius="xl" pad={15} style={{ marginBottom: 14, ...style }}>
       {eyebrow && (
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 14 }}>
-          <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--violet-400)' }}>{eyebrow}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 11 }}>
+          <span style={{ fontSize: 11.5, fontWeight: 800, letterSpacing: '0.16em', textTransform: 'uppercase', color: 'var(--violet-400)' }}>{eyebrow}</span>
           {action}
         </div>
       )}
@@ -368,10 +351,20 @@ function VakilCardApp({ profile = defaultProfile }) {
   // Muted aerial-map backdrop for the Directions tile (CSS-only — no map
   // tile fetch/API key) — faint dual-grain grid lines over a slate-green
   // base evoke terrain/road without competing with the Google pin overlay.
-  const mapTileBg =
-    'repeating-linear-gradient(90deg, rgba(147,169,204,.14) 0 1.5px, transparent 1.5px 22px),' +
-    'repeating-linear-gradient(0deg, rgba(147,169,204,.10) 0 1.5px, transparent 1.5px 26px),' +
-    'linear-gradient(150deg, #33415c 0%, #263349 55%, #1b273c 100%)';
+  // D3 fix (2026-08-16 fix batch): this was a single hardcoded DARK gradient
+  // with no light-theme variant, unlike every other ActionTile (which use
+  // the theme-aware `var(--glass)` default) — so switching to light mode
+  // left this one tile a dark slate island against light neighbours,
+  // reported as "colour gaps". Now branches on `theme` with a light
+  // equivalent (same grid pattern, pale blue-grey base) instead of one
+  // fixed value.
+  const mapTileBg = theme === 'light'
+    ? 'repeating-linear-gradient(90deg, rgba(71,92,133,.10) 0 1.5px, transparent 1.5px 22px),' +
+      'repeating-linear-gradient(0deg, rgba(71,92,133,.08) 0 1.5px, transparent 1.5px 26px),' +
+      'linear-gradient(150deg, #eef1f7 0%, #e4e9f2 55%, #dbe1ed 100%)'
+    : 'repeating-linear-gradient(90deg, rgba(147,169,204,.14) 0 1.5px, transparent 1.5px 22px),' +
+      'repeating-linear-gradient(0deg, rgba(147,169,204,.10) 0 1.5px, transparent 1.5px 26px),' +
+      'linear-gradient(150deg, #33415c 0%, #263349 55%, #1b273c 100%)';
   // `k` is the availability key (see profile.actions from the SSR layer). A
   // tile whose action has no real target renders disabled/greyed. Tiles with
   // no `k` (Appointment, Save) are always available.
@@ -437,40 +430,49 @@ function VakilCardApp({ profile = defaultProfile }) {
             click-handler is what actually drives it — see the "pay now"
             branch there for the Free vs Pro split. */}
         <div style={{ borderRadius: 'var(--r-xl)', marginBottom: 16, overflow: 'hidden', background: 'var(--glass-frost)', backdropFilter: 'blur(24px) saturate(1.4)', WebkitBackdropFilter: 'blur(24px) saturate(1.4)', border: '1px solid var(--hairline-strong)', boxShadow: '0 6px 18px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04), var(--inset-edge)' }}>
-          {/* Pro only — same QR the pay sheet and dashboard's own payment-QR
-              draw from (one shared window.qrcode renderer). Sits above the
-              button row now instead of between the UPI line and the button,
-              so the row below reads as one clean unit. Free never gets this
-              — Free's Pay Now opens the locked/upsell sheet, so a working
-              QR here would be a payment path Free hasn't earned. */}
-          {profile.upi && profile.pro ? (
-            <div style={{ padding: '16px 16px 0' }}>
-              <div style={{ display: 'flex', justifyContent: 'center' }}>
-                <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
-              </div>
-              <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.3 }}>Tap to enlarge · Double-tap to download</div>
-            </div>
-          ) : null}
-
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 0' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '16px 14px 0' }}>
             <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
             {profile.upi ? (
               <div style={{ flex: 1, minWidth: 0 }}>
+                {/* 2026-08-16 fix batch (item A3): the QR used to sit as its
+                    own block above this row — founder direction now is to
+                    fold it straight into the Pay Now button itself, so the
+                    button doubles as "tap = open pay sheet" and "double-tap
+                    the QR corner = download the QR" in one control. The QR
+                    thumbnail carries its own data-qr-zoom slot (same
+                    tap/double-tap handling as every other QR in the app —
+                    see mount.js's capture-phase listener, which stops the
+                    click from also reaching the button's own "pay now"
+                    handler), so the two gestures never collide. Pro only —
+                    Free's Pay Now opens the locked/upsell sheet instead, so
+                    a working payment QR here would be a path Free hasn't
+                    earned. */}
                 <Button
                   aria-label="Pay Now"
                   variant="primary"
-                  size="sm"
+                  size="md"
                   full
-                  icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}
+                  icon={
+                    profile.pro
+                      ? <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} size={34} pad={3} radius={8} />
+                      : <IconImg src="/ds/assets/actions/pay.png" size={18} invert fallback={Icons.rupee(18)} />
+                  }
                   style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
                 >
                   Pay Now
                 </Button>
+                {profile.pro && (
+                  <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginTop: 5, lineHeight: 1.3 }}>Double-tap the QR to download it</div>
+                )}
               </div>
             ) : (
               <div style={{ flex: 1 }} />
             )}
-            <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 18px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)', flexShrink: 0 }}>{Icons.share(15)}Share</button>
+            {/* Height/padding kept exactly in sync with Button's size="md"
+                metrics (52px / 0 24px) — same mismatch class of bug fixed
+                previously for size="sm"; bumping Pay Now to "md" for D1
+                (bigger buttons) without re-syncing this one would reopen it. */}
+            <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 8, height: 52, padding: '0 24px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 15, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)', flexShrink: 0 }}>{Icons.share(17)}Share</button>
           </div>
 
           {/* UPI ID + copy + Vakilpedia branding — one centered row under the
@@ -483,8 +485,11 @@ function VakilCardApp({ profile = defaultProfile }) {
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px 14px', flexWrap: 'wrap' }}>
             {profile.upi && (
               <>
-                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-low)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
-                <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(13)}</button>
+                {/* D2 (2026-08-16 fix batch): bumped from 12.5 -> 14.5, and
+                    the copy button from a 13px glyph to a proper 30px
+                    touch target (was borderline for reliable tapping). */}
+                <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--text-low)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
+                <button aria-label="Copy UPI ID" onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, width: 30, height: 30, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Icons.copy(17)}</button>
                 <VerifiedShield size="sm" label="" style={{ gap: 0, flexShrink: 0 }} />
                 <span style={{ width: 1, height: 12, background: 'var(--hairline-strong)', flexShrink: 0 }} />
               </>
@@ -580,6 +585,24 @@ function VakilCardApp({ profile = defaultProfile }) {
               </span>
             </div>
 
+            {/* Office address — merged in here (D4, 2026-08-16 fix batch):
+                previously its own "Office" Section further down the page,
+                paired with a decorative (non-functional — the "Open in
+                Maps" pill had a no-op onClick) fake-map tile. Removed that
+                tile entirely and folded the real address text into this
+                listing instead, since it's the same location this card is
+                already showing. The standalone Office section still renders
+                below as a fallback for profiles without a connected Google
+                Business (see !profile.googleBusiness branch). */}
+            {(profile.firm || (profile.address && profile.address.length)) && (
+              <div style={{ marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+                {profile.firm && <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--text-hi)', marginBottom: 4 }}>{profile.firm}</div>}
+                {profile.address && profile.address.length ? (
+                  <div style={{ fontSize: 12, color: 'var(--text-low)', lineHeight: 1.5 }}>{profile.address[0]}{profile.address[1] ? <><br />{profile.address[1]}</> : null}</div>
+                ) : null}
+              </div>
+            )}
+
             {/* Social handles — merged into this same tile (founder
                 direction 2026-08-16) rather than a separate card, so the
                 two don't cost a second heading + border + padding each. */}
@@ -634,19 +657,22 @@ function VakilCardApp({ profile = defaultProfile }) {
           </div>
         </Section>
 
-        <Section eyebrow="Office">
-          <div style={{ display: 'flex', gap: 14 }}>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-hi)', marginBottom: 6 }}>{profile.firm}</div>
-              <div style={{ fontSize: 13, color: 'var(--text-low)', lineHeight: 1.55 }}>{profile.address[0]}<br/>{profile.address[1]}</div>
-            </div>
-            <div onClick={() => {}} style={{ flex: '0 0 130px', borderRadius: 14, cursor: 'pointer', border: '1px solid var(--hairline)', position: 'relative', minHeight: 128, overflow: 'hidden' }}>
-              <StyledMap radius={14} />
-              <span style={{ position: 'absolute', top: '38%', left: '50%', transform: 'translate(-50%,-50%)', filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.45))' }}><GMapsPin size={34} /></span>
-              <div style={{ position: 'absolute', left: 8, right: 8, bottom: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 6, height: 30, borderRadius: 9, background: 'var(--glass-frost)', backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)', border: '1px solid var(--hairline)', color: 'var(--text-hi)', fontSize: 11, fontWeight: 700 }}>{Icons.ext(13)} Open in Maps</div>
-            </div>
-          </div>
-        </Section>
+        {/* D4 (2026-08-16 fix batch): the office address used to always
+            render here alongside a decorative fake-map tile (pure CSS/SVG,
+            no real map API, and its "Open in Maps" pill had a literal
+            no-op onClick — never functional). That tile is gone, and the
+            address text itself now lives inside the Google Business
+            section above whenever one exists. This fallback only fires for
+            profiles with no connected Google Business (Free tier, or Pro
+            not yet connected) — the address must never disappear for them. */}
+        {!profile.googleBusiness && (profile.firm || (profile.address && profile.address.length)) ? (
+          <Section eyebrow="Office">
+            {profile.firm && <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-hi)', marginBottom: 6 }}>{profile.firm}</div>}
+            {profile.address && profile.address.length ? (
+              <div style={{ fontSize: 13, color: 'var(--text-low)', lineHeight: 1.55 }}>{profile.address[0]}{profile.address[1] ? <><br />{profile.address[1]}</> : null}</div>
+            ) : null}
+          </Section>
+        ) : null}
 
         {/* Footer — every element is a real link (brand → vakilpedia.com,
             icons → Vakilpedia's own LinkedIn / YouTube / Facebook). */}

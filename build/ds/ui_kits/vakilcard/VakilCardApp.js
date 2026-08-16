@@ -398,7 +398,10 @@ const SOCIAL_META = {
 function InlineUpiQr({
   upi,
   name,
-  qrUrl
+  qrUrl,
+  size = 92,
+  radius = 12,
+  pad = 6
 }) {
   // Prefer the lawyer's OWN uploaded QR (shown + downloaded exactly as
   // uploaded). Only when there's no uploaded image do we draw a valid QR
@@ -435,18 +438,19 @@ function InlineUpiQr({
     "data-qr-caption": `Scan to pay ${upi}`,
     role: "button",
     tabIndex: 0,
-    "aria-label": "Tap to enlarge the payment QR",
-    title: "Tap to enlarge",
+    "aria-label": "Payment QR \u2014 tap to enlarge, double-tap to download",
+    title: "Tap to enlarge \xB7 Double-tap to download",
     style: {
-      width: 92,
-      height: 92,
-      borderRadius: 12,
+      width: size,
+      height: size,
+      borderRadius: radius,
       background: '#fff',
-      padding: 6,
+      padding: pad,
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
-      cursor: 'zoom-in'
+      cursor: 'zoom-in',
+      flexShrink: 0
     }
   }, dataUrl ? /*#__PURE__*/React.createElement("img", {
     src: dataUrl,
@@ -454,13 +458,13 @@ function InlineUpiQr({
     style: {
       width: '100%',
       height: '100%',
-      borderRadius: 6
+      borderRadius: Math.max(radius - 6, 2)
     }
   }) : /*#__PURE__*/React.createElement("span", {
     style: {
       color: '#0b0b0b'
     }
-  }, Icons.qr(40)));
+  }, Icons.qr(Math.round(size * 0.43))));
 }
 
 /* ---- Profiles — the card is data-driven; swap `profile` for a real or demo lawyer ---- */
@@ -570,113 +574,10 @@ function GMapsPin({
   }));
 }
 
-/* ---- Stylised vector map backdrop (Office tile) — pure inline SVG, no map
-   API / tiles / screenshots, so it's lightweight and free of Google copyright.
-   Dark premium blue-grey palette with soft roads, water and parks; two layers
-   drift gently at different speeds (see .vp-map-far/.vp-map-near in page.css)
-   for a subtle parallax that keeps the tile from reading as an empty box. ---- */
-function StyledMap({
-  radius = 14
-}) {
-  return /*#__PURE__*/React.createElement("div", {
-    "aria-hidden": "true",
-    style: {
-      position: 'absolute',
-      inset: 0,
-      borderRadius: radius,
-      overflow: 'hidden',
-      background: 'linear-gradient(160deg, #21324f 0%, #1a2740 55%, #131d31 100%)'
-    }
-  }, /*#__PURE__*/React.createElement("svg", {
-    className: "vp-map-far",
-    viewBox: "0 0 240 240",
-    preserveAspectRatio: "xMidYMid slice",
-    style: {
-      position: 'absolute',
-      inset: '-14%',
-      width: '128%',
-      height: '128%'
-    }
-  }, /*#__PURE__*/React.createElement("g", {
-    fill: "#294a3d",
-    opacity: "0.8"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "14",
-    y: "150",
-    width: "64",
-    height: "58",
-    rx: "12"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "158",
-    y: "22",
-    width: "76",
-    height: "54",
-    rx: "12"
-  })), /*#__PURE__*/React.createElement("path", {
-    d: "M-10 66 C 60 44, 92 112, 152 96 S 250 122, 262 102 L 262 152 C 200 160, 150 138, 100 158 S 18 156, -10 138 Z",
-    fill: "#274a68",
-    opacity: "0.9"
-  }), /*#__PURE__*/React.createElement("g", {
-    fill: "#28374f"
-  }, /*#__PURE__*/React.createElement("rect", {
-    x: "28",
-    y: "28",
-    width: "36",
-    height: "30",
-    rx: "6"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "82",
-    y: "22",
-    width: "42",
-    height: "26",
-    rx: "6"
-  }), /*#__PURE__*/React.createElement("rect", {
-    x: "118",
-    y: "150",
-    width: "48",
-    height: "36",
-    rx: "7"
-  }))), /*#__PURE__*/React.createElement("svg", {
-    className: "vp-map-near",
-    viewBox: "0 0 240 240",
-    preserveAspectRatio: "xMidYMid slice",
-    style: {
-      position: 'absolute',
-      inset: '-10%',
-      width: '120%',
-      height: '120%'
-    }
-  }, /*#__PURE__*/React.createElement("g", {
-    stroke: "#93a9cc",
-    strokeWidth: "6",
-    strokeLinecap: "round",
-    fill: "none",
-    opacity: "0.9"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M-10 92 H 262"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M72 -10 V 262"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M-10 28 C 80 72, 142 40, 262 82"
-  })), /*#__PURE__*/React.createElement("g", {
-    stroke: "#3f5378",
-    strokeWidth: "3",
-    strokeLinecap: "round",
-    fill: "none"
-  }, /*#__PURE__*/React.createElement("path", {
-    d: "M-10 152 H 262"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M152 -10 V 262"
-  }), /*#__PURE__*/React.createElement("path", {
-    d: "M20 202 H 204"
-  }))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'absolute',
-      inset: 0,
-      background: 'radial-gradient(120% 90% at 50% 8%, transparent 52%, rgba(8,12,22,0.34))'
-    }
-  }));
-}
+// StyledMap (decorative Office-tile map backdrop) removed 2026-08-16 fix
+// batch (D4) — the fake-map tile it backed is gone; see the Office section
+// and the merged Google Business listing further down.
+
 function ThemeToggle({
   theme,
   onToggle
@@ -699,7 +600,12 @@ function ThemeToggle({
   }, theme === 'dark' ? Icons.sun(18) : Icons.moon(18));
 }
 
-/* ---- Section wrapper ---- */
+/* ---- Section wrapper ----
+   2026-08-16 fix batch (D1): pad trimmed 20 -> 15 and the eyebrow's bottom
+   margin 14 -> 11 — reclaims real vertical space on mobile without the
+   section reading as cramped; the eyebrow label itself is bumped up in
+   compensation (10.5 -> 11.5 handled at the call sites' font-size, this
+   wrapper only owns the eyebrow strip layout). */
 function Section({
   eyebrow,
   action,
@@ -709,9 +615,9 @@ function Section({
   return /*#__PURE__*/React.createElement(GlassCard, {
     tone: "thin",
     radius: "xl",
-    pad: 20,
+    pad: 15,
     style: {
-      marginBottom: 16,
+      marginBottom: 14,
       ...style
     }
   }, eyebrow && /*#__PURE__*/React.createElement("div", {
@@ -719,11 +625,11 @@ function Section({
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 14
+      marginBottom: 11
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 11,
+      fontSize: 11.5,
       fontWeight: 800,
       letterSpacing: '0.16em',
       textTransform: 'uppercase',
@@ -1061,7 +967,14 @@ function VakilCardApp({
   // Muted aerial-map backdrop for the Directions tile (CSS-only — no map
   // tile fetch/API key) — faint dual-grain grid lines over a slate-green
   // base evoke terrain/road without competing with the Google pin overlay.
-  const mapTileBg = 'repeating-linear-gradient(90deg, rgba(147,169,204,.14) 0 1.5px, transparent 1.5px 22px),' + 'repeating-linear-gradient(0deg, rgba(147,169,204,.10) 0 1.5px, transparent 1.5px 26px),' + 'linear-gradient(150deg, #33415c 0%, #263349 55%, #1b273c 100%)';
+  // D3 fix (2026-08-16 fix batch): this was a single hardcoded DARK gradient
+  // with no light-theme variant, unlike every other ActionTile (which use
+  // the theme-aware `var(--glass)` default) — so switching to light mode
+  // left this one tile a dark slate island against light neighbours,
+  // reported as "colour gaps". Now branches on `theme` with a light
+  // equivalent (same grid pattern, pale blue-grey base) instead of one
+  // fixed value.
+  const mapTileBg = theme === 'light' ? 'repeating-linear-gradient(90deg, rgba(71,92,133,.10) 0 1.5px, transparent 1.5px 22px),' + 'repeating-linear-gradient(0deg, rgba(71,92,133,.08) 0 1.5px, transparent 1.5px 26px),' + 'linear-gradient(150deg, #eef1f7 0%, #e4e9f2 55%, #dbe1ed 100%)' : 'repeating-linear-gradient(90deg, rgba(147,169,204,.14) 0 1.5px, transparent 1.5px 22px),' + 'repeating-linear-gradient(0deg, rgba(147,169,204,.10) 0 1.5px, transparent 1.5px 26px),' + 'linear-gradient(150deg, #33415c 0%, #263349 55%, #1b273c 100%)';
   // `k` is the availability key (see profile.actions from the SSR layer). A
   // tile whose action has no real target renders disabled/greyed. Tiles with
   // no `k` (Appointment, Save) are always available.
@@ -1241,33 +1154,12 @@ function VakilCardApp({
       border: '1px solid var(--hairline-strong)',
       boxShadow: '0 6px 18px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04), var(--inset-edge)'
     }
-  }, profile.upi && profile.pro ? /*#__PURE__*/React.createElement("div", {
-    style: {
-      padding: '16px 16px 0'
-    }
   }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      justifyContent: 'center'
-    }
-  }, /*#__PURE__*/React.createElement(InlineUpiQr, {
-    upi: profile.upi,
-    name: profile.name,
-    qrUrl: profile.payQrUrl
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      fontSize: 9.5,
-      color: 'var(--text-dim)',
-      marginTop: 6,
-      lineHeight: 1.3
-    }
-  }, "Tap to enlarge \xB7 Double-tap to download")) : null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
       gap: 8,
-      padding: '14px 14px 0'
+      padding: '16px 14px 0'
     }
   }, /*#__PURE__*/React.createElement(ThemeToggle, {
     theme: theme,
@@ -1280,19 +1172,34 @@ function VakilCardApp({
   }, /*#__PURE__*/React.createElement(Button, {
     "aria-label": "Pay Now",
     variant: "primary",
-    size: "sm",
+    size: "md",
     full: true,
-    icon: /*#__PURE__*/React.createElement(IconImg, {
+    icon: profile.pro ? /*#__PURE__*/React.createElement(InlineUpiQr, {
+      upi: profile.upi,
+      name: profile.name,
+      qrUrl: profile.payQrUrl,
+      size: 34,
+      pad: 3,
+      radius: 8
+    }) : /*#__PURE__*/React.createElement(IconImg, {
       src: "/ds/assets/actions/pay.png",
-      size: 16,
+      size: 18,
       invert: true,
-      fallback: Icons.rupee(16)
+      fallback: Icons.rupee(18)
     }),
     style: !profile.pro ? {
       opacity: 0.45,
       filter: 'grayscale(1)'
     } : undefined
-  }, "Pay Now")) : /*#__PURE__*/React.createElement("div", {
+  }, "Pay Now"), profile.pro && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      fontSize: 9.5,
+      color: 'var(--text-dim)',
+      marginTop: 5,
+      lineHeight: 1.3
+    }
+  }, "Double-tap the QR to download it")) : /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
@@ -1301,21 +1208,21 @@ function VakilCardApp({
     style: {
       display: 'inline-flex',
       alignItems: 'center',
-      gap: 7,
-      height: 40,
-      padding: '0 18px',
+      gap: 8,
+      height: 52,
+      padding: '0 24px',
       borderRadius: 'var(--r-pill)',
       background: 'linear-gradient(180deg, #17c964, #12a150)',
       border: '1px solid rgba(255,255,255,0.18)',
       color: '#fff',
-      fontSize: 13.5,
+      fontSize: 15,
       fontWeight: 800,
       fontFamily: 'var(--font-sans)',
       cursor: 'pointer',
       boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       flexShrink: 0
     }
-  }, Icons.share(15), "Share")), /*#__PURE__*/React.createElement("div", {
+  }, Icons.share(17), "Share")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
@@ -1326,7 +1233,7 @@ function VakilCardApp({
     }
   }, profile.upi && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 12.5,
+      fontSize: 14.5,
       fontWeight: 700,
       color: 'var(--text-low)',
       fontFamily: 'var(--font-mono)',
@@ -1335,19 +1242,24 @@ function VakilCardApp({
       whiteSpace: 'nowrap'
     }
   }, profile.upi), /*#__PURE__*/React.createElement("button", {
+    "aria-label": "Copy UPI ID",
     onClick: () => {
       setCopied(true);
       setTimeout(() => setCopied(false), 1200);
     },
     style: {
       flexShrink: 0,
+      width: 30,
+      height: 30,
       background: 'none',
       border: 'none',
       color: copied ? 'var(--success)' : 'var(--text-low)',
       cursor: 'pointer',
-      display: 'flex'
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center'
     }
-  }, Icons.copy(13)), /*#__PURE__*/React.createElement(VerifiedShield, {
+  }, Icons.copy(17)), /*#__PURE__*/React.createElement(VerifiedShield, {
     size: "sm",
     label: "",
     style: {
@@ -1541,7 +1453,26 @@ function VakilCardApp({
       textTransform: 'uppercase',
       color: 'var(--text-dim)'
     }
-  }, "Google"))), social.length > 0 && /*#__PURE__*/React.createElement("div", {
+  }, "Google"))), (profile.firm || profile.address && profile.address.length) && /*#__PURE__*/React.createElement("div", {
+    style: {
+      marginTop: 14,
+      paddingTop: 14,
+      borderTop: '1px solid var(--hairline)'
+    }
+  }, profile.firm && /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 13.5,
+      fontWeight: 700,
+      color: 'var(--text-hi)',
+      marginBottom: 4
+    }
+  }, profile.firm), profile.address && profile.address.length ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      fontSize: 12,
+      color: 'var(--text-low)',
+      lineHeight: 1.5
+    }
+  }, profile.address[0], profile.address[1] ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("br", null), profile.address[1]) : null) : null), social.length > 0 && /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       flexWrap: 'wrap',
@@ -1685,74 +1616,22 @@ function VakilCardApp({
     }
   }, practice.map(p => /*#__PURE__*/React.createElement("span", {
     key: p
-  }, p)))), /*#__PURE__*/React.createElement(Section, {
+  }, p)))), !profile.googleBusiness && (profile.firm || profile.address && profile.address.length) ? /*#__PURE__*/React.createElement(Section, {
     eyebrow: "Office"
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      gap: 14
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      flex: 1
-    }
-  }, /*#__PURE__*/React.createElement("div", {
+  }, profile.firm && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 15,
       fontWeight: 700,
       color: 'var(--text-hi)',
       marginBottom: 6
     }
-  }, profile.firm), /*#__PURE__*/React.createElement("div", {
+  }, profile.firm), profile.address && profile.address.length ? /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 13,
       color: 'var(--text-low)',
       lineHeight: 1.55
     }
-  }, profile.address[0], /*#__PURE__*/React.createElement("br", null), profile.address[1])), /*#__PURE__*/React.createElement("div", {
-    onClick: () => {},
-    style: {
-      flex: '0 0 130px',
-      borderRadius: 14,
-      cursor: 'pointer',
-      border: '1px solid var(--hairline)',
-      position: 'relative',
-      minHeight: 128,
-      overflow: 'hidden'
-    }
-  }, /*#__PURE__*/React.createElement(StyledMap, {
-    radius: 14
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      position: 'absolute',
-      top: '38%',
-      left: '50%',
-      transform: 'translate(-50%,-50%)',
-      filter: 'drop-shadow(0 2px 6px rgba(0,0,0,0.45))'
-    }
-  }, /*#__PURE__*/React.createElement(GMapsPin, {
-    size: 34
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      position: 'absolute',
-      left: 8,
-      right: 8,
-      bottom: 8,
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 6,
-      height: 30,
-      borderRadius: 9,
-      background: 'var(--glass-frost)',
-      backdropFilter: 'blur(8px)',
-      WebkitBackdropFilter: 'blur(8px)',
-      border: '1px solid var(--hairline)',
-      color: 'var(--text-hi)',
-      fontSize: 11,
-      fontWeight: 700
-    }
-  }, Icons.ext(13), " Open in Maps")))), /*#__PURE__*/React.createElement("div", {
+  }, profile.address[0], profile.address[1] ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("br", null), profile.address[1]) : null) : null) : null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',

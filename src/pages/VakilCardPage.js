@@ -223,6 +223,44 @@ function GoogleConnectHero({ pro }) {
   );
 }
 
+// 2026-08-16 fix batch (item A7): a persistent connection indicator, always
+// visible near the top of the dashboard — not just while disconnected
+// (GoogleConnectHero above self-hides once fully connected, so previously
+// there was no lasting on-page confirmation the connection is still live).
+// Green dot = both Calendar + Business connected; red = not (yet), or only
+// partially. Own lightweight config fetch, same pattern as
+// GoogleConnectHero, so it doesn't need state lifted through the tree —
+// polls again on window focus so a disconnect/reconnect done elsewhere
+// (e.g. the Booking & Reviews panel below) is reflected without a reload.
+function GoogleStatusChip({ pro }) {
+  const [cfg, setCfg] = useState(null);
+  const refresh = useCallback(() => {
+    if (!pro) return;
+    getBookingConfig().then(setCfg).catch(() => setCfg(null));
+  }, [pro]);
+  useEffect(() => { refresh(); }, [refresh]);
+  useEffect(() => {
+    if (!pro) return;
+    window.addEventListener("focus", refresh);
+    return () => window.removeEventListener("focus", refresh);
+  }, [pro, refresh]);
+  if (!pro || !cfg || !cfg.calendar_platform_configured) return null;
+  const connected = !!(cfg.calendar_connected && cfg.google_business_connected);
+  const partial = !connected && !!(cfg.calendar_connected || cfg.google_business_connected);
+  const label = connected ? "Google connected" : partial ? "Google partially connected" : "Google not connected";
+  const dotColor = connected ? "bg-emerald-500" : partial ? "bg-amber-500" : "bg-rose-500";
+  return (
+    <span
+      className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold px-2.5 py-1"
+      title={label}
+      aria-label={label}
+    >
+      <span className={`h-2 w-2 rounded-full flex-none ${dotColor}`} aria-hidden="true" />
+      {label}
+    </span>
+  );
+}
+
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Booking & Reviews — the one panel covering Phase 3 (Free windows-based
@@ -913,6 +951,7 @@ export default function VakilCardPage() {
           <span className={`rounded-full text-[11px] font-black uppercase tracking-wider px-3 py-1 ${pro ? "bg-[#635BFF] text-white" : "bg-slate-200 text-slate-600"}`}>
             {pro ? "Pro" : "Free"}
           </span>
+          <GoogleStatusChip pro={pro} />
         </div>
         <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
       </div>

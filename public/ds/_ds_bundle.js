@@ -641,9 +641,9 @@ function ActionTile({
       flexDirection: 'column',
       alignItems: 'center',
       justifyContent: 'center',
-      gap: 8,
-      minHeight: 96,
-      padding: '16px 10px',
+      gap: 6,
+      minHeight: 92,
+      padding: '11px 7px',
       width: '100%',
       background: 'var(--glass)',
       border: '1px solid var(--hairline)',
@@ -666,7 +666,7 @@ function ActionTile({
     }
   }, icon), /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 13,
+      fontSize: 14,
       fontWeight: 700,
       letterSpacing: '-0.01em',
       textAlign: 'center',
@@ -674,7 +674,7 @@ function ActionTile({
     }
   }, label), sublabel && /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 11,
+      fontSize: 11.5,
       color: 'var(--text-low)',
       fontWeight: 500
     }

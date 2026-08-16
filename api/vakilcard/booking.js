@@ -35,6 +35,24 @@ function json(res, status, data) {
   res.end(JSON.stringify(data));
 }
 
+// 2026-08-16 fix batch: root cause of "appointment button slow / connect
+// fails silently" — none of this file's Google API calls had a timeout, so
+// a slow (not erroring) Google response left the whole booking request
+// hanging indefinitely instead of degrading to windows-only/fallback as the
+// surrounding comments already claimed. This wraps fetch() with an
+// AbortController-based deadline; callers keep their existing try/catch
+// (a timeout just throws like any other fetch failure) so no call site
+// needs to change its error handling.
+async function fetchWithTimeout(url, opts = {}, timeoutMs = 6000) {
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...opts, signal: controller.signal });
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 // ---------------------------------------------------------------------------
 // Google Calendar (Pro's "Smart" booking) — folded into this file rather than
 // its own api/vakilcard/calendar.js endpoint: Vercel's Hobby plan caps a
@@ -73,7 +91,7 @@ function notConfigured(res) {
 }
 
 async function gcalExchangeCode(code) {
-  const r = await fetch("https://oauth2.googleapis.com/token", {
+  const r = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -90,7 +108,7 @@ async function gcalExchangeCode(code) {
 }
 
 async function gcalRefreshAccessToken(refreshToken) {
-  const r = await fetch("https://oauth2.googleapis.com/token", {
+  const r = await fetchWithTimeout("https://oauth2.googleapis.com/token", {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
@@ -139,7 +157,7 @@ async function freeBusy(profileId, { days = 14 } = {}) {
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + days * 86400000).toISOString();
   try {
-    const r = await fetch("https://www.googleapis.com/calendar/v3/freeBusy", {
+    const r = await fetchWithTimeout("https://www.googleapis.com/calendar/v3/freeBusy", {
       method: "POST",
       headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
       body: JSON.stringify({ timeMin, timeMax, items: [{ id: calendarId }] }),
@@ -227,7 +245,7 @@ async function storeCalendarConnection(pid, t) {
 async function storeBusinessConnection(pid, t) {
   try {
     const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
-    const accountsRes = await fetch("https://mybusinessbusinessinformation.googleapis.com/v1/accounts", {
+    const accountsRes = await fetchWithTimeout("https://mybusinessbusinessinformation.googleapis.com/v1/accounts", {
       headers: { Authorization: `Bearer ${t.access_token}` },
     });
     if (!accountsRes.ok) throw new Error(`GMB accounts fetch failed: ${await accountsRes.text()}`);
@@ -235,7 +253,7 @@ async function storeBusinessConnection(pid, t) {
     if (accounts.length === 0) return { ok: false, reason: "gmb_no_accounts" };
 
     const accountName = accounts[0].name;
-    const locationsRes = await fetch(
+    const locationsRes = await fetchWithTimeout(
       `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,metadata`,
       { headers: { Authorization: `Bearer ${t.access_token}` } }
     );

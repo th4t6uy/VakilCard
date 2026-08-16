@@ -28,6 +28,27 @@
     React.createElement(window.VakilCardApp, { profile: profile })
   );
 
+  /* 2026-08-16 fix batch: long-pressing any tile/button/logo/QR image was
+     triggering the browser's native "save image" / "open link" context
+     menu (iOS -webkit-touch-callout + Android's default long-press
+     handling) — jarring on a card meant to feel like a native app, and it
+     also fought with the app's own double-tap-to-download QR gesture.
+     Wiring-layer concern (like the sheets/QR-zoom overlays this file
+     already injects), not a component-markup change, so it's scoped to
+     #root only rather than touching VakilCardApp.jsx per-element. */
+  (function preventLongPressMenu() {
+    var style = document.createElement("style");
+    style.textContent =
+      "#root, #root *{-webkit-touch-callout:none}" +
+      "#root img, #root svg{-webkit-user-drag:none;user-drag:none;pointer-events:auto}";
+    document.head.appendChild(style);
+    var rootEl = document.getElementById("root");
+    if (rootEl) {
+      rootEl.addEventListener("contextmenu", function (e) { e.preventDefault(); }, false);
+      rootEl.addEventListener("dragstart", function (e) { e.preventDefault(); }, false);
+    }
+  })();
+
   function track(ev) {
     if (visualOnly || !boot.profileId) return;
     try {
@@ -123,7 +144,13 @@
       // office's Google Maps listing to let visitors read existing reviews
       // (links.reviewView) — never a dead tap either way, and never showing
       // a "leave a review" action Free hasn't unlocked.
-      else if (label.indexOf("review") === 0) {
+      // 2026-08-16 fix batch: was `label.indexOf("review") === 0`, which
+      // only matches a caption that STARTS with "review" — but the real
+      // server-rendered captions are "Leave a Review" / "View Reviews"
+      // (profile.js buildLinks()), so neither actual case ever matched and
+      // the tile was a dead tap for every entitled user. indexOf(...) !== -1
+      // matches the word anywhere in the caption instead.
+      else if (label.indexOf("review") !== -1) {
         if (links.review) { go = links.review; ev = "google_review"; newTab = true; }
         else if (links.reviewView) { go = links.reviewView; newTab = true; }
       }
@@ -207,17 +234,22 @@
   /* ---------- Shared UPI app launcher set ----------
      One brand list drives the Pro pay sheet, the free Pay Now sheet AND the
      booking payment step, so iconography and ordering never drift apart.
-     GPay / PhonePe / Paytm / BHIM / CRED, each launched by its own scheme so
-     a bare upi:// can't be hijacked by the device's default handler.
-     Everything else rides the "Any UPI app" row below (standard upi://
-     intent → the OS chooser / default app — never a dead tap).
+     GPay / PhonePe / Paytm / BHIM / CRED / WhatsApp, each launched by its own
+     scheme so a bare upi:// can't be hijacked by the device's default
+     handler — no separate fallback row (2026-08-16 fix batch: removed, see
+     upiLauncherHtml below).
      Scheme confidence (2026-08-16 fix batch): tez:// / phonepe:// /
      paytmmp:// were already live and working. bhim:// is NPCI's own
      reference-app scheme, high confidence. credpay:// is community-sourced,
      not NPCI-verified — flagged here in case it needs a follow-up fix once
-     tested on a real device with CRED installed. Brand icons for bhim/cred
-     don't exist yet under /ds/assets/upi/ — appTile() already falls back to
-     the plain ₹ tile (never a broken image) until real PNGs are added. */
+     tested on a real device with CRED installed. WhatsApp Pay has no public,
+     distinct URI scheme for external deep-linking (its UPI payments run
+     inside WhatsApp's own chat UI, not via an external intent) — this tile
+     uses the same generic upi:// intent as every other UPI-registered app,
+     so it opens WhatsApp directly when WhatsApp is the device's UPI handler
+     for the tapped VPA, or the OS chooser otherwise. That is the same actual
+     payment link (q) as every other tile — never a dead tap, and never a
+     WhatsApp *chat* link (this is not links.whatsapp). */
   function upiLauncherApps(q) {
     return [
       ["gpay", "Google Pay", "#fff", "tez://upi/pay?" + q],
@@ -225,6 +257,7 @@
       ["paytm", "Paytm", "#fff", "paytmmp://pay?" + q],
       ["bhim", "BHIM UPI", "#fff", "bhim://upi/pay?" + q],
       ["cred", "CRED", "#fff", "credpay://upi/pay?" + q],
+      ["whatsapp", "WhatsApp Pay", "#fff", "upi://pay?" + q],
     ];
   }
 
@@ -239,24 +272,19 @@
     );
   }
 
-  /** The launcher block: 3-across brand grid (wraps to 2 rows for 5 apps) +
-      full-width "Any UPI app" row. That fallback row is a bare upi:// link —
-      the OS decides which app opens it. On a phone where WhatsApp has been
-      set as the DEFAULT app for upi:// links, WhatsApp opens instead of a
-      chooser: that's the device's own "open by default" setting (Android:
-      Settings > Apps > WhatsApp > Open by default; iOS has no equivalent
-      per-scheme override at all), not something a webpage can force past —
-      naming GPay/PhonePe/Paytm/BHIM/CRED explicitly above (each its own
-      scheme) is the real fix, since it lets most payers skip this row
-      entirely instead of hitting the ambiguous fallback. */
+  /** The launcher block: 3-across brand grid (wraps to 2 rows for 6 apps).
+      2026-08-16 fix batch: the generic "Other UPI app" fallback row was
+      removed — every app now on the grid (GPay/PhonePe/Paytm/BHIM/CRED/
+      WhatsApp) has its own named tile and its own scheme/intent, so the
+      ambiguous bare upi:// fallback (which could silently hand off to
+      whatever app the phone treats as its UPI default) no longer adds any
+      coverage the named tiles don't already provide. `upiUri` is accepted
+      for call-site compatibility but is no longer rendered directly here. */
   function upiLauncherHtml(q, upiUri) {
     return (
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;justify-items:center;padding:6px 0 2px">' +
       upiLauncherApps(q).map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
-      "</div>" +
-      '<a href="' + upiUri.replace(/"/g, "&quot;") + '" aria-label="Pay with any UPI app" style="' + sheetBtnCss + ';justify-content:center">' +
-      nounIcon("pay") +
-      "Other UPI app</a>"
+      "</div>"
     );
   }
 
@@ -607,13 +635,38 @@
     var username = (boot.profile && boot.profile.username) || "";
     if (!username || !boot.profileId) { showFallback(); return; }
 
-    fetch("/api/vakilcard/booking?action=public_slots&username=" + encodeURIComponent(username))
+    // 2026-08-16 fix batch: root cause of "appointment button slow / feels
+    // stuck" was that this fetch had NO timeout — the server's own Google
+    // Calendar calls (freeBusy / token refresh) also had none, so a slow
+    // (not erroring) Google response left this request hanging silently
+    // with no loading state and no fallback ever firing. Fixed on both
+    // ends: an immediate loading sheet here so the tap always gets instant
+    // feedback, plus an AbortController so a hung request degrades to the
+    // WhatsApp/Call fallback within 8s instead of stalling indefinitely.
+    var loading = openSheet("Book an appointment", '<div style="display:flex;align-items:center;justify-content:center;padding:28px 0;color:var(--text-low);font-size:13px">Loading available times…</div>');
+    var controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+    var timedOut = false;
+    var timer = setTimeout(function () {
+      timedOut = true;
+      if (controller) controller.abort();
+    }, 8000);
+
+    fetch(
+      "/api/vakilcard/booking?action=public_slots&username=" + encodeURIComponent(username),
+      controller ? { signal: controller.signal } : undefined
+    )
       .then(function (r) { return r.ok ? r.json() : null; })
       .then(function (data) {
+        clearTimeout(timer);
+        loading.close();
         if (!data || !Array.isArray(data.slots) || !data.slots.length) { showFallback(); return; }
         renderSlotPicker(data);
       })
-      .catch(showFallback);
+      .catch(function () {
+        clearTimeout(timer);
+        loading.close();
+        showFallback();
+      });
   }
 
   function renderSlotPicker(data) {

@@ -26,10 +26,5 @@ html,body{margin:0;height:100%;background:var(--bg-void);font-family:var(--font-
 .vp-scroll.is-scrolling::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.28)}
 [data-theme="light"] .vp-scroll.is-scrolling{scrollbar-color:rgba(30,28,40,0.28) transparent}
 [data-theme="light"] .vp-scroll.is-scrolling::-webkit-scrollbar-thumb{background:rgba(30,28,40,0.28)}
-/* Stylised vector map (Office tile) — two layers drift at different speeds for
-   a gentle premium parallax. Slow + tiny amplitude = never distracting. */
-.vp-map-far{animation:vpMapDriftA 30s ease-in-out infinite;will-change:transform}
-.vp-map-near{animation:vpMapDriftB 38s ease-in-out infinite;will-change:transform}
-@keyframes vpMapDriftA{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(-8px,-6px,0)}}
-@keyframes vpMapDriftB{0%,100%{transform:translate3d(0,0,0)}50%{transform:translate3d(9px,6px,0)}}
-@media (prefers-reduced-motion: reduce){.vp-map-far,.vp-map-near{animation:none!important}}
+/* .vp-map-far/.vp-map-near (Office tile decorative map parallax) removed
+   2026-08-16 fix batch (D4) — the fake-map tile they animated is gone. */
