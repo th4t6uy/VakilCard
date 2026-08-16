@@ -156,7 +156,14 @@ const demoProfile = {
   address: ['123 Legal Street', 'Example City – 110001'],
   // Demo renders as Pro — showcase the Google Business tile too, and (as of
   // the merged-pill rework) the Pro payment QR rather than the locked state.
-  googleBusiness: { name: 'Sidharth Gautam Law Chambers', address: '123 Legal Street, Example City' },
+  // rating/reviewCount: sample data only, so the design preview actually
+  // exercises the real-rating branch (stars + count) instead of always
+  // falling back to the honest "no rating on file yet" copy — the live
+  // card only ever shows a rating profile.js populated from a real,
+  // OAuth-verified Google Business connection (see profile.js/booking.js;
+  // real ratings are separately blocked on Google's Reviews API quota
+  // approval, unrelated to this demo).
+  googleBusiness: { name: 'Sidharth Gautam Law Chambers', address: '123 Legal Street, Example City', rating: 4.8, reviewCount: 126 },
   pro: true,
 };
 window.vakilDefaultProfile = defaultProfile;
@@ -417,82 +424,77 @@ function VakilCardApp({ profile = defaultProfile }) {
       <div ref={scroller} onScroll={onScroll} className={scrolling ? 'vp-scroll is-scrolling' : 'vp-scroll'} style={{ position: 'relative', zIndex: 1, flex: 1, overflowY: 'auto', padding: '0 16px calc(48px + env(safe-area-inset-bottom, 0px))', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ height: compact ? 246 : 288, transition: 'height var(--dur-slow) var(--ease-glass)' }} />
 
-        {/* Merged Vakilpedia + Payment pill. Brand row: Theme toggle then
-            Share — Share is deliberately the corner-most (rightmost)
-            control. Payment row only renders when a UPI ID exists, and is
-            now compact (no inline QR by default — added back only for Pro,
-            right above the button, so it doesn't compete with Connect for
-            hero space below). Pay Now stays a plain button (not native
-            `disabled`) even when locked for Free, because mount.js's single
-            delegated document click-handler is what actually drives it —
-            see the "pay now" branch there for the Free vs Pro split. */}
+        {/* Payment pill — v5 redesign (founder direction 2026-08-16): the
+            Vakilpedia brand row is gone from here entirely (moved to a
+            footer line in Connect below), which combined with folding
+            Theme+Pay+Share into one row cuts this tile roughly in half —
+            the main lever for getting Google Business into the hero on
+            short mobile viewports. Row order left-to-right is deliberate:
+            Theme (leftmost) · Pay Now (center, takes the remaining width)
+            · Share (rightmost/corner-most, unchanged position from before).
+            Pay Now stays a plain button (not native `disabled`) even when
+            locked for Free, because mount.js's single delegated document
+            click-handler is what actually drives it — see the "pay now"
+            branch there for the Free vs Pro split. */}
         <div style={{ borderRadius: 'var(--r-xl)', marginBottom: 16, overflow: 'hidden', background: 'var(--glass-frost)', backdropFilter: 'blur(24px) saturate(1.4)', WebkitBackdropFilter: 'blur(24px) saturate(1.4)', border: '1px solid var(--hairline-strong)', boxShadow: '0 6px 18px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04), var(--inset-edge)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, height: 56, padding: '0 8px 0 14px' }}>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-              <img src="../../assets/logos/vakilpedia.png" alt="" style={{ height: 26 }} />
-              <span style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--text-hi)' }}>Vakilpedia<sup style={{ fontSize: '0.42em', fontWeight: 500, opacity: 0.5 }}>TM</sup></span>
-            </div>
-            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-              <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
-              <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 18px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)' }}>{Icons.share(15)}Share</button>
-            </div>
-          </div>
-
-          {profile.upi ? (
-            <div style={{ padding: '14px 16px 16px', borderTop: '1px solid var(--hairline)' }}>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                <div style={{ minWidth: 0 }}>
-                  <div style={{ fontSize: 10.5, color: 'var(--text-low)' }}>UPI ID</div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 2 }}>
-                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-hi)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
-                    <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(14)}</button>
-                  </div>
-                </div>
-                <VerifiedShield size="sm" label="" style={{ gap: 0, flexShrink: 0 }} />
+          {/* Pro only — same QR the pay sheet and dashboard's own payment-QR
+              draw from (one shared window.qrcode renderer). Sits above the
+              button row now instead of between the UPI line and the button,
+              so the row below reads as one clean unit. Free never gets this
+              — Free's Pay Now opens the locked/upsell sheet, so a working
+              QR here would be a payment path Free hasn't earned. */}
+          {profile.upi && profile.pro ? (
+            <div style={{ padding: '16px 16px 0' }}>
+              <div style={{ display: 'flex', justifyContent: 'center' }}>
+                <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
               </div>
-
-              {/* Pro only — the same QR the pay sheet and dashboard's own
-                  payment-QR draw from (one shared window.qrcode renderer,
-                  never a second implementation). Removed from Free's view
-                  entirely, not just visually — Free's Pay Now opens the
-                  locked/upsell sheet instead of a working pay flow now, so a
-                  QR here would be a real payment path Free hasn't earned. */}
-              {profile.pro ? (
-                <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0 4px' }}>
-                  <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
-                </div>
-              ) : null}
-              {profile.pro && (
-                <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.3 }}>Tap to enlarge · Double-tap to download</div>
-              )}
-
-              {/* full: the button previously defaulted to inline/auto width
-                  inside this full-width block, leaving dead space to its
-                  right (bottom-right of the pill) below the UPI row and
-                  shield — stretch it to fill the tile like the rest of the
-                  rows above it. */}
-              <Button
-                aria-label="Pay Now"
-                variant="primary"
-                full
-                icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}
-                style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
-              >
-                Pay Now
-              </Button>
-              {!profile.pro && (
-                <div style={{ fontSize: 10.5, color: 'var(--text-dim)', marginTop: 8, textAlign: 'center' }}>Online UPI payments are a Pro feature — tap to see what unlocks.</div>
-              )}
+              <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.3 }}>Tap to enlarge · Double-tap to download</div>
             </div>
           ) : null}
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '14px 14px 0' }}>
+            <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
+            {profile.upi ? (
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <Button
+                  aria-label="Pay Now"
+                  variant="primary"
+                  full
+                  icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}
+                  style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
+                >
+                  Pay Now
+                </Button>
+              </div>
+            ) : (
+              <div style={{ flex: 1 }} />
+            )}
+            <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 18px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)', flexShrink: 0 }}>{Icons.share(15)}Share</button>
+          </div>
+
+          {/* UPI ID + copy — centered under the button row, per founder
+              direction. VerifiedShield rides alongside it now instead of
+              anchoring its own row. */}
+          {profile.upi ? (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px 14px' }}>
+              <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-low)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
+              <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(13)}</button>
+              <VerifiedShield size="sm" label="" style={{ gap: 0, flexShrink: 0 }} />
+            </div>
+          ) : (
+            <div style={{ paddingBottom: 14 }} />
+          )}
+          {!profile.pro && profile.upi && (
+            <div style={{ fontSize: 10.5, color: 'var(--text-dim)', textAlign: 'center', padding: '0 16px 14px' }}>Online UPI payments are a Pro feature — tap to see what unlocks.</div>
+          )}
         </div>
 
-        {/* Connect — tiles only now. Social handles used to live in this
-            same section (extra heading + wrapped icon row), which pushed
-            Google Business further down and, on short mobile viewports,
-            past the fold of the hero cluster. Splitting them out (moved
-            below Google Business — founder direction 2026-08-16) shortens
-            Connect so Google Business lands sooner in the scroll. */}
+        {/* Connect — tiles, plus the Vakilpedia brand mark as a quiet footer
+            line (moved out of its own top-of-card row — founder direction
+            2026-08-16 — this and dropping Social handles down into Google
+            Business below are what free up hero space on mobile). Social
+            handles used to live in this section too (extra heading +
+            wrapped icon row) — moved out for the same reason. */}
         <Section eyebrow="Connect">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
             {tiles.map((t) => {
@@ -516,6 +518,10 @@ function VakilCardApp({ profile = defaultProfile }) {
                 />
               );
             })}
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+            <img src="../../assets/logos/vakilpedia.png" alt="" style={{ height: 16, opacity: 0.8 }} />
+            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-low)' }}>Vakilpedia<sup style={{ fontSize: '0.5em', fontWeight: 500, opacity: 0.6 }}>TM</sup></span>
           </div>
         </Section>
 
@@ -569,13 +575,26 @@ function VakilCardApp({ profile = defaultProfile }) {
                 <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Google</span>
               </span>
             </div>
-          </Section>
-        ) : null}
 
-        {/* Social handles — split out from Connect (founder direction
-            2026-08-16), now directly under Google Business so Connect stays
-            short and Google Business lands earlier in the mobile scroll. */}
-        {social.length > 0 && (
+            {/* Social handles — merged into this same tile (founder
+                direction 2026-08-16) rather than a separate card, so the
+                two don't cost a second heading + border + padding each. */}
+            {social.length > 0 && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
+                {social.map(([key, url]) => {
+                  const meta = SOCIAL_META[key];
+                  const icon = Icons[meta.icon] || Icons.globe;
+                  return (
+                    <a key={key} href={url} target="_blank" rel="noopener noreferrer" aria-label={meta.label} title={meta.label} data-ev={`social_${key}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: '50%', background: 'var(--glass-thick)', border: '1px solid var(--hairline-strong)', color: meta.color, textDecoration: 'none', cursor: 'pointer' }}>{icon(18)}</a>
+                  );
+                })}
+              </div>
+            )}
+          </Section>
+        ) : social.length > 0 ? (
+          // No Google Business tile to merge into (not connected / not
+          // entitled) — social still needs a home, so it keeps its own
+          // fallback Section rather than disappearing.
           <Section eyebrow="Social handles">
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
               {social.map(([key, url]) => {
@@ -587,7 +606,7 @@ function VakilCardApp({ profile = defaultProfile }) {
               })}
             </div>
           </Section>
-        )}
+        ) : null}
 
         {/* Premium upsell — deliberately the first tile revealed on scroll */}
         <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 12, padding: 16, marginBottom: 16, borderRadius: 'var(--r-xl)', background: 'linear-gradient(120deg, var(--glass-tint-violet), var(--glass-tint-gold))', border: '1px solid var(--hairline)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
