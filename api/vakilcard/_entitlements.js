@@ -22,7 +22,7 @@ const PRO_FEATURES = [
   "premium_themes",
   "remove_branding",
   "google_review",
-  "google_business_embed",
+  "google_business",
 ];
 
 function isProActive(profile) {

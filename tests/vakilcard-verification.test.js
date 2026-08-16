@@ -293,10 +293,17 @@ test("draft cards are not public (profile SSR + vcf)", async () => {
 
   const res = fakeRes();
   await profileHandler({ query: { username: "9876543210" }, headers: { "user-agent": "Mozilla" } }, res);
-  assert.equal(res.statusCode, 404, "draft is 404 to the public");
+  // 2026-08-15 kiosk fix: a draft is no longer a dead-end 404 — it serves the
+  // finish-setup page (verify YOUR OWN phone, resume setup) with noindex +
+  // no-store. It must still never render the draft card itself or offer the
+  // reserved name to strangers. (This test predated that fix and asserted
+  // 404 — stale, updated to the shipped behaviour.)
+  assert.equal(res.statusCode, 200, "draft serves the finish-setup page");
   assert.equal(res.headers["X-Robots-Tag"], "noindex");
-  assert.ok(res.body.includes("noindex") && res.body.includes("published"), "friendly not-published page");
+  assert.equal(res.headers["Cache-Control"], "no-store");
+  assert.ok(res.body.includes("noindex") && /isn't public yet|hasn't been published/.test(res.body), "friendly not-published page");
   assert.ok(!res.body.includes("Claim this username"), "draft page must not offer the reserved name");
+  assert.ok(!res.body.includes("__VAKILCARD_BOOT__"), "draft card content is never rendered publicly");
 
   const res2 = fakeRes();
   await vcfHandler({ query: { username: "9876543210" }, headers: {} }, res2);
@@ -320,15 +327,18 @@ test("preview token renders draft via the production renderer; bad token stays 4
   assert.equal(res.headers["Cache-Control"], "no-store");
   assert.ok(res.body.includes("Advocate Test"), "renders actual profile content");
 
+  // A rejected token must never render the draft card — since the 2026-08-15
+  // kiosk fix the fallback is the finish-setup page (200, noindex), not 404.
   const wrongPid = jwt.sign({ pid: "someone-else", typ: "preview" }, { expiresInSec: 900 });
   const res2 = fakeRes();
   await handler({ query: { username: "9876543210", pt: wrongPid }, headers: { "user-agent": "Mozilla" } }, res2);
-  assert.equal(res2.statusCode, 404, "pid-mismatched token is rejected");
+  assert.ok(!res2.body.includes("__VAKILCARD_BOOT__"), "pid-mismatched token never renders the card");
+  assert.ok(res2.body.includes("noindex"), "fallback page is noindexed");
 
   const accessToken = jwt.sign({ sub: "acc", pid: "prof-1", typ: "access" });
   const res3 = fakeRes();
   await handler({ query: { username: "9876543210", pt: accessToken }, headers: { "user-agent": "Mozilla" } }, res3);
-  assert.equal(res3.statusCode, 404, "access tokens cannot be used as preview tokens");
+  assert.ok(!res3.body.includes("__VAKILCARD_BOOT__"), "access tokens cannot be used as preview tokens");
 });
 
 test("consolidated profile tracking handler (profile.js POST)", async () => {
@@ -375,236 +385,70 @@ test("consolidated profile tracking handler (profile.js POST)", async () => {
   require.cache[libPath].exports = saved;
 });
 
-test("Google Business Profile map embed serialization and fallback generation", async () => {
+test("Google Business tile + Pro pay fields (profile.js SSR boot)", async () => {
   const profilePath = path.resolve(__dirname, "../api/vakilcard/profile.js");
   const saved = require.cache[libPath].exports;
-
-  // Case 1: Pro user with custom embed URL
-  const proCustomProfile = {
+  const base = {
     id: "11111111-2222-3333-4444-555555555555",
-    username: "pro_custom",
-    subscription_plan: "PRO",
-    subscription_status: "ACTIVE",
-    google_business_embed: "https://www.google.com/maps/embed?pb=custom_pb_code",
-    full_name: "Advocate Pro Custom",
-    offices: [{ address: "Delhi High Court" }],
-    practice_areas: [],
-    social_links: {},
-    is_published: true
+    username: "gbpro",
+    full_name: "Advocate GB",
+    designation: null, bio: null, photo_url: null, email: null,
+    phone: "+919876543210", whatsapp: null, website: null,
+    show_email: true, show_phone: true, theme_preference: "system",
+    languages: [], practice_areas: [], social_links: {}, is_published: true,
+  };
+  const serve = async (profile) => {
+    require.cache[libPath].exports = {
+      ...saved,
+      resolveProfileOrAlias: async () => ({ profile }),
+      trackEvent: async () => {},
+    };
+    delete require.cache[profilePath];
+    const handler = require(profilePath);
+    require.cache[libPath].exports = saved;
+    const res = fakeRes();
+    await handler({ method: "GET", query: { username: profile.username }, headers: { "user-agent": "Mozilla" } }, res);
+    assert.equal(res.statusCode, 200);
+    return res.body;
   };
 
-  require.cache[libPath].exports = {
-    ...saved,
-    resolveProfileOrAlias: async () => ({ profile: proCustomProfile }),
-    trackEvent: async () => {},
-  };
-  delete require.cache[profilePath];
-  let handler = require(profilePath);
+  // Pro + explicit Google Business link + consultation fee: the tile data,
+  // the external link, the fee and the dashboard origin all ship in boot.
+  let body = await serve({
+    ...base,
+    subscription_plan: "PRO", subscription_status: "ACTIVE",
+    google_business_url: "https://maps.app.goo.gl/xyz",
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: 500 },
+  });
+  assert.ok(body.includes('"googleBusiness":{"name":"GB Law Chambers"'), "tile data for Pro");
+  assert.ok(body.includes('"googleBusiness":"https://maps.app.goo.gl/xyz"'), "external link is the saved GB url");
+  assert.ok(body.includes('"fee":500'), "consultation fee ships for the Pro pay sheet");
+  assert.ok(body.includes('"dash":"'), "dashboard origin ships for owner-facing links");
+  assert.ok(body.includes('"google_business"') === false, "no raw entitlement keys leak into the page");
 
-  let res = fakeRes();
-  await handler({ method: "GET", query: { username: "pro_custom" }, headers: { "user-agent": "Mozilla" } }, res);
-  assert.equal(res.statusCode, 200);
-  assert.match(res.body, /"googleBusinessEmbed":"https:\/\/www\.google\.com\/maps\/embed\?pb=custom_pb_code"/);
+  // Pro without a saved link: falls back to the office's Maps listing.
+  body = await serve({
+    ...base,
+    subscription_plan: "PRO", subscription_status: "ACTIVE",
+    google_business_url: null,
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: null },
+  });
+  assert.ok(body.includes('"googleBusiness":"https://maps.google.com/?cid=1"'), "falls back to office maps_url");
+  assert.ok(body.includes('"fee":null'), "no fee configured → null");
 
-  // Case 2: Pro user without custom embed URL but with office address -> should fallback to search-based map embed
-  const proFallbackProfile = {
-    id: "11111111-2222-3333-4444-555555555555",
-    username: "pro_fallback",
-    subscription_plan: "PRO",
-    subscription_status: "ACTIVE",
-    google_business_embed: null,
-    full_name: "Advocate Pro Fallback",
-    offices: [{ address: "123 Chambers, Delhi" }],
-    practice_areas: [],
-    social_links: {},
-    is_published: true
-  };
-
-  require.cache[libPath].exports = {
-    ...saved,
-    resolveProfileOrAlias: async () => ({ profile: proFallbackProfile }),
-    trackEvent: async () => {},
-  };
-  delete require.cache[profilePath];
-  handler = require(profilePath);
-
-  res = fakeRes();
-  await handler({ method: "GET", query: { username: "pro_fallback" }, headers: { "user-agent": "Mozilla" } }, res);
-  assert.equal(res.statusCode, 200);
-  assert.match(res.body, /"googleBusinessEmbed":"https:\/\/maps\.google\.com\/maps\?q=123%20Chambers%2C%20Delhi&t=&z=14&ie=UTF8&iwloc=&output=embed"/);
-
-  // Case 3: Free user with custom embed URL in database -> googleBusinessEmbed must be null (gated)
-  const freeProfile = {
-    id: "11111111-2222-3333-4444-555555555555",
-    username: "free_user",
-    subscription_plan: "FREE",
-    subscription_status: "ACTIVE",
-    google_business_embed: "https://www.google.com/maps/embed?pb=custom_pb_code",
-    full_name: "Advocate Free",
-    offices: [{ address: "123 Chambers, Delhi" }],
-    practice_areas: [],
-    social_links: {},
-    is_published: true
-  };
-
-  require.cache[libPath].exports = {
-    ...saved,
-    resolveProfileOrAlias: async () => ({ profile: freeProfile }),
-    trackEvent: async () => {},
-  };
-  delete require.cache[profilePath];
-  handler = require(profilePath);
-
-  res = fakeRes();
-  await handler({ method: "GET", query: { username: "free_user" }, headers: { "user-agent": "Mozilla" } }, res);
-  assert.equal(res.statusCode, 200);
-  assert.match(res.body, /"googleBusinessEmbed":null/);
-
-  // Cleanup stub
-  require.cache[libPath].exports = saved;
+  // Free: tile absent and link null even when a URL sits in the DB.
+  body = await serve({
+    ...base,
+    subscription_plan: "FREE", subscription_status: "ACTIVE",
+    google_business_url: "https://maps.app.goo.gl/xyz",
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: 500 },
+  });
+  assert.ok(body.includes('"googleBusiness":null'), "Free never gets the tile or the link");
+  assert.ok(!body.includes('"googleBusiness":{'), "no tile data for Free");
 });
-
-test("Google Business Profile OAuth flow integration", async () => {
-  const bookingPath = path.resolve(__dirname, "../api/vakilcard/booking.js");
-  const savedDb = require.cache[libPath].exports;
-
-  const oldClientId = process.env.GOOGLE_OAUTH_CLIENT_ID;
-  const oldClientSecret = process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  const oldRedirectUri = process.env.GOOGLE_OAUTH_REDIRECT_URI;
-
-  process.env.GOOGLE_OAUTH_CLIENT_ID = "mock-client-id";
-  process.env.GOOGLE_OAUTH_CLIENT_SECRET = "mock-client-secret";
-  process.env.GOOGLE_OAUTH_REDIRECT_URI = "http://localhost:3000/api/vakilcard/booking?action=gcal_callback";
-
-  // Mock profile
-  const testProfile = {
-    id: "11111111-2222-3333-4444-555555555555",
-    username: "gmb_owner",
-    subscription_plan: "PRO",
-    subscription_status: "ACTIVE",
-    google_business_embed: null,
-    google_review_link: null,
-  };
-
-  // Setup DB stub
-  require.cache[libPath].exports = {
-    ...savedDb,
-    db: async (q, opts) => {
-      if (q.startsWith("vakilcard_profiles?account_id")) {
-        return [testProfile];
-      }
-      if (q.startsWith("vakilcard_profiles?id=eq.11111111-2222-3333-4444-555555555555")) {
-        if (opts && opts.method === "PATCH") {
-          Object.assign(testProfile, opts.body);
-          return [];
-        }
-        return [testProfile];
-      }
-      if (q.startsWith("vakilcard_profiles?id=")) {
-        return [testProfile];
-      }
-      if (q.startsWith("vakilcard_google_business_connections")) {
-        if (opts && opts.method === "DELETE") return [];
-        return [];
-      }
-      return [];
-    },
-    resolveAccount: async () => ({ accountId: "acc-123" }),
-  };
-
-  delete require.cache[bookingPath];
-  const handler = require(bookingPath);
-
-  // 1. Test google_business_start redirects
-  let res = fakeRes();
-  const reqStart = {
-    method: "GET",
-    query: { action: "google_business_start" },
-    headers: { authorization: "Bearer some-token" }
-  };
-  await handler(reqStart, res);
-  assert.equal(res.statusCode, 302);
-  const location = res.headers["Location"];
-  assert.match(location, /https:\/\/accounts\.google\.com\/o\/oauth2\/v2\/auth/);
-  assert.match(location, /scope=https%3A%2F%2Fwww\.googleapis\.com%2Fauth%2Fbusiness\.manage/);
-
-  // Extract the signed state from the redirect URL
-  const stateUrlParam = new URL(location).searchParams.get("state");
-
-  // Stub global fetch for OAuth token exchange and GMB API calls
-  const originalFetch = global.fetch;
-  global.fetch = async (url, fetchOpts) => {
-    if (url === "https://oauth2.googleapis.com/token") {
-      return {
-        ok: true,
-        json: async () => ({ access_token: "mock-access-token", expires_in: 3600, refresh_token: "mock-refresh-token" })
-      };
-    }
-    if (url === "https://mybusinessbusinessinformation.googleapis.com/v1/accounts") {
-      return {
-        ok: true,
-        json: async () => ({ accounts: [{ name: "accounts/acc-gmb-123", accountName: "My GMB Account" }] })
-      };
-    }
-    if (url === "https://mybusinessbusinessinformation.googleapis.com/v1/accounts/acc-gmb-123/locations?readMask=name,title,metadata") {
-      return {
-        ok: true,
-        json: async () => ({
-          locations: [{
-            name: "accounts/acc-gmb-123/locations/loc-456",
-            title: "Test Law Chambers",
-            metadata: {
-              mapsUri: "https://maps.google.com/?cid=9988776655",
-              newReviewUrl: "https://search.google.com/local/writereview?placeid=ChIJmock123"
-            }
-          }]
-        })
-      };
-    }
-    throw new Error(`Unexpected fetch URL: ${url}`);
-  };
-
-  // 2. Test Callback fetches locations and updates profile
-  let resCallback = fakeRes();
-  const reqCallback = {
-    method: "GET",
-    query: { action: "gcal_callback", code: "mock-auth-code", state: stateUrlParam }
-  };
-
-  try {
-    await handler(reqCallback, resCallback);
-    assert.equal(resCallback.statusCode, 302);
-    assert.match(resCallback.headers["Location"], /gmb=connected/);
-    assert.equal(testProfile.google_business_embed, "https://maps.google.com/maps?q=cid:9988776655&output=embed");
-    assert.equal(testProfile.google_review_link, "https://search.google.com/local/writereview?placeid=ChIJmock123");
-  } finally {
-    global.fetch = originalFetch;
-  }
-
-  // 3. Test Disconnect
-  let resDisconnect = fakeRes();
-  const reqDisconnect = {
-    method: "POST",
-    query: { action: "google_business_disconnect" },
-    headers: { authorization: "Bearer some-token" }
-  };
-  await handler(reqDisconnect, resDisconnect);
-  assert.equal(resDisconnect.statusCode, 200);
-  assert.equal(testProfile.google_business_embed, null);
-  assert.equal(testProfile.google_review_link, null);
-
-  // Restore DB stub
-  require.cache[libPath].exports = savedDb;
-
-  // Restore env
-  if (oldClientId) process.env.GOOGLE_OAUTH_CLIENT_ID = oldClientId;
-  else delete process.env.GOOGLE_OAUTH_CLIENT_ID;
-  if (oldClientSecret) process.env.GOOGLE_OAUTH_CLIENT_SECRET = oldClientSecret;
-  else delete process.env.GOOGLE_OAUTH_CLIENT_SECRET;
-  if (oldRedirectUri) process.env.GOOGLE_OAUTH_REDIRECT_URI = oldRedirectUri;
-  else delete process.env.GOOGLE_OAUTH_REDIRECT_URI;
-});
-
 
 /* ---------- runner ---------- */
 (async () => {

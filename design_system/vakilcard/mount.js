@@ -11,6 +11,10 @@
 (function () {
   var boot = window.__VAKILCARD_BOOT__ || {};
   var visualOnly = !!(boot.demo || boot.preview);
+  // True once the owner-detect block (bottom of this file) matches the
+  // stored session to THIS card. Drives owner-only education (e.g. the
+  // greyed Pro pay preview on a Free card) — never anything visitor-facing.
+  var ownerViewing = false;
 
   if (boot.theme === "light" || boot.theme === "dark") {
     document.documentElement.dataset.theme = boot.theme;
@@ -105,6 +109,10 @@
       else if (label.indexOf("directions") === 0) { go = links.maps; ev = "directions"; newTab = true; }
       else if (label.indexOf("email") === 0) { go = links.mailto; ev = "email"; }
       else if (label.indexOf("website") === 0) { go = links.website; ev = "website"; newTab = true; }
+      // Google Business tile: opens the owner's Google Business profile
+      // EXTERNALLY (Google app / new tab) — Pro-only, decided server-side
+      // (links.googleBusiness is only ever set when entitled).
+      else if (label.indexOf("google business") === 0) { go = links.googleBusiness; ev = "google_business"; newTab = true; }
       // Reviews tile: Pro deep-links straight to the owner's Google review
       // form (links.review, Pro-only per entitlements). Free reuses the
       // office's Google Maps listing to let visitors read existing reviews
@@ -167,21 +175,24 @@
     "font-size:13.5px;font-weight:700;text-decoration:none;cursor:pointer";
 
   /* ---------- iOS-folder style app tile (icon + label under it) ----------
-     Brand PNGs load lazily from /icons/upi/<key>.png (background-removed,
-     transparent — see Vakilpedia/Logos Icons UX UI, the canonical source);
-     until the asset exists the tile shows a brand-coloured monogram — never
-     a broken image. object-fit:contain (not cover) because these are real
-     logo lockups, not square glyphs — cropping would clip the wordmark. */
+     Real brand PNGs from /ds/assets/upi/<key>.png (the founder's Logos set,
+     trimmed + optimized at build time). MUST be under /ds/* — the www proxy
+     forwards only /ds/* and /api/vakilcard/*, so the old /icons/... path
+     404'd on www cards (and the files were never shipped at all).
+     Founder direction 2026-08-15: FULL-SIZE transparent app icons — the PNG
+     fills the whole tile, no padding, no plate, exactly like a home-screen
+     icon. The glass ₹ monogram is only a fallback and is HIDDEN the moment
+     the real PNG loads. */
   function appTile(key, label, color, href, fg) {
     return (
       '<a href="' + href.replace(/"/g, "&quot;") + '" aria-label="Pay with ' + label + '" ' +
       'style="display:flex;flex-direction:column;align-items:center;gap:7px;text-decoration:none;padding:6px 2px;border-radius:14px" ' +
       'onfocus="this.style.outline=\'2px solid var(--violet-400)\'" onblur="this.style.outline=\'none\'">' +
-      '<span style="position:relative;width:56px;height:56px;border-radius:14px;overflow:hidden;background:' + color + ';display:flex;align-items:center;justify-content:center;box-shadow:0 3px 10px rgba(0,0,0,.28);border:1px solid rgba(255,255,255,.12)">' +
-      '<span style="font-size:22px;font-weight:900;color:' + (fg || "#fff") + ';font-family:var(--font-sans)">₹</span>' +
-      '<img src="/icons/upi/' + key + '.png" alt="" ' +
-      'style="position:absolute;inset:6px;width:calc(100% - 12px);height:calc(100% - 12px);object-fit:contain;display:none" ' +
-      'onload="this.style.display=\'block\'" onerror="this.remove()">' +
+      '<span style="position:relative;width:56px;height:56px;border-radius:14px;overflow:hidden;display:flex;align-items:center;justify-content:center">' +
+      '<span style="position:absolute;inset:0;border-radius:14px;display:flex;align-items:center;justify-content:center;background:var(--glass-thick);border:1px solid var(--hairline);font-size:22px;font-weight:900;color:var(--text-hi);font-family:var(--font-sans)">₹</span>' +
+      '<img src="/ds/assets/upi/' + key + '.png" alt="" ' +
+      'style="position:absolute;inset:0;width:100%;height:100%;object-fit:contain;display:none" ' +
+      'onload="this.style.display=\'block\';this.previousElementSibling.style.display=\'none\'" onerror="this.remove()">' +
       "</span>" +
       '<span style="font-size:10.5px;font-weight:700;color:var(--text-mid);text-align:center;line-height:1.15;max-width:64px">' + label + "</span>" +
       "</a>"
@@ -189,19 +200,42 @@
   }
 
   /* ---------- Shared UPI app launcher set ----------
-     One brand list drives BOTH the Pro grid and the free Pay Now sheet so the
-     iconography and ordering never drift apart. `q` = the upi query string
-     (pa/pn/cu…); `upiUri` = the full upi:// intent used for the graceful
-     system-chooser fallback. Every key maps to a real PNG in /icons/upi/. */
-  function upiLauncherApps(q, upiUri) {
+     One brand list drives the Pro pay sheet, the free Pay Now sheet AND the
+     booking payment step, so iconography and ordering never drift apart.
+     Exactly the apps whose real icons exist in Assets/Logos (founder
+     direction 2026-08-15): GPay / PhonePe / Paytm, each launched by its own
+     scheme so a bare upi:// can't be hijacked by the device's default
+     handler. Everything else rides the "Any UPI app" row below (standard
+     upi:// intent → the OS chooser / default app — never a dead tap). */
+  function upiLauncherApps(q) {
     return [
-      ["gpay", "Google Pay", "#f1f3f4", "tez://upi/pay?" + q, "#1a73e8"],
-      ["phonepe", "PhonePe", "#5f259f", "phonepe://pay?" + q],
-      ["paytm", "Paytm", "#0f2f66", "paytmmp://pay?" + q],
-      ["bhim", "BHIM", "#00639b", upiUri],
-      ["amazonpay", "Amazon Pay", "#232f3e", upiUri],
-      ["upi", "Any UPI app", "#635BFF", upiUri],
+      ["gpay", "Google Pay", "#fff", "tez://upi/pay?" + q],
+      ["phonepe", "PhonePe", "#fff", "phonepe://pay?" + q],
+      ["paytm", "Paytm", "#fff", "paytmmp://pay?" + q],
     ];
+  }
+
+  /** Noun action icon (black line art) — flipped white in dark theme, same
+      rule as the component's IconImg. */
+  function nounIcon(name, size) {
+    var dark = document.documentElement.dataset.theme !== "light";
+    return (
+      '<img src="/ds/assets/actions/' + name + '.png" alt="" loading="lazy" ' +
+      'style="width:' + (size || 18) + "px;height:" + (size || 18) + "px;object-fit:contain;flex-shrink:0" +
+      (dark ? ";filter:invert(1) brightness(1.6)" : "") + '" onerror="this.remove()">'
+    );
+  }
+
+  /** The launcher block: 3-across brand grid + full-width "Any UPI app" row. */
+  function upiLauncherHtml(q, upiUri) {
+    return (
+      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;justify-items:center;padding:6px 0 2px">' +
+      upiLauncherApps(q).map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
+      "</div>" +
+      '<a href="' + upiUri.replace(/"/g, "&quot;") + '" aria-label="Pay with any UPI app" style="' + sheetBtnCss + ';justify-content:center">' +
+      nounIcon("pay") +
+      "Any UPI app</a>"
+    );
   }
 
   /* ---------- iOS-style QR zoom: blur backdrop, fluid center expansion,
@@ -258,88 +292,142 @@
     return close;
   }
 
-  /* ---------- Pay: UPI app chooser (mobile) / real QR (desktop) ---------- */
+  /* ---------- Pay: Pro sheet — consultation fee default + custom amount ----
+     Founder spec (2026-08-15): the DEFAULT action is "Pay consultation fee"
+     (the owner's configured fee travels in the upi link's am= param); a
+     "Custom amount" option lets the payer type any amount, and every deep
+     link / the QR regenerates live for the chosen amount. Mobile gets the
+     brand app grid + Any-UPI row; desktop gets a real scannable QR. */
+
+  var segBtnCss =
+    "flex:1;padding:11px 10px;border-radius:14px;border:1px solid var(--hairline);background:var(--glass-thick);" +
+    "color:var(--text-hi);font-family:var(--font-sans);font-size:12px;font-weight:800;cursor:pointer;text-align:center;line-height:1.3";
+  var segBtnOnCss = ";border-color:var(--violet-400);box-shadow:0 0 0 1px var(--violet-400) inset";
 
   function showPaySheet() {
-    var upiUri = links.upi; // upi://pay?pa=…&pn=…
-    var q = upiUri.split("?")[1] || "";
+    var upiUri = links.upi; // upi://pay?pa=…&pn=…[&am=fee]
+    var baseQ = upiUri.split("?")[1] || "";
     var vpa = "";
-    q.split("&").forEach(function (kv) {
-      var p = kv.split("=");
-      if (p[0] === "pa") vpa = decodeURIComponent(p[1] || "");
+    var linkFee = null;
+    var baseParams = [];
+    baseQ.split("&").forEach(function (kv) {
+      var i = kv.indexOf("=");
+      var k = i < 0 ? kv : kv.slice(0, i);
+      var v = i < 0 ? "" : kv.slice(i + 1);
+      if (k === "pa") vpa = decodeURIComponent(v || "");
+      if (k === "am") { linkFee = parseFloat(decodeURIComponent(v || "")) || null; return; }
+      if (k === "tn") return; // note is re-applied per selection
+      baseParams.push(kv);
     });
+    var fee = typeof boot.fee === "number" && boot.fee > 0 ? boot.fee : linkFee;
     var isMobile = /iphone|ipad|ipod|android/i.test(navigator.userAgent);
 
-    if (isMobile) {
-      // iOS-folder app grid: icon tile + label underneath, three per row.
-      // Dedicated schemes where they exist; the rest ride the standard
-      // upi:// intent — the OS routes it to the chosen/default handler.
-      // Official-brand app launcher. App-specific schemes resolve straight to
-      // that app; brands without a reliable public scheme (BHIM/Amazon Pay)
-      // ride the standard upi:// intent so the OS routes to the installed app
-      // or shows the system UPI chooser (graceful fallback — never a dead tap).
-      // NOTE: every key here has a real brand PNG in /icons/upi/ — no letter
-      // monograms. To make extra apps a Pro-only perk later, split this into a
-      // base set + a Pro-gated `extras` array (boot.pro decides which render).
-      var apps = upiLauncherApps(q, upiUri);
-      var body =
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;justify-items:center;padding:6px 0 2px">' +
-        apps.map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
-        "</div>";
-      body += '<div style="margin-top:10px;font-size:11.5px;color:var(--text-low);text-align:center">Paying <b style="color:var(--text-hi)">' + vpa + "</b> directly — no middleman.</div>";
-      openSheet("Pay with UPI", body);
-      return;
-    }
+    // mode: "fee" (default whenever a fee exists) | "custom"
+    var mode = fee ? "fee" : "custom";
+    var uriFor = function () {
+      var q = baseParams.join("&");
+      if (mode === "fee" && fee) {
+        q += (q ? "&" : "") + "am=" + encodeURIComponent(String(fee)) + "&tn=" + encodeURIComponent("Consultation fee");
+      } else if (mode === "custom") {
+        var el = document.getElementById("vc-amt-input");
+        var amt = el ? parseFloat(el.value) : NaN;
+        if (amt && amt > 0) q += (q ? "&" : "") + "am=" + encodeURIComponent(String(amt));
+      }
+      return { q: q, uri: "upi://pay?" + q };
+    };
 
-    // Desktop: a REAL scannable QR of the exact upi:// URI + copy + download.
+    var chooser =
+      '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+      (fee
+        ? '<button id="vc-amt-fee" style="' + segBtnCss + segBtnOnCss + '">Pay consultation fee<span style="display:block;font-size:15px;margin-top:2px">₹' + fee + "</span></button>"
+        : "") +
+      '<button id="vc-amt-custom" style="' + segBtnCss + (fee ? "" : segBtnOnCss) + '">Custom amount<span style="display:block;font-size:10px;font-weight:600;color:var(--text-low);margin-top:2px">you choose</span></button>' +
+      "</div>" +
+      '<input id="vc-amt-input" type="number" min="1" inputmode="numeric" placeholder="Enter amount (₹)" ' +
+      'style="display:' + (fee ? "none" : "block") + ';width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:14px">';
+
     var s = openSheet(
-      "Scan to pay with any UPI app",
-      '<div id="vc-payqr" data-qr-zoom data-qr-name="upi-payment-qr" data-qr-caption="Scan with any UPI app" role="button" tabindex="0" aria-label="Tap to enlarge the payment QR" style="display:flex;justify-content:center;padding:10px 0;cursor:zoom-in"><div style="font-size:12px;color:var(--text-low)">Generating QR…</div></div>' +
+      isMobile ? "Pay with UPI" : "Scan to pay with any UPI app",
+      chooser +
+        '<div id="vc-pay-body"></div>' +
+        '<div style="margin-top:10px;font-size:11.5px;color:var(--text-low);text-align:center">Paying <b style="color:var(--text-hi)">' + vpa + "</b> directly — no middleman.</div>"
+    );
+
+    var renderBody = function () {
+      var cur = uriFor();
+      var bodyEl = s.panel.querySelector("#vc-pay-body");
+      if (isMobile) {
+        bodyEl.innerHTML = upiLauncherHtml(cur.q, cur.uri);
+        return;
+      }
+      // Desktop: a REAL scannable QR of the exact upi:// URI + copy + download.
+      bodyEl.innerHTML =
+        '<div id="vc-payqr" data-qr-zoom data-qr-name="upi-payment-qr" data-qr-caption="Scan with any UPI app" role="button" tabindex="0" aria-label="Tap to enlarge the payment QR" style="display:flex;justify-content:center;padding:10px 0;cursor:zoom-in"><div style="font-size:12px;color:var(--text-low)">Generating QR…</div></div>' +
         '<div style="text-align:center;font-size:12.5px;color:var(--text-low);margin-top:2px">UPI ID: <b style="color:var(--text-hi)">' + vpa + "</b></div>" +
         '<button id="vc-pay-copy" style="' + sheetBtnCss + ';justify-content:center">Copy UPI ID</button>' +
-        '<a id="vc-pay-dl" style="' + sheetBtnCss + ';justify-content:center;display:none">Download QR</a>'
-    );
-    var renderQr = function () {
-      try {
-        var qr = window.qrcode(0, "M");
-        qr.addData(upiUri);
-        qr.make();
-        var dataUrl = qr.createDataURL(8, 8);
-        s.panel.querySelector("#vc-payqr").innerHTML =
-          '<img src="' + dataUrl + '" alt="UPI payment QR" style="width:210px;height:210px;border-radius:14px;background:#fff;padding:8px">';
-        var dl = s.panel.querySelector("#vc-pay-dl");
-        dl.href = dataUrl;
-        dl.download = (vpa || "upi") + "-qr.gif";
-        dl.style.display = "flex";
-      } catch (e) {
-        s.panel.querySelector("#vc-payqr").innerHTML =
-          '<div style="font-size:12px;color:var(--text-low)">Couldn\'t draw the QR — use the UPI ID below.</div>';
+        '<a id="vc-pay-dl" style="' + sheetBtnCss + ';justify-content:center;display:none">Download QR</a>';
+      var renderQr = function () {
+        try {
+          var qr = window.qrcode(0, "M");
+          qr.addData(cur.uri);
+          qr.make();
+          var dataUrl = qr.createDataURL(8, 8);
+          s.panel.querySelector("#vc-payqr").innerHTML =
+            '<img src="' + dataUrl + '" alt="UPI payment QR" style="width:210px;height:210px;border-radius:14px;background:#fff;padding:8px">';
+          var dl = s.panel.querySelector("#vc-pay-dl");
+          dl.href = dataUrl;
+          dl.download = (vpa || "upi") + "-qr.gif";
+          dl.style.display = "flex";
+        } catch (e) {
+          s.panel.querySelector("#vc-payqr").innerHTML =
+            '<div style="font-size:12px;color:var(--text-low)">Couldn\'t draw the QR — use the UPI ID below.</div>';
+        }
+      };
+      if (window.qrcode) renderQr();
+      else {
+        var sc = document.createElement("script");
+        sc.src = "/ds/qrcode.js";
+        sc.onload = renderQr;
+        sc.onerror = renderQr;
+        document.head.appendChild(sc);
       }
+      var copyBtn = s.panel.querySelector("#vc-pay-copy");
+      copyBtn.addEventListener("click", function () {
+        if (navigator.clipboard) navigator.clipboard.writeText(vpa);
+        this.textContent = "Copied ✓";
+      });
     };
-    if (window.qrcode) renderQr();
-    else {
-      var sc = document.createElement("script");
-      sc.src = "/ds/qrcode.js";
-      sc.onload = renderQr;
-      sc.onerror = renderQr;
-      document.head.appendChild(sc);
-    }
-    s.panel.querySelector("#vc-pay-copy").addEventListener("click", function () {
-      if (navigator.clipboard) navigator.clipboard.writeText(vpa);
-      this.textContent = "Copied ✓";
-    });
+
+    var feeBtn = s.panel.querySelector("#vc-amt-fee");
+    var customBtn = s.panel.querySelector("#vc-amt-custom");
+    var amtInput = s.panel.querySelector("#vc-amt-input");
+    var setMode = function (m) {
+      mode = m;
+      if (feeBtn) feeBtn.style.cssText = segBtnCss + (m === "fee" ? segBtnOnCss : "");
+      customBtn.style.cssText = segBtnCss + (m === "custom" ? segBtnOnCss : "");
+      amtInput.style.display = m === "custom" ? "block" : "none";
+      if (m === "custom") amtInput.focus();
+      renderBody();
+    };
+    if (feeBtn) feeBtn.addEventListener("click", function () { setMode("fee"); });
+    customBtn.addEventListener("click", function () { setMode("custom"); });
+    // Regenerate every deep link / the QR as the payer types the amount.
+    amtInput.addEventListener("input", renderBody);
+    renderBody();
   }
 
   /* ---------- FREE pay: the lawyer's own uploaded QR + UPI ID ---------- */
 
   function showFreePaySheet() {
-    // Pay Now = a REAL UPI app launcher, never a second copy of the QR. The
-    // card's Payment section already shows the QR tile + its Download/enlarge;
-    // re-showing the QR here was the reported "duplicate QR" bug. On mobile we
+    // Free Pay Now sheet (founder direction 2026-08-15): the UPI app
+    // launcher AND the QR image together. The QR (the lawyer's own uploaded
+    // one, else drawn from the UPI ID) lets clients scan/screenshot manually
+    // — tap enlarges it, DOUBLE-TAP downloads it. Pro cards never show a QR
+    // in their Pay sheet on mobile — native intents replace it. On mobile we
     // launch each app by its OWN custom scheme (tez:// / phonepe:// /
-    // paytmmp://) where one exists — a bare upi:// can be hijacked by WhatsApp
-    // Pay when it's the device's default upi handler — and fall back to the
-    // system UPI chooser (upi://) for brands without a public scheme.
+    // paytmmp://) — a bare upi:// can be hijacked by WhatsApp Pay when it's
+    // the device's default upi handler — with the "Any UPI app" row (upi://)
+    // as the graceful system-chooser fallback.
     var upiId = boot.upiId || "";
     var isMobile = /Android|iPhone|iPad|iPod/i.test(navigator.userAgent || "");
     var q =
@@ -349,21 +437,45 @@
     var upiUri = "upi://pay?" + q;
     var body = "";
     if (isMobile && upiId) {
+      body += upiLauncherHtml(q, upiUri);
+    }
+    if (boot.payQr || upiId) {
       body +=
-        '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:10px 8px;justify-items:center;padding:6px 0 2px">' +
-        upiLauncherApps(q, upiUri).map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
+        '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:' + (isMobile && upiId ? "12px" : "4px") + '">' +
+        '<div id="vc-freeqr" data-qr-zoom data-qr-name="' + (upiId || "upi").replace(/"/g, "") + '-qr" data-qr-caption="Scan with any UPI app" role="button" tabindex="0" aria-label="Payment QR — tap to enlarge, double-tap to download" ' +
+        'style="width:150px;height:150px;border-radius:14px;background:#fff;padding:8px;display:flex;align-items:center;justify-content:center;cursor:zoom-in;box-shadow:0 4px 14px rgba(0,0,0,.25)">' +
+        '<div style="font-size:11px;color:#555">Loading QR…</div></div>' +
+        '<div style="font-size:10.5px;color:var(--text-dim)">Tap to enlarge · Double-tap to download</div>' +
         "</div>";
     }
     if (upiId) {
       body +=
         '<div style="text-align:center;font-size:12.5px;color:var(--text-low);margin-top:12px">' +
-        (isMobile ? "Paying " : "Scan the QR on the card, or pay ") +
+        (isMobile ? "Paying " : "Scan to pay ") +
         '<b style="color:var(--text-hi)">' + upiId + "</b>" +
         (isMobile ? " directly — no middleman." : " with any UPI app.") +
         "</div>" +
         '<button id="vc-freepay-copy" style="' + sheetBtnCss + ';justify-content:center;margin-top:10px">Copy UPI ID</button>';
-    } else {
+    } else if (!boot.payQr) {
       body += '<div style="text-align:center;font-size:12.5px;color:var(--text-low);padding:10px 0">Scan the QR on the card with any UPI app.</div>';
+    }
+    // Educate the (detected) owner of a Free card: show exactly what the Pro
+    // pay sheet adds — greyed out, non-interactive — so they see what they're
+    // missing (founder direction 2026-08-15). NEVER shown to visitors: a
+    // client paying a lawyer must never see the lawyer's plan pitched.
+    if (ownerViewing && !boot.pro) {
+      body +=
+        '<div style="margin-top:14px;padding:12px;border-radius:16px;border:1px dashed var(--hairline-strong);position:relative">' +
+        '<span style="position:absolute;top:-8px;left:12px;padding:2px 8px;border-radius:999px;background:var(--violet-400);color:#fff;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-sans)">Pro preview</span>' +
+        '<div style="opacity:.45;filter:grayscale(1);pointer-events:none">' +
+        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+        '<span style="' + segBtnCss + segBtnOnCss + ';display:block">Pay consultation fee<span style="display:block;font-size:15px;margin-top:2px">₹ your fee</span></span>' +
+        '<span style="' + segBtnCss + ';display:block">Custom amount<span style="display:block;font-size:10px;font-weight:600;color:var(--text-low);margin-top:2px">client chooses</span></span>' +
+        "</div>" +
+        "</div>" +
+        '<div style="font-size:11px;color:var(--text-low);line-height:1.45;margin-top:8px">Only you can see this. On <b style="color:var(--text-hi)">VakilCard Pro</b>, clients pay your set consultation fee — or any amount — in one tap, straight into your UPI.</div>' +
+        '<a href="' + ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:800;color:var(--violet-400);text-decoration:none;font-family:var(--font-sans)">Upgrade to Pro →</a>' +
+        "</div>";
     }
     var s = openSheet(isMobile ? "Pay with UPI" : "Pay via UPI", body);
     var copyBtn = s.panel.querySelector("#vc-freepay-copy");
@@ -372,6 +484,36 @@
         if (navigator.clipboard) navigator.clipboard.writeText(upiId);
         this.textContent = "Copied ✓";
       });
+    // Fill the QR slot: the lawyer's own uploaded QR exactly as uploaded,
+    // else a real QR drawn locally from the UPI ID — never a placeholder.
+    var qrSlot = s.panel.querySelector("#vc-freeqr");
+    if (qrSlot) {
+      var setImg = function (src) {
+        qrSlot.innerHTML =
+          '<img src="' + src.replace(/"/g, "&quot;") + '" alt="UPI payment QR" style="width:100%;height:100%;object-fit:contain;border-radius:8px">';
+      };
+      if (boot.payQr) setImg(boot.payQr);
+      else if (upiId) {
+        var drawFreeQr = function () {
+          try {
+            var qr = window.qrcode(0, "M");
+            qr.addData(upiUri);
+            qr.make();
+            setImg(qr.createDataURL(6, 6));
+          } catch (err) {
+            qrSlot.innerHTML = '<div style="font-size:10px;color:#555">Use the UPI ID below</div>';
+          }
+        };
+        if (window.qrcode) drawFreeQr();
+        else {
+          var sc2 = document.createElement("script");
+          sc2.src = "/ds/qrcode.js";
+          sc2.onload = drawFreeQr;
+          sc2.onerror = drawFreeQr;
+          document.head.appendChild(sc2);
+        }
+      }
+    }
   }
 
   /* ---------- Book Appointment ----------
@@ -387,13 +529,10 @@
      to WhatsApp/Call — a booking sheet must never be a dead end. */
 
   function showBookSheet() {
-    var actionIcon = function (name) {
-      return '<img src="/icons/actions/' + name + '.png" alt="" loading="lazy" style="width:18px;height:18px;object-fit:contain;flex-shrink:0" onerror="this.remove()">';
-    };
     var fallbackBody =
       '<div style="font-size:13px;color:var(--text-low);line-height:1.5">Online booking isn\'t set up yet. Message directly — it\'s the fastest way to get a slot.</div>' +
-      (links.whatsapp ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center">' + actionIcon("whatsapp") + "Message on WhatsApp</a>" : "") +
-      (links.tel ? '<a href="' + links.tel + '" style="' + sheetBtnCss + ';justify-content:center">' + actionIcon("call") + "Call instead</a>" : "");
+      (links.whatsapp ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center">' + nounIcon("whatsapp") + "Message on WhatsApp</a>" : "") +
+      (links.tel ? '<a href="' + links.tel + '" style="' + sheetBtnCss + ';justify-content:center">' + nounIcon("call") + "Call instead</a>" : "");
     var showFallback = function () { openSheet("Book an appointment", fallbackBody); };
 
     var username = (boot.profile && boot.profile.username) || "";
@@ -509,13 +648,10 @@
 
   function renderPaymentStep(reqResult) {
     var q = reqResult.pay_link.split("?")[1] || "";
-    var apps = upiLauncherApps(q, reqResult.pay_link);
     var body =
       '<div style="font-size:12.5px;color:var(--text-low);margin-bottom:8px">Pay <b style="color:var(--text-hi)">₹' + reqResult.amount_inr + '</b> to confirm — your slot is held until then.</div>' +
-      '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;justify-items:center;padding:6px 0 10px">' +
-      apps.map(function (a) { return appTile(a[0], a[1], a[2], a[3], a[4]); }).join("") +
-      "</div>" +
-      '<button id="vc-bk-paid" style="' + sheetBtnCss + ';justify-content:center">I\'ve paid</button>' +
+      upiLauncherHtml(q, reqResult.pay_link) +
+      '<button id="vc-bk-paid" style="' + sheetBtnCss + ';justify-content:center;margin-top:10px">I\'ve paid</button>' +
       '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">Paid directly via UPI — no gateway in between. The lawyer confirms receipt before your appointment is finalised.</div>';
     var s = openSheet("Complete payment", body);
     s.panel.querySelector("#vc-bk-paid").addEventListener("click", function () {
@@ -562,8 +698,34 @@
     requestAnimationFrame(tick);
   }
 
-  /* ---------- QR tap → iOS-style zoom (works in every mode: it's purely
-     visual, no navigation — demo visitors get to feel the interaction). */
+  /* ---------- QR image download (double-tap) ----------
+     Uploaded QRs live on another origin, where the anchor `download`
+     attribute is ignored — fetch to a blob first; if that's blocked, open
+     the image so the client can long-press-save it. Data/blob URLs (the
+     locally drawn QRs) download directly. */
+  function downloadQrImage(src, name) {
+    var save = function (url, revoke) {
+      var a = document.createElement("a");
+      a.href = url;
+      a.download = name || "qr.png";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      if (revoke) setTimeout(function () { URL.revokeObjectURL(url); }, 4000);
+    };
+    if (/^(data|blob):/.test(src)) { save(src); return; }
+    fetch(src, { mode: "cors" })
+      .then(function (r) { if (!r.ok) throw new Error("http_" + r.status); return r.blob(); })
+      .then(function (b) { save(URL.createObjectURL(b), true); })
+      .catch(function () { window.open(src, "_blank", "noopener"); });
+  }
+
+  /* ---------- QR tap → iOS-style zoom; DOUBLE-tap → direct download ----------
+     (founder direction 2026-08-15: double-clicking the QR image downloads it
+     so clients can scan it manually later). A short timer tells the two
+     apart: the second tap of a double-tap cancels the pending zoom. Works in
+     every mode — purely visual/local, no navigation. */
+  var qrTapTimer = null;
   document.addEventListener("click", function (e) {
     var slot = e.target.closest && e.target.closest("[data-qr-zoom]");
     if (!slot) return;
@@ -571,7 +733,20 @@
     if (!img || !img.src) return;
     e.preventDefault();
     e.stopPropagation();
-    showQrZoom(img.src, (slot.getAttribute("data-qr-name") || "qr") + ".png", slot.getAttribute("data-qr-caption") || "");
+    var src = img.src;
+    var name = (slot.getAttribute("data-qr-name") || "qr") + ".png";
+    var caption = slot.getAttribute("data-qr-caption") || "";
+    if (qrTapTimer) {
+      clearTimeout(qrTapTimer);
+      qrTapTimer = null;
+      if (visualOnly) { showQrZoom(src, name, caption); return; } // demo/preview: keep it visual
+      downloadQrImage(src, name);
+      return;
+    }
+    qrTapTimer = setTimeout(function () {
+      qrTapTimer = null;
+      showQrZoom(src, name, caption);
+    }, 300);
   }, true); // capture — before the visual-only anchor blocker
 
   // Keyboard access for the same tiles (role=button in the component).
@@ -841,10 +1016,14 @@
       } catch (e) { return null; }
     };
     var showEditChip = function () {
+      ownerViewing = true;
       if (document.getElementById("vc-edit-chip")) return;
       var a = document.createElement("a");
       a.id = "vc-edit-chip";
-      a.href = "/vakilcard/setup";
+      // The dashboard lives on its own subdomain since the 2026-08-04
+      // cutover — the old relative "/vakilcard/setup" resolves nowhere on
+      // either origin (www or the card subdomain) and was a dead tap.
+      a.href = (boot.dash || "https://vakilcard.vakilpedia.com") + "/setup";
       a.textContent = "✎ Edit my card";
       a.style.cssText =
         "position:fixed;bottom:14px;right:14px;z-index:98;display:inline-flex;align-items:center;gap:6px;" +

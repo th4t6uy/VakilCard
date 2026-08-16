@@ -10,8 +10,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowRight, Banknote, Briefcase, CalendarClock, Check, Copy, Download,
   ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
-  Lock, LogOut, Phone, Pencil, Plus, QrCode, Rocket, Share2, Smartphone,
-  Sparkles, Star, Trash2, UserRound, X,
+  Lock, LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
+  Smartphone, Sparkles, Star, Trash2, UserRound, X,
 } from "lucide-react";
 import {
   getMe, getMyAnalytics, getAccount, saveProfile, deleteProfile,
@@ -19,7 +19,6 @@ import {
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
   googleCalendarConnectUrl, disconnectGoogleCalendar,
-  googleBusinessConnectUrl, disconnectGoogleBusiness,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
@@ -147,10 +146,11 @@ const EDIT_SECTIONS = [
 // `key` must exist in api/vakilcard/_entitlements.js's PRO_FEATURES.
 const PRO_TOOLS = [
   { key: "website", icon: Globe2, title: "Personal website button", freeDesc: "Add a live link to your own site on your card.", proDesc: "Set your site under Contact & website — it goes live on your card." },
-  { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay in one tap via their own UPI app — no QR needed.", proDesc: "Active — clients tapping Pay get the native UPI app chooser automatically." },
+  { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay your consultation fee — or any amount — in one tap via their own UPI app.", proDesc: "Active — clients tapping Pay choose your consultation fee or a custom amount, then their UPI app." },
   { key: "booking", icon: CalendarClock, title: "Smart appointment booking", freeDesc: "Basic booking is already on — upgrade for Google Calendar sync so you're never double-booked, plus payment-before-confirmation.", proDesc: "Set up below — connect Google Calendar and require payment before a slot is confirmed." },
   { key: "remove_branding", icon: Sparkles, title: "Remove Vakilpedia branding", freeDesc: "Your card, only your name — no \"Powered by Vakilpedia\".", proDesc: "Toggle it off in Theme below." },
   { key: "google_review", icon: Star, title: "Get more reviews", freeDesc: "A direct \"Leave a review\" button straight to Google.", proDesc: "Add your review link in Booking & Reviews below." },
+  { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Add your Google Business link in Booking & Reviews below — the tile appears on your card." },
 ];
 
 function ProToolRow({ tool, pro, onLocked }) {
@@ -206,74 +206,23 @@ function flattenGroups(groups) {
 }
 let groupIdSeq = 0;
 
-function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveReviewLink, onSaveBusinessEmbed, onUpgrade }) {
+function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReviewLink, onSaveBusinessUrl, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [reviewLink, setReviewLink] = useState("");
-  const [businessEmbed, setBusinessEmbed] = useState("");
   const [savingReview, setSavingReview] = useState(false);
-  const [savingEmbed, setSavingEmbed] = useState(false);
+  const [businessUrl, setBusinessUrl] = useState("");
+  const [savingBusiness, setSavingBusiness] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
-  const [successMsg, setSuccessMsg] = useState("");
 
-  useEffect(() => {
-    if (initialReviewLink) setReviewLink(initialReviewLink);
-  }, [initialReviewLink]);
-
-  useEffect(() => {
-    if (initialBusinessEmbed) setBusinessEmbed(initialBusinessEmbed);
-  }, [initialBusinessEmbed]);
-
-  useEffect(() => {
-    if (typeof window === "undefined") return;
-    const params = new URLSearchParams(window.location.search);
-    const gmb = params.get("gmb");
-    const gcal = params.get("gcal");
-    const msg = params.get("msg");
-    let changed = false;
-
-    if (gmb) {
-      changed = true;
-      if (gmb === "connected") {
-        setSuccessMsg("Successfully connected to Google Business Profile!");
-        setErr("");
-      } else {
-        const errorDetails = msg === "gmb_no_accounts"
-          ? "No Google Business accounts found on this Google account."
-          : msg === "gmb_no_locations"
-          ? "No locations found in your Google Business Profile."
-          : `Failed to connect Google Business Profile: ${msg || "unknown error"}.`;
-        setErr(errorDetails);
-        setSuccessMsg("");
-      }
-      params.delete("gmb");
-    }
-
-    if (gcal) {
-      changed = true;
-      if (gcal === "connected") {
-        setSuccessMsg("Successfully connected Google Calendar!");
-        setErr("");
-      } else {
-        setErr(`Failed to connect Google Calendar: ${msg || "unknown error"}.`);
-        setSuccessMsg("");
-      }
-      params.delete("gcal");
-    }
-
-    if (msg && (gmb || gcal)) {
-      params.delete("msg");
-    }
-
-    if (changed) {
-      const url = new URL(window.location.href);
-      url.search = params.toString();
-      window.history.replaceState({}, "", url.pathname + url.search + url.hash);
-    }
-  }, []);
+  // Prefill the Pro link inputs with what's already saved — previously the
+  // review-link box always opened empty, so "Save" with a blank box could
+  // silently wipe an existing link.
+  useEffect(() => { if (initialReviewLink) setReviewLink(initialReviewLink); }, [initialReviewLink]);
+  useEffect(() => { if (initialBusinessUrl) setBusinessUrl(initialBusinessUrl); }, [initialBusinessUrl]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -293,7 +242,6 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   const saveWindows = async () => {
     setSavingWindows(true);
     setErr("");
-    setSuccessMsg("");
     try {
       const flat = flattenGroups(groups.filter((g) => g.days.length));
       const r = await saveBookingWindows(flat);
@@ -309,10 +257,8 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
   const saveReviewLink = async () => {
     setSavingReview(true);
     setErr("");
-    setSuccessMsg("");
     try {
       await onSaveReviewLink(reviewLink);
-      setSuccessMsg("Saved Google review link.");
     } catch {
       setErr("Couldn't save your review link.");
     } finally {
@@ -320,55 +266,23 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
     }
   };
 
-  const connectBusiness = async () => {
+  const saveBusinessUrl = async () => {
+    setSavingBusiness(true);
     setErr("");
-    setSuccessMsg("");
     try {
-      window.location.href = await googleBusinessConnectUrl();
+      await onSaveBusinessUrl(businessUrl);
     } catch {
-      setErr("Failed to start Google Business Profile connection flow.");
-    }
-  };
-
-  const disconnectBusiness = async () => {
-    setSavingEmbed(true);
-    setErr("");
-    setSuccessMsg("");
-    try {
-      await disconnectGoogleBusiness();
-      setSuccessMsg("Disconnected Google Business Profile.");
-      load();
-    } catch {
-      setErr("Couldn't disconnect Google Business Profile — please try again.");
+      setErr("Couldn't save your Google Business link.");
     } finally {
-      setSavingEmbed(false);
-    }
-  };
-
-  const saveBusinessEmbed = async () => {
-    setSavingEmbed(true);
-    setErr("");
-    setSuccessMsg("");
-    try {
-      await onSaveBusinessEmbed(businessEmbed);
-      setSuccessMsg("Saved Google Business embed URL.");
-    } catch {
-      setErr("Couldn't save your Google Business embed link.");
-    } finally {
-      setSavingEmbed(false);
+      setSavingBusiness(false);
     }
   };
 
   const connectCalendar = async () => {
-    setErr("");
-    setSuccessMsg("");
     window.location.href = await googleCalendarConnectUrl();
   };
   const disconnectCalendar = async () => {
-    setErr("");
-    setSuccessMsg("");
     await disconnectGoogleCalendar();
-    setSuccessMsg("Disconnected Google Calendar.");
     load();
   };
 
@@ -439,7 +353,7 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
-          <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to stop double-bookings →</button>
+          <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to stop double-bookings →</button>
         ) : !cfg || !cfg.calendar_platform_configured ? (
           <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
         ) : cfg.calendar_connected ? (
@@ -460,7 +374,7 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
         {!pro ? (
           <>
             <p className="text-xs text-slate-500 mt-1 hyphens-none">Free shows a "View Reviews" link to your office's Google listing. Upgrade for a direct "Leave a Review" button.</p>
-            <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade →</button>
+            <button type="button" onClick={() => onUpgrade("google_review")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
           </>
         ) : (
           <div className="flex flex-wrap gap-2 mt-2">
@@ -479,55 +393,29 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
 
       <div className="mt-6 pt-5 border-t border-slate-200">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google Business Profile</p>
+          <p className="text-sm font-bold text-slate-800">Google Business tile</p>
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
           <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">Upgrade to connect your Google account and automatically embed your Google Maps office location and reviews button directly on your card.</p>
-            <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade →</button>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">A native Google tile on your card — visitors tap it to open your Google Business profile with all your reviews and photos.</p>
+            <button type="button" onClick={() => onUpgrade("google_business")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
           </>
         ) : (
-          <div className="mt-2 space-y-3">
-            {cfg && cfg.google_business_connected ? (
-              <>
-                <div className="flex items-center gap-2">
-                  <span className="text-sm text-emerald-700 font-bold inline-flex items-center gap-1">
-                    <Check className="h-4 w-4" /> Connected: {cfg.google_business_name || "Google Business Profile"}
-                  </span>
-                  <button type="button" onClick={disconnectBusiness} disabled={savingEmbed} className="text-xs font-bold text-slate-500 underline ml-2">
-                    {savingEmbed ? "Disconnecting…" : "Disconnect"}
-                  </button>
-                </div>
-                {initialBusinessEmbed && (
-                  <div className="mt-2 rounded-xl overflow-hidden border border-slate-200 h-[150px] bg-slate-50">
-                    <iframe
-                      src={initialBusinessEmbed}
-                      width="100%"
-                      height="100%"
-                      style={{ border: 0 }}
-                      allowFullScreen=""
-                      loading="lazy"
-                    />
-                  </div>
-                )}
-                {initialReviewLink && (
-                  <div className="mt-1 text-xs text-slate-600">
-                    <span className="font-semibold text-slate-700">Review Link:</span> <a href={initialReviewLink} target="_blank" rel="noreferrer" className="text-[#635BFF] hover:underline break-all">{initialReviewLink}</a>
-                  </div>
-                )}
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-slate-500 hyphens-none">
-                  Connect your Google Account to fetch and embed your interactive office map and setup direct client reviews.
-                </p>
-                <button type="button" onClick={connectBusiness} className={btn}>
-                  Connect Google Business
-                </button>
-              </>
-            )}
-          </div>
+          <>
+            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">Paste your Google Business / Maps listing link (from your listing's Share button). Without one, the tile uses your office's Maps link automatically.</p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={businessUrl}
+                onChange={(e) => setBusinessUrl(e.target.value)}
+                placeholder="https://maps.app.goo.gl/…  or  https://g.co/kgs/…"
+                className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
+              />
+              <button type="button" onClick={saveBusinessUrl} disabled={savingBusiness} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+                {savingBusiness ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -577,7 +465,6 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessEmbed, onSaveRevi
       </div>
 
       {err && <p className="text-sm font-semibold text-rose-700 mt-4">{err}</p>}
-      {successMsg && <p className="text-sm font-semibold text-emerald-700 mt-4">{successMsg}</p>}
     </div>
   );
 }
@@ -1259,15 +1146,15 @@ export default function VakilCardPage() {
               Pro-only rows (calendar sync, review link) render locked. */}
           <BookingPanel
             pro={pro}
-            initialReviewLink={profile && profile.google_review_link}
-            initialBusinessEmbed={profile && profile.google_business_embed}
-            onUpgrade={() => setUpgradeFeature("booking")}
+            initialReviewLink={profile.google_review_link || ""}
+            initialBusinessUrl={profile.google_business_url || ""}
+            onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
             onSaveReviewLink={async (link) => {
               await saveFull({ google_review_link: link });
               await load();
             }}
-            onSaveBusinessEmbed={async (embed) => {
-              await saveFull({ google_business_embed: embed });
+            onSaveBusinessUrl={async (link) => {
+              await saveFull({ google_business_url: link });
               await load();
             }}
           />

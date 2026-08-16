@@ -25,6 +25,12 @@ test("isProActive: only PRO + ACTIVE + unexpired is entitled", () => {
 });
 
 test("entitlementsFor: every Pro feature flips together, pricing attached", () => {
+  // The catalogue itself: existing keys must never silently disappear
+  // (preserves current users' plans), and google_business is Pro-gated.
+  for (const k of [
+    "custom_username", "native_pay", "website", "booking", "analytics",
+    "premium_themes", "remove_branding", "google_review", "google_business",
+  ]) assert.ok(PRO_FEATURES.includes(k), `PRO_FEATURES must include ${k}`);
   const free = entitlementsFor({ subscription_plan: "FREE", subscription_status: "ACTIVE" });
   assert.equal(free.plan, "FREE");
   for (const f of PRO_FEATURES) assert.equal(free.features[f], false);

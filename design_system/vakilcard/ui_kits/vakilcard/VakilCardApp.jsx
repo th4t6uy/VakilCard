@@ -154,6 +154,8 @@ const demoProfile = {
   upi: 'sidharthgautam@example', firm: 'Sidharth Gautam Law Chambers',
   social: [['linkedin', 'https://www.linkedin.com/in/example'], ['instagram', 'https://www.instagram.com/example'], ['youtube', 'https://www.youtube.com/@example']],
   address: ['123 Legal Street', 'Example City – 110001'],
+  // Demo renders as Pro — showcase the Google Business tile too.
+  googleBusiness: { name: 'Sidharth Gautam Law Chambers', address: '123 Legal Street, Example City' },
 };
 window.vakilDefaultProfile = defaultProfile;
 window.vakilDemoProfile = demoProfile;
@@ -359,19 +361,26 @@ function VakilCardApp({ profile = defaultProfile }) {
   // self-promotion. That upsell still lives in the "Premium upsell" banner
   // below and the footer's "Powered by Vakilpedia" link.
   const actions = profile.actions || null; // null (demo) => everything live
+  // Icon PNGs live under /ds/assets/actions/ (absolute path, NOT the page
+  // <base>): the www proxy forwards only /ds/* + /api/vakilcard/*, so the
+  // old /icons/... refs 404'd on BOTH origins — the files were never shipped.
+  // These are the founder's Noun Project set (Assets/Logos, black line art,
+  // captions cropped), inverted to white in dark mode by IconImg.
   const tiles = [
-    { i: <IconImg src="/icons/actions/call.png" invert={darkIcon} fallback={Icons.phone(24)} />, l: 'Call', t: 'success', k: 'call' },
-    { i: <IconImg src="/icons/actions/whatsapp.png" invert={darkIcon} fallback={Icons.wa(24)} />, l: 'WhatsApp', t: 'success', k: 'whatsapp' },
-    { i: <IconImg src="/icons/actions/book.png" invert={darkIcon} fallback={Icons.cal(24)} />, l: 'Appointment', t: 'violet' },
+    { i: <IconImg src="/ds/assets/actions/call.png" invert={darkIcon} fallback={Icons.phone(24)} />, l: 'Call', t: 'success', k: 'call' },
+    { i: <IconImg src="/ds/assets/actions/whatsapp.png" invert={darkIcon} fallback={Icons.wa(24)} />, l: 'WhatsApp', t: 'success', k: 'whatsapp' },
+    { i: <IconImg src="/ds/assets/actions/book.png" invert={darkIcon} fallback={Icons.cal(24)} />, l: 'Appointment', t: 'violet' },
     { i: <GMapsPin size={26} />, l: 'Directions', t: 'violet', bg: mapTileBg, k: 'directions' },
-    { i: <IconImg src="/icons/actions/email.png" invert={darkIcon} fallback={Icons.mail(24)} />, l: 'Email', t: 'violet', k: 'email' },
-    { i: <IconImg src="/icons/actions/website.png" invert={darkIcon} fallback={Icons.globe(24)} />, l: 'Website', t: 'info', k: 'website' },
+    { i: <IconImg src="/ds/assets/actions/email.png" invert={darkIcon} fallback={Icons.mail(24)} />, l: 'Email', t: 'violet', k: 'email' },
+    { i: <IconImg src="/ds/assets/actions/website.png" invert={darkIcon} fallback={Icons.globe(24)} />, l: 'Website', t: 'info', k: 'website' },
     // Free: "View Reviews" opens the office's Google Maps listing (reuses
     // office.maps_url — no separate field needed). Pro: "Leave a Review"
     // deep-links straight to the owner's google_review_link. Which label +
     // destination applies is decided server-side (profile.js `actions`/
     // `links.review*`) — this tile is purely data-driven, never hides.
-    { i: <IconImg src="/icons/actions/review.png" invert={darkIcon} fallback={Icons.star(24)} />, l: profile.reviewLabel || 'Reviews', t: 'gold', k: 'reviews' },
+    // (No review PNG exists in the founder's icon set — the star glyph IS
+    // the intended icon here, not a fallback.)
+    { i: Icons.star(24), l: profile.reviewLabel || 'Reviews', t: 'gold', k: 'reviews' },
     { i: Icons.contact(24), l: 'Save', s: 'Contact', t: 'neutral' },
   ];
 
@@ -413,7 +422,7 @@ function VakilCardApp({ profile = defaultProfile }) {
                   <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-hi)', fontFamily: 'var(--font-mono)' }}>{profile.upi}</span>
                   <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(15)}</button>
                 </div>
-                <Button variant="primary" icon={Icons.rupee(16)}>Pay Now</Button>
+                <Button variant="primary" icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}>Pay Now</Button>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 14, fontSize: 11, color: 'var(--text-dim)' }}>
                   <VerifiedShield size="sm" label="" style={{ gap: 0 }} />
                   <span>Secured via UPI. No payment goes through Vakilpedia.</span>
@@ -422,7 +431,7 @@ function VakilCardApp({ profile = defaultProfile }) {
               <div style={{ flexShrink: 0, textAlign: 'center' }}>
                 <div style={{ fontSize: 10, color: 'var(--text-low)', marginBottom: 6 }}>Scan &amp; Pay</div>
                 <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
-                <div style={{ fontSize: 9.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.3 }}>Tap to enlarge<br/>&amp; scan</div>
+                <div style={{ fontSize: 9.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.3 }}>Tap to enlarge<br/>Double-tap to download</div>
               </div>
             </div>
           </Section>
@@ -506,21 +515,44 @@ function VakilCardApp({ profile = defaultProfile }) {
           </div>
         </Section>
 
-        {profile.googleBusinessEmbed && (
-          <Section eyebrow="Google Business Profile">
-            <div style={{ width: '100%', borderRadius: 14, overflow: 'hidden', border: '1px solid var(--hairline)', height: 240, background: 'var(--bg-card)' }}>
-              <iframe
-                src={profile.googleBusinessEmbed}
-                width="100%"
-                height="100%"
-                style={{ border: 0 }}
-                allowFullScreen=""
-                loading="lazy"
-                referrerPolicy="no-referrer-when-downgrade"
-              ></iframe>
+        {/* Google Business tile — native listing-style preview (Pro; the
+            server only populates profile.googleBusiness when entitled and a
+            destination exists). Tapping opens the owner's Google Business
+            profile EXTERNALLY — mount.js matches the aria-label and opens
+            links.googleBusiness in a new tab; here it stays purely visual.
+            No fabricated rating numbers: the star row is decorative and the
+            copy says what the tap gives ("reviews, photos & directions"). */}
+        {profile.googleBusiness ? (
+          <Section eyebrow="Google Business">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Google Business profile"
+              title="Open in Google"
+              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', borderRadius: 16, border: '1px solid var(--hairline)', background: 'var(--glass-thick)', padding: '12px 14px' }}
+            >
+              <span style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 12, background: '#fff', border: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.22)' }}>
+                <IconImg src="/ds/assets/brands/google-maps.png" size={30} fallback={<GMapsPin size={28} />} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.name}</span>
+                {profile.googleBusiness.address ? (
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-low)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.address}</span>
+                ) : null}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                  <span aria-hidden="true" style={{ display: 'inline-flex', gap: 1, color: 'var(--gold-400, #d9a441)' }}>
+                    {[0, 1, 2, 3, 4].map((i) => <span key={i} style={{ display: 'inline-flex' }}>{Icons.star(10)}</span>)}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>Reviews · Photos · Directions</span>
+                </span>
+              </span>
+              <span style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--text-mid)' }}>
+                {Icons.ext(15)}
+                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Google</span>
+              </span>
             </div>
           </Section>
-        )}
+        ) : null}
 
         {/* Footer — every element is a real link (brand → vakilpedia.com,
             icons → Vakilpedia's own LinkedIn / YouTube / Facebook). */}

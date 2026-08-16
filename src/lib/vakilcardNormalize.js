@@ -292,5 +292,16 @@ export function formToDsProfile(f) {
     // Free/no-link falls back to "View Reviews" (reuses the office's Maps
     // listing) — preview interactions are visual-only either way.
     reviewLabel: f.google_review_link ? "Leave a Review" : "View Reviews",
+    // Mirrors profile.js's Google Business tile: preview it whenever a
+    // destination would exist (owner's Google Business link, else the office
+    // Maps listing). Entitlement gating stays server-side on the live card —
+    // the owner's own preview simply shows what their data unlocks.
+    googleBusiness:
+      f.google_business_url || office.maps_url
+        ? {
+            name: chamber || f.full_name || "Your chamber",
+            address: addrParts.slice(-2).join(", ") || null,
+          }
+        : null,
   };
 }

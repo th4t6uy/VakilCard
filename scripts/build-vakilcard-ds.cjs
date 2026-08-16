@@ -45,7 +45,16 @@ copy(path.join(src, "styles.css"), path.join(out, "styles.css"));
 copy(path.join(src, "_ds_bundle.js"), path.join(out, "_ds_bundle.js"));
 copy(path.join(src, "page.css"), path.join(out, "page.css"));
 copy(path.join(src, "mount.js"), path.join(out, "mount.js"));
-copy(path.join(src, "assets", "logos", "vakilpedia.png"), path.join(out, "assets", "logos", "vakilpedia.png"));
+// The whole assets tree (logos + action/upi/brand icon PNGs). Everything the
+// card references at runtime must live under /ds/* — the www proxy
+// (Vakilpedia-code middleware) only forwards /ds/* and /api/vakilcard/*, so
+// an asset outside /ds/ would 404 on www.vakilpedia.com/<username>.
+(function copyDir(from, to) {
+  for (const entry of fs.readdirSync(from, { withFileTypes: true })) {
+    if (entry.isDirectory()) copyDir(path.join(from, entry.name), path.join(to, entry.name));
+    else copy(path.join(from, entry.name), path.join(to, entry.name));
+  }
+})(path.join(src, "assets"), path.join(out, "assets"));
 for (const f of fs.readdirSync(path.join(src, "tokens"))) {
   copy(path.join(src, "tokens", f), path.join(out, "tokens", f));
 }
