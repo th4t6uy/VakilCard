@@ -241,6 +241,18 @@ function toDsProfile(p) {
     // layer to consume; the DS's visual theme variants themselves are a
     // separate design-system task — see the phase report's open items.
     cardTheme: p.card_theme || "default",
+    // Google Business tile (Pro): native listing-style preview on the card.
+    // Only the DISPLAY data ships here — the destination URL stays in
+    // links.googleBusiness (mount.js opens it externally), matching how
+    // every other tile works. Rendered only when a real destination exists:
+    // the owner's saved Google Business link, else their office Maps listing.
+    googleBusiness:
+      isProActive(p) && (p.google_business_url || office.maps_url)
+        ? {
+            name: chamber || p.full_name,
+            address: addrParts.slice(-2).join(", ") || null,
+          }
+        : null,
   };
 }
 
@@ -294,6 +306,11 @@ function buildLinks(p, pro = false) {
     // read existing reviews — never a dead tile either way.
     review: pro && p.google_review_link ? p.google_review_link : null,
     reviewView: office.maps_url || null,
+    // Google Business tile destination (Pro): the owner's saved Google
+    // Business Profile link (google_business_url, Pro-gated at write time in
+    // me.js), falling back to the office's Maps listing — for most chambers
+    // that listing IS the Google Business profile. Free: null (tile absent).
+    googleBusiness: pro ? p.google_business_url || office.maps_url || null : null,
   };
 }
 
@@ -350,6 +367,14 @@ function renderPage(p, themeOverride, mode = "live") {
         url,
         theme,
         pro,
+        // Owner dashboard origin — mount.js builds owner-facing URLs (Edit
+        // chip, upgrade links) from this instead of hardcoding paths.
+        dash: DASHBOARD_SITE,
+        // Consultation fee (₹) for the Pro pay sheet's default option.
+        fee:
+          p.payment && p.payment.show_upi !== false && Number(p.payment.consultation_fee) > 0
+            ? Number(p.payment.consultation_fee)
+            : null,
         // Free pay experience: the lawyer's own uploaded QR + UPI ID text.
         payQr: p.payment && p.payment.show_upi !== false ? p.payment.upi_qr_url || null : null,
         upiId: p.payment && p.payment.show_upi !== false ? p.payment.upi_id || null : null,
@@ -454,7 +479,7 @@ module.exports = async function handler(req, res) {
       "view", "share", "call", "whatsapp", "email", "pay", "directions",
       "save_contact", "appointment", "website", "qr_download", "social_click",
       "draft_created", "profile_25", "profile_50", "profile_75", "published",
-      "nfc_tap", "google_review", "payment_claimed",
+      "nfc_tap", "google_review", "google_business", "payment_claimed",
     ]);
     const FUNNEL_EVENTS = new Set(["cta_click", "otp_started", "otp_verified"]);
     const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;

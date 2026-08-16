@@ -293,10 +293,17 @@ test("draft cards are not public (profile SSR + vcf)", async () => {
 
   const res = fakeRes();
   await profileHandler({ query: { username: "9876543210" }, headers: { "user-agent": "Mozilla" } }, res);
-  assert.equal(res.statusCode, 404, "draft is 404 to the public");
+  // 2026-08-15 kiosk fix: a draft is no longer a dead-end 404 — it serves the
+  // finish-setup page (verify YOUR OWN phone, resume setup) with noindex +
+  // no-store. It must still never render the draft card itself or offer the
+  // reserved name to strangers. (This test predated that fix and asserted
+  // 404 — stale, updated to the shipped behaviour.)
+  assert.equal(res.statusCode, 200, "draft serves the finish-setup page");
   assert.equal(res.headers["X-Robots-Tag"], "noindex");
-  assert.ok(res.body.includes("noindex") && res.body.includes("published"), "friendly not-published page");
+  assert.equal(res.headers["Cache-Control"], "no-store");
+  assert.ok(res.body.includes("noindex") && /isn't public yet|hasn't been published/.test(res.body), "friendly not-published page");
   assert.ok(!res.body.includes("Claim this username"), "draft page must not offer the reserved name");
+  assert.ok(!res.body.includes("__VAKILCARD_BOOT__"), "draft card content is never rendered publicly");
 
   const res2 = fakeRes();
   await vcfHandler({ query: { username: "9876543210" }, headers: {} }, res2);
@@ -320,15 +327,18 @@ test("preview token renders draft via the production renderer; bad token stays 4
   assert.equal(res.headers["Cache-Control"], "no-store");
   assert.ok(res.body.includes("Advocate Test"), "renders actual profile content");
 
+  // A rejected token must never render the draft card — since the 2026-08-15
+  // kiosk fix the fallback is the finish-setup page (200, noindex), not 404.
   const wrongPid = jwt.sign({ pid: "someone-else", typ: "preview" }, { expiresInSec: 900 });
   const res2 = fakeRes();
   await handler({ query: { username: "9876543210", pt: wrongPid }, headers: { "user-agent": "Mozilla" } }, res2);
-  assert.equal(res2.statusCode, 404, "pid-mismatched token is rejected");
+  assert.ok(!res2.body.includes("__VAKILCARD_BOOT__"), "pid-mismatched token never renders the card");
+  assert.ok(res2.body.includes("noindex"), "fallback page is noindexed");
 
   const accessToken = jwt.sign({ sub: "acc", pid: "prof-1", typ: "access" });
   const res3 = fakeRes();
   await handler({ query: { username: "9876543210", pt: accessToken }, headers: { "user-agent": "Mozilla" } }, res3);
-  assert.equal(res3.statusCode, 404, "access tokens cannot be used as preview tokens");
+  assert.ok(!res3.body.includes("__VAKILCARD_BOOT__"), "access tokens cannot be used as preview tokens");
 });
 
 test("consolidated profile tracking handler (profile.js POST)", async () => {
@@ -373,6 +383,71 @@ test("consolidated profile tracking handler (profile.js POST)", async () => {
 
   // Cleanup stub
   require.cache[libPath].exports = saved;
+});
+
+test("Google Business tile + Pro pay fields (profile.js SSR boot)", async () => {
+  const profilePath = path.resolve(__dirname, "../api/vakilcard/profile.js");
+  const saved = require.cache[libPath].exports;
+  const base = {
+    id: "11111111-2222-3333-4444-555555555555",
+    username: "gbpro",
+    full_name: "Advocate GB",
+    designation: null, bio: null, photo_url: null, email: null,
+    phone: "+919876543210", whatsapp: null, website: null,
+    show_email: true, show_phone: true, theme_preference: "system",
+    languages: [], practice_areas: [], social_links: {}, is_published: true,
+  };
+  const serve = async (profile) => {
+    require.cache[libPath].exports = {
+      ...saved,
+      resolveProfileOrAlias: async () => ({ profile }),
+      trackEvent: async () => {},
+    };
+    delete require.cache[profilePath];
+    const handler = require(profilePath);
+    require.cache[libPath].exports = saved;
+    const res = fakeRes();
+    await handler({ method: "GET", query: { username: profile.username }, headers: { "user-agent": "Mozilla" } }, res);
+    assert.equal(res.statusCode, 200);
+    return res.body;
+  };
+
+  // Pro + explicit Google Business link + consultation fee: the tile data,
+  // the external link, the fee and the dashboard origin all ship in boot.
+  let body = await serve({
+    ...base,
+    subscription_plan: "PRO", subscription_status: "ACTIVE",
+    google_business_url: "https://maps.app.goo.gl/xyz",
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: 500 },
+  });
+  assert.ok(body.includes('"googleBusiness":{"name":"GB Law Chambers"'), "tile data for Pro");
+  assert.ok(body.includes('"googleBusiness":"https://maps.app.goo.gl/xyz"'), "external link is the saved GB url");
+  assert.ok(body.includes('"fee":500'), "consultation fee ships for the Pro pay sheet");
+  assert.ok(body.includes('"dash":"'), "dashboard origin ships for owner-facing links");
+  assert.ok(body.includes('"google_business"') === false, "no raw entitlement keys leak into the page");
+
+  // Pro without a saved link: falls back to the office's Maps listing.
+  body = await serve({
+    ...base,
+    subscription_plan: "PRO", subscription_status: "ACTIVE",
+    google_business_url: null,
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: null },
+  });
+  assert.ok(body.includes('"googleBusiness":"https://maps.google.com/?cid=1"'), "falls back to office maps_url");
+  assert.ok(body.includes('"fee":null'), "no fee configured → null");
+
+  // Free: tile absent and link null even when a URL sits in the DB.
+  body = await serve({
+    ...base,
+    subscription_plan: "FREE", subscription_status: "ACTIVE",
+    google_business_url: "https://maps.app.goo.gl/xyz",
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: 500 },
+  });
+  assert.ok(body.includes('"googleBusiness":null'), "Free never gets the tile or the link");
+  assert.ok(!body.includes('"googleBusiness":{'), "no tile data for Free");
 });
 
 /* ---------- runner ---------- */

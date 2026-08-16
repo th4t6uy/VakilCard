@@ -490,7 +490,12 @@ const demoProfile = {
   upi: 'sidharthgautam@example',
   firm: 'Sidharth Gautam Law Chambers',
   social: [['linkedin', 'https://www.linkedin.com/in/example'], ['instagram', 'https://www.instagram.com/example'], ['youtube', 'https://www.youtube.com/@example']],
-  address: ['123 Legal Street', 'Example City – 110001']
+  address: ['123 Legal Street', 'Example City – 110001'],
+  // Demo renders as Pro — showcase the Google Business tile too.
+  googleBusiness: {
+    name: 'Sidharth Gautam Law Chambers',
+    address: '123 Legal Street, Example City'
+  }
 };
 window.vakilDefaultProfile = defaultProfile;
 window.vakilDemoProfile = demoProfile;
@@ -1052,9 +1057,14 @@ function VakilCardApp({
   // self-promotion. That upsell still lives in the "Premium upsell" banner
   // below and the footer's "Powered by Vakilpedia" link.
   const actions = profile.actions || null; // null (demo) => everything live
+  // Icon PNGs live under /ds/assets/actions/ (absolute path, NOT the page
+  // <base>): the www proxy forwards only /ds/* + /api/vakilcard/*, so the
+  // old /icons/... refs 404'd on BOTH origins — the files were never shipped.
+  // These are the founder's Noun Project set (Assets/Logos, black line art,
+  // captions cropped), inverted to white in dark mode by IconImg.
   const tiles = [{
     i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "/icons/actions/call.png",
+      src: "/ds/assets/actions/call.png",
       invert: darkIcon,
       fallback: Icons.phone(24)
     }),
@@ -1063,7 +1073,7 @@ function VakilCardApp({
     k: 'call'
   }, {
     i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "/icons/actions/whatsapp.png",
+      src: "/ds/assets/actions/whatsapp.png",
       invert: darkIcon,
       fallback: Icons.wa(24)
     }),
@@ -1072,7 +1082,7 @@ function VakilCardApp({
     k: 'whatsapp'
   }, {
     i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "/icons/actions/book.png",
+      src: "/ds/assets/actions/book.png",
       invert: darkIcon,
       fallback: Icons.cal(24)
     }),
@@ -1088,7 +1098,7 @@ function VakilCardApp({
     k: 'directions'
   }, {
     i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "/icons/actions/email.png",
+      src: "/ds/assets/actions/email.png",
       invert: darkIcon,
       fallback: Icons.mail(24)
     }),
@@ -1097,7 +1107,7 @@ function VakilCardApp({
     k: 'email'
   }, {
     i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "/icons/actions/website.png",
+      src: "/ds/assets/actions/website.png",
       invert: darkIcon,
       fallback: Icons.globe(24)
     }),
@@ -1110,12 +1120,10 @@ function VakilCardApp({
   // deep-links straight to the owner's google_review_link. Which label +
   // destination applies is decided server-side (profile.js `actions`/
   // `links.review*`) — this tile is purely data-driven, never hides.
+  // (No review PNG exists in the founder's icon set — the star glyph IS
+  // the intended icon here, not a fallback.)
   {
-    i: /*#__PURE__*/React.createElement(IconImg, {
-      src: "/icons/actions/review.png",
-      invert: darkIcon,
-      fallback: Icons.star(24)
-    }),
+    i: Icons.star(24),
     l: profile.reviewLabel || 'Reviews',
     t: 'gold',
     k: 'reviews'
@@ -1324,7 +1332,12 @@ function VakilCardApp({
     }
   }, Icons.copy(15))), /*#__PURE__*/React.createElement(Button, {
     variant: "primary",
-    icon: Icons.rupee(16)
+    icon: /*#__PURE__*/React.createElement(IconImg, {
+      src: "/ds/assets/actions/pay.png",
+      size: 16,
+      invert: true,
+      fallback: Icons.rupee(16)
+    })
   }, "Pay Now"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
@@ -1362,7 +1375,7 @@ function VakilCardApp({
       marginTop: 6,
       lineHeight: 1.3
     }
-  }, "Tap to enlarge", /*#__PURE__*/React.createElement("br", null), "& scan")))) : null, /*#__PURE__*/React.createElement(Section, {
+  }, "Tap to enlarge", /*#__PURE__*/React.createElement("br", null), "Double-tap to download")))) : null, /*#__PURE__*/React.createElement(Section, {
     eyebrow: "Connect"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1584,7 +1597,109 @@ function VakilCardApp({
       fontSize: 11,
       fontWeight: 700
     }
-  }, Icons.ext(13), " Open in Maps")))), /*#__PURE__*/React.createElement("div", {
+  }, Icons.ext(13), " Open in Maps")))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
+    eyebrow: "Google Business"
+  }, /*#__PURE__*/React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": "Google Business profile",
+    title: "Open in Google",
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      cursor: 'pointer',
+      borderRadius: 16,
+      border: '1px solid var(--hairline)',
+      background: 'var(--glass-thick)',
+      padding: '12px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      width: 46,
+      height: 46,
+      borderRadius: 12,
+      background: '#fff',
+      border: '1px solid var(--hairline)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 3px 10px rgba(0,0,0,0.22)'
+    }
+  }, /*#__PURE__*/React.createElement(IconImg, {
+    src: "/ds/assets/brands/google-maps.png",
+    size: 30,
+    fallback: /*#__PURE__*/React.createElement(GMapsPin, {
+      size: 28
+    })
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: 13.5,
+      fontWeight: 800,
+      color: 'var(--text-hi)',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, profile.googleBusiness.name), profile.googleBusiness.address ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: 11,
+      color: 'var(--text-low)',
+      marginTop: 2,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, profile.googleBusiness.address) : null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      display: 'inline-flex',
+      gap: 1,
+      color: 'var(--gold-400, #d9a441)'
+    }
+  }, [0, 1, 2, 3, 4].map(i => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      display: 'inline-flex'
+    }
+  }, Icons.star(10)))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      color: 'var(--text-dim)'
+    }
+  }, "Reviews \xB7 Photos \xB7 Directions"))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 4,
+      color: 'var(--text-mid)'
+    }
+  }, Icons.ext(15), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 8.5,
+      fontWeight: 700,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      color: 'var(--text-dim)'
+    }
+  }, "Google")))) : null, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',

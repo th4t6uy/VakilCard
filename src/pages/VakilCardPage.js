@@ -10,8 +10,8 @@ import { useNavigate, useParams } from "react-router-dom";
 import {
   ArrowRight, Banknote, Briefcase, CalendarClock, Check, Copy, Download,
   ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
-  Lock, LogOut, Phone, Pencil, Plus, QrCode, Rocket, Share2, Smartphone,
-  Sparkles, Star, Trash2, UserRound, X,
+  Lock, LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
+  Smartphone, Sparkles, Star, Trash2, UserRound, X,
 } from "lucide-react";
 import {
   getMe, getMyAnalytics, getAccount, saveProfile, deleteProfile,
@@ -146,10 +146,11 @@ const EDIT_SECTIONS = [
 // `key` must exist in api/vakilcard/_entitlements.js's PRO_FEATURES.
 const PRO_TOOLS = [
   { key: "website", icon: Globe2, title: "Personal website button", freeDesc: "Add a live link to your own site on your card.", proDesc: "Set your site under Contact & website — it goes live on your card." },
-  { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay in one tap via their own UPI app — no QR needed.", proDesc: "Active — clients tapping Pay get the native UPI app chooser automatically." },
+  { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay your consultation fee — or any amount — in one tap via their own UPI app.", proDesc: "Active — clients tapping Pay choose your consultation fee or a custom amount, then their UPI app." },
   { key: "booking", icon: CalendarClock, title: "Smart appointment booking", freeDesc: "Basic booking is already on — upgrade for Google Calendar sync so you're never double-booked, plus payment-before-confirmation.", proDesc: "Set up below — connect Google Calendar and require payment before a slot is confirmed." },
   { key: "remove_branding", icon: Sparkles, title: "Remove Vakilpedia branding", freeDesc: "Your card, only your name — no \"Powered by Vakilpedia\".", proDesc: "Toggle it off in Theme below." },
   { key: "google_review", icon: Star, title: "Get more reviews", freeDesc: "A direct \"Leave a review\" button straight to Google.", proDesc: "Add your review link in Booking & Reviews below." },
+  { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Add your Google Business link in Booking & Reviews below — the tile appears on your card." },
 ];
 
 function ProToolRow({ tool, pro, onLocked }) {
@@ -205,15 +206,23 @@ function flattenGroups(groups) {
 }
 let groupIdSeq = 0;
 
-function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
+function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReviewLink, onSaveBusinessUrl, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [reviewLink, setReviewLink] = useState("");
   const [savingReview, setSavingReview] = useState(false);
+  const [businessUrl, setBusinessUrl] = useState("");
+  const [savingBusiness, setSavingBusiness] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
+
+  // Prefill the Pro link inputs with what's already saved — previously the
+  // review-link box always opened empty, so "Save" with a blank box could
+  // silently wipe an existing link.
+  useEffect(() => { if (initialReviewLink) setReviewLink(initialReviewLink); }, [initialReviewLink]);
+  useEffect(() => { if (initialBusinessUrl) setBusinessUrl(initialBusinessUrl); }, [initialBusinessUrl]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -254,6 +263,18 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
       setErr("Couldn't save your review link.");
     } finally {
       setSavingReview(false);
+    }
+  };
+
+  const saveBusinessUrl = async () => {
+    setSavingBusiness(true);
+    setErr("");
+    try {
+      await onSaveBusinessUrl(businessUrl);
+    } catch {
+      setErr("Couldn't save your Google Business link.");
+    } finally {
+      setSavingBusiness(false);
     }
   };
 
@@ -332,7 +353,7 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
-          <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to stop double-bookings →</button>
+          <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to stop double-bookings →</button>
         ) : !cfg || !cfg.calendar_platform_configured ? (
           <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
         ) : cfg.calendar_connected ? (
@@ -353,7 +374,7 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
         {!pro ? (
           <>
             <p className="text-xs text-slate-500 mt-1 hyphens-none">Free shows a "View Reviews" link to your office's Google listing. Upgrade for a direct "Leave a Review" button.</p>
-            <button type="button" onClick={onUpgrade} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade →</button>
+            <button type="button" onClick={() => onUpgrade("google_review")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
           </>
         ) : (
           <div className="flex flex-wrap gap-2 mt-2">
@@ -367,6 +388,34 @@ function BookingPanel({ pro, onSaveReviewLink, onUpgrade }) {
               {savingReview ? "Saving…" : "Save"}
             </button>
           </div>
+        )}
+      </div>
+
+      <div className="mt-6 pt-5 border-t border-slate-200">
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-bold text-slate-800">Google Business tile</p>
+          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+        </div>
+        {!pro ? (
+          <>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">A native Google tile on your card — visitors tap it to open your Google Business profile with all your reviews and photos.</p>
+            <button type="button" onClick={() => onUpgrade("google_business")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
+          </>
+        ) : (
+          <>
+            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">Paste your Google Business / Maps listing link (from your listing's Share button). Without one, the tile uses your office's Maps link automatically.</p>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={businessUrl}
+                onChange={(e) => setBusinessUrl(e.target.value)}
+                placeholder="https://maps.app.goo.gl/…  or  https://g.co/kgs/…"
+                className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
+              />
+              <button type="button" onClick={saveBusinessUrl} disabled={savingBusiness} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+                {savingBusiness ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -1097,9 +1146,15 @@ export default function VakilCardPage() {
               Pro-only rows (calendar sync, review link) render locked. */}
           <BookingPanel
             pro={pro}
-            onUpgrade={() => setUpgradeFeature("booking")}
+            initialReviewLink={profile.google_review_link || ""}
+            initialBusinessUrl={profile.google_business_url || ""}
+            onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
             onSaveReviewLink={async (link) => {
               await saveFull({ google_review_link: link });
+              await load();
+            }}
+            onSaveBusinessUrl={async (link) => {
+              await saveFull({ google_business_url: link });
               await load();
             }}
           />

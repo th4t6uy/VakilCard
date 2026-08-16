@@ -156,6 +156,10 @@ module.exports = async function handler(req, res) {
       if (!pro && newReviewLink && newReviewLink !== (profile && profile.google_review_link)) {
         return json(res, 402, { error: "pro_required", feature: "google_review" });
       }
+      const newBusinessUrl = str(b.google_business_url, 500);
+      if (!pro && newBusinessUrl && newBusinessUrl !== (profile && profile.google_business_url)) {
+        return json(res, 402, { error: "pro_required", feature: "google_business" });
+      }
       const newTheme = ["default", "midnight", "ivory"].includes(b.card_theme) ? b.card_theme : "default";
       if (!pro && newTheme !== "default" && newTheme !== (profile && profile.card_theme)) {
         return json(res, 402, { error: "pro_required", feature: "premium_themes" });
@@ -203,6 +207,12 @@ module.exports = async function handler(req, res) {
           ? b.theme_preference
           : "system",
         google_review_link: newReviewLink || null,
+        // Deploy-safe: only touch the column when there's something to write
+        // or clear — so a deploy that races the additive migration can never
+        // break every profile save on an un-migrated database.
+        ...(newBusinessUrl || (profile && profile.google_business_url)
+          ? { google_business_url: newBusinessUrl || null }
+          : {}),
         card_theme: newTheme,
         hide_branding: newHideBranding,
         booking_windows: bookingWindows,
