@@ -116,7 +116,15 @@ function clientIp(req) {
  */
 async function createAccountViaCaseLinx(phoneE164, code, ip) {
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 6000);
+  // 25s, raised from 6s on 2026-08-16. SIX SECONDS WAS NOT ENOUGH and it broke
+  // signup outright the moment the bridge started working: CaseLinx's
+  // signup/complete does an OTP verify + auth.users create + supracore account +
+  // profile write, which routinely exceeds 6s on Render's starter plan. The abort
+  // landed in the catch below, this returned consumed:false, and VakilCard then
+  // tried to verify a code CaseLinx had ALREADY consumed server-side — so the
+  // lawyer saw "Incorrect or expired code" while a real Vakilpedia account had in
+  // fact just been created for them. Observed live on +919168125271.
+  const timeout = setTimeout(() => controller.abort(), 25000);
   try {
     const r = await fetch(`${CASELINX_ORIGIN}/api/supracore/signup/complete`, {
       method: "POST",
@@ -125,7 +133,7 @@ async function createAccountViaCaseLinx(phoneE164, code, ip) {
       signal: controller.signal,
     });
     const data = await r.json().catch(() => null);
-    if (!data || typeof data !== "object") return { consumed: false, accountId: null };
+    if (!data || typeof data !== "object") return await didCaseLinxAlreadyConsume(phoneE164);
     if (data.status === "completed" || data.status === "signed_in") {
       return { consumed: true, accountId: data.accountId || null };
     }
@@ -137,9 +145,52 @@ async function createAccountViaCaseLinx(phoneE164, code, ip) {
     // consume a valid session, so it is still safe (and correct) to verify locally.
     return { consumed: false, accountId: null };
   } catch {
-    return { consumed: false, accountId: null };
+    // TIMEOUT OR NETWORK ERROR — we genuinely do not know whether CaseLinx finished.
+    // Never assume it did not: assuming wrongly is what showed a real signup an
+    // "expired code" error. Ask the database what actually happened.
+    return await didCaseLinxAlreadyConsume(phoneE164);
   } finally {
     clearTimeout(timeout);
+  }
+}
+
+/**
+ * Did CaseLinx consume this phone's verification session after all?
+ *
+ * Called only when the bridge call gave no usable answer (timeout, network error,
+ * unparseable body). The verification_sessions table is SHARED between VakilCard
+ * and CaseLinx, so a `consumed` row is proof CaseLinx verified the code even
+ * though we never saw the reply — in which case re-verifying locally is
+ * guaranteed to fail on a spent code and would wrongly reject a real signup.
+ *
+ * Also resolves the SupraCore account id so both sides still share one id, which
+ * is the whole point of the bridge. Best-effort throughout: any failure here
+ * returns consumed:false, which is the old (safe, pre-2026-08-16) behaviour.
+ */
+async function didCaseLinxAlreadyConsume(phoneE164) {
+  try {
+    const rows = await db(
+      `verification_sessions?phone_e164=eq.${encodeURIComponent(phoneE164)}` +
+      `&order=created_at.desc&limit=1&select=status`
+    );
+    const consumed = Array.isArray(rows) && rows[0] && rows[0].status === "consumed";
+    if (!consumed) return { consumed: false, accountId: null };
+
+    // The code WAS spent by CaseLinx. Recover the shared account id if we can.
+    let accountId = null;
+    try {
+      const resolved = await db("rpc/supracore_admin_resolve_handle", {
+        method: "POST",
+        body: { p_handle: phoneE164 },
+      });
+      const match = resolved && Array.isArray(resolved.matches) ? resolved.matches[0] : null;
+      accountId = (match && match.accountId) || null;
+    } catch {
+      /* id recovery is a bonus, not a requirement */
+    }
+    return { consumed: true, accountId };
+  } catch {
+    return { consumed: false, accountId: null };
   }
 }
 

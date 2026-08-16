@@ -119,6 +119,11 @@ function claimPage(code) {
     <input id="otp" type="tel" inputmode="numeric" maxlength="6" placeholder="6-digit code" autocomplete="one-time-code">
     <div class="err" id="err-otp"></div>
     <button id="btn-verify">Verify &amp; activate</button>
+    <button id="btn-resend" type="button" disabled
+            style="background:#fff;color:#635BFF;border:1.5px solid #CBD5E1;margin-top:10px">Resend code</button>
+    <p id="resend-note" style="margin:8px 0 0;font-size:12px;color:#64748B;text-align:center">
+      Didn&rsquo;t get it? You can resend in <span id="resend-count">60</span>s.
+    </p>
   </div>
   <div id="step-done" class="step">
     <h1>VakilCard activated 🎉</h1>
@@ -153,6 +158,57 @@ function claimPage(code) {
   document.getElementById("btn-courtque").disabled = true; // re-armed once step-done renders below
   agreeCourtque.addEventListener("change", function(){ document.getElementById("btn-courtque").disabled = !agreeCourtque.checked; });
 
+  // ── Resend cooldown (2026-08-16) ───────────────────────────────────────────
+  // WhatsApp delivery is not instant and a lawyer standing at a stall has no way
+  // to ask for another code without this. 60s, restarted on every send, so the
+  // button cannot be used to hammer the OTP sender — the server has its own
+  // cooldown/rate limit too; this is the visible half of it.
+  var RESEND_SECONDS = 60;
+  var resendTimer = null;
+  function startResendCooldown(){
+    var left = RESEND_SECONDS;
+    var btn = document.getElementById("btn-resend");
+    var note = document.getElementById("resend-note");
+    var count = document.getElementById("resend-count");
+    btn.disabled = true;
+    note.style.display = "block";
+    count.textContent = String(left);
+    if (resendTimer) clearInterval(resendTimer);
+    resendTimer = setInterval(function(){
+      left -= 1;
+      if (left <= 0) {
+        clearInterval(resendTimer); resendTimer = null;
+        btn.disabled = false;
+        note.style.display = "none";
+        return;
+      }
+      count.textContent = String(left);
+    }, 1000);
+  }
+
+  document.getElementById("btn-resend").addEventListener("click", function(){
+    setErr("err-otp", "");
+    if (!phone) { setErr("err-otp", "Go back and enter your number again."); return; }
+    var btn = this; btn.disabled = true; btn.textContent = "Sending…";
+    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "resend", phone: phone }) })
+      .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
+      .then(function(res){
+        btn.textContent = "Resend code";
+        if (!res.ok) {
+          // Server said no (its own cooldown / hourly cap). Re-arm the timer anyway
+          // so the button cannot be tapped repeatedly into a hard rate limit.
+          setErr("err-otp", res.d && (res.d.error === "rate_limited" || res.d.error === "cooldown")
+            ? "Please wait a moment before asking for another code."
+            : "Couldn't resend just now. Try again shortly.");
+          startResendCooldown();
+          return;
+        }
+        document.getElementById("otp").value = "";
+        startResendCooldown();
+      })
+      .catch(function(){ btn.textContent = "Resend code"; setErr("err-otp", "Network error, try again."); startResendCooldown(); });
+  });
+
   document.getElementById("btn-send").addEventListener("click", function(){
     setErr("err-phone", "");
     if (!agreeVakilcard.checked) { setErr("err-phone", "Please agree to the Terms of Use to continue."); return; }
@@ -166,6 +222,7 @@ function claimPage(code) {
         if (!res.ok) { setErr("err-phone", res.d.error === "rate_limited" || res.d.error === "cooldown" ? "Too many attempts, try again shortly." : "Couldn't send the code. Check the number."); return; }
         document.getElementById("phone-echo").textContent = phone;
         show("step-otp");
+        startResendCooldown();
       })
       .catch(function(){ btn.disabled = false; btn.textContent = "Send code"; setErr("err-phone", "Network error, try again."); });
   });
