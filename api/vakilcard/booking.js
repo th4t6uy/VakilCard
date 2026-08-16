@@ -359,12 +359,15 @@ module.exports = async function handler(req, res) {
             prefer: "resolution=merge-duplicates,return=minimal",
           });
 
-          // Update profile with fetched map embed & reviews link
+          // Update profile with fetched map embed, reviews link & verified
+          // business name (google_business_name — public card's display-name
+          // source; see supabase/migrations/202608160001_add_google_business_name.sql)
           await db(`vakilcard_profiles?id=eq.${claims.pid}`, {
             method: "PATCH",
             body: {
               google_business_embed: embedUrl,
               google_review_link: newReviewUrl || null,
+              google_business_name: businessName || null,
             },
             prefer: "return=minimal",
           });
@@ -426,6 +429,7 @@ module.exports = async function handler(req, res) {
         body: {
           google_business_embed: null,
           google_review_link: null,
+          google_business_name: null,
         },
         prefer: "return=minimal",
       });
