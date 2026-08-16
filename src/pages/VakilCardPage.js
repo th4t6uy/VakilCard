@@ -304,22 +304,30 @@ function flattenGroups(groups) {
 }
 let groupIdSeq = 0;
 
-function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
+// Human copy for the `reason` codes api/vakilcard/booking.js's gcal_callback
+// computes but (before 2026-08-16) never surfaced anywhere — see
+// storeBusinessConnection/storeCalendarConnection in that file. Read off the
+// `?google=|gmb=|gcal=connected|error&msg=<reason>` redirect params (see
+// the googleNotice effect below).
+const GOOGLE_CONNECT_REASONS = {
+  gmb_no_accounts:
+    "Calendar connected, but Business Profile didn't — the Google account you signed in with isn't listed as a Manager or Owner on any Google Business Profile. Being the account your listing is \"registered under\" on Search/Maps doesn't grant this automatically; open business.google.com with that account, or add it as a Manager on the listing from whichever account does have access, then reconnect here.",
+  gmb_no_locations:
+    "Calendar connected, but that Google account's Business Profile has no locations set up yet — finish setting up the listing in Google Business Profile, then reconnect.",
+  no_refresh_token_reconnect_required:
+    "Google didn't grant a long-lived connection — this usually happens on a repeat sign-in. Click Connect Google again and make sure to complete the consent screen fully.",
+  exchange_failed: "Something went wrong talking to Google. Please try connecting again — if it keeps failing, contact support.",
+  expired_state: "That Google sign-in link expired — please try connecting again.",
+  no_code: "Google sign-in was cancelled before it finished — please try connecting again.",
+};
+
+function BookingPanel({ pro, googleReviewLink, googleNotice, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
-  const [reviewLink, setReviewLink] = useState("");
-  const [savingReview, setSavingReview] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
-
-  // Prefill the Pro link input with what's already saved — previously the
-  // review-link box always opened empty, so "Save" with a blank box could
-  // silently wipe an existing link. (Google Business is OAuth-connected now,
-  // not a pasted link — see connectGoogle/disconnectBusiness below — so it
-  // has no equivalent prefill.)
-  useEffect(() => { if (initialReviewLink) setReviewLink(initialReviewLink); }, [initialReviewLink]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -348,18 +356,6 @@ function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
       setErr("Couldn't save your availability — please try again.");
     } finally {
       setSavingWindows(false);
-    }
-  };
-
-  const saveReviewLink = async () => {
-    setSavingReview(true);
-    setErr("");
-    try {
-      await onSaveReviewLink(reviewLink);
-    } catch {
-      setErr("Couldn't save your review link.");
-    } finally {
-      setSavingReview(false);
     }
   };
 
@@ -460,6 +456,11 @@ function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
           <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
         ) : (
           <>
+            {googleNotice && googleNotice.msg && (
+              <div className={`mt-2 rounded-xl px-3 py-2 text-xs leading-relaxed ${googleNotice.severity === "error" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-800"}`}>
+                {GOOGLE_CONNECT_REASONS[googleNotice.msg] || `Google reported: "${googleNotice.msg}". Try reconnecting — if it keeps happening, contact support.`}
+              </div>
+            )}
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap text-sm">
                 <span className="text-xs font-bold text-slate-500 w-20 flex-none">Calendar</span>
@@ -514,17 +515,19 @@ function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
             <button type="button" onClick={() => onUpgrade("google_review")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
           </>
         ) : (
-          <div className="flex flex-wrap gap-2 mt-2">
-            <input
-              value={reviewLink}
-              onChange={(e) => setReviewLink(e.target.value)}
-              placeholder="https://g.page/r/.../review"
-              className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-base px-3 py-2"
-            />
-            <button type="button" onClick={saveReviewLink} disabled={savingReview} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
-              {savingReview ? "Saving…" : "Save"}
-            </button>
-          </div>
+          // 2026-08-16, per explicit product direction: this is never a
+          // field the owner fills in — it's lifted straight from the
+          // connected Google Business Profile listing (see
+          // storeBusinessConnection in api/vakilcard/booking.js) and shown
+          // here read-only. Connect Google Business above to populate it;
+          // disconnecting clears it automatically.
+          <p className="text-xs text-slate-500 mt-1.5 hyphens-none">
+            {googleReviewLink ? (
+              <>Synced from your connected Google Business listing: <a href={googleReviewLink} target="_blank" rel="noreferrer" className="font-bold text-[#635BFF] underline break-all">{googleReviewLink}</a></>
+            ) : (
+              <>Connect Google Business above and your real review link will appear here automatically — nothing to type in.</>
+            )}
+          </p>
         )}
       </div>
 
@@ -655,6 +658,37 @@ export default function VakilCardPage() {
     url.searchParams.delete("from");
     window.history.replaceState({}, "", url.pathname + url.search + url.hash);
   }, [autoGoogleSignIn]);
+
+  // ?google=|gmb=|gcal=connected|error&msg=<reason> — the gcal_callback
+  // redirect from api/vakilcard/booking.js (see GOOGLE_CONNECT_REASONS
+  // above). Before 2026-08-16 this reason was computed server-side and put
+  // in the URL but never read anywhere — a partial failure (e.g. Calendar
+  // connects, Business doesn't) landed back on the dashboard showing
+  // "connected" with no explanation for the half that didn't. Captured once
+  // via a lazy initializer, same pattern as autoGoogleSignIn above, then
+  // stripped so a refresh doesn't re-show it.
+  const [googleNotice] = useState(() => {
+    if (typeof window === "undefined") return null;
+    const p = new URLSearchParams(window.location.search);
+    for (const kind of ["google", "gmb", "gcal"]) {
+      const status = p.get(kind);
+      if (status === "connected" || status === "error") {
+        const msg = p.get("msg");
+        if (!msg && status !== "error") return null; // fully-successful connect — nothing to say
+        return { kind, ok: status === "connected", msg, severity: status === "error" ? "error" : "warning" };
+      }
+    }
+    return null;
+  });
+  useEffect(() => {
+    if (!googleNotice) return;
+    const url = new URL(window.location.href);
+    url.searchParams.delete("google");
+    url.searchParams.delete("gmb");
+    url.searchParams.delete("gcal");
+    url.searchParams.delete("msg");
+    window.history.replaceState({}, "", url.pathname + url.search + url.hash);
+  }, [googleNotice]);
 
   useEffect(() => {
     document.title = "VakilCard — One Link. Everything Your Client Needs. | Vakilpedia";
@@ -1268,12 +1302,9 @@ export default function VakilCardPage() {
               Pro-only rows (calendar sync, review link) render locked. */}
           <BookingPanel
             pro={pro}
-            initialReviewLink={profile.google_review_link || ""}
+            googleReviewLink={profile.google_review_link || ""}
+            googleNotice={googleNotice}
             onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
-            onSaveReviewLink={async (link) => {
-              await saveFull({ google_review_link: link });
-              await load();
-            }}
           />
 
           {/* share + theme side-by-side on xl — compact tiles, halves page scroll */}

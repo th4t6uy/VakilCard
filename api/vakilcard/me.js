@@ -155,14 +155,24 @@ module.exports = async function handler(req, res) {
       if (!pro && newWebsite && newWebsite !== (profile && profile.website)) {
         return json(res, 402, { error: "pro_required", feature: "website" });
       }
-      // Same ADD/CHANGE-only guard for the two other Pro-gated fields that
-      // live on the profile row. Clearing or leaving unchanged never 402s —
+      // Same ADD/CHANGE-only guard for the other Pro-gated field that lives
+      // on the profile row. Clearing or leaving unchanged never 402s —
       // autosave always resends the full profile, so a hard "no writes at
       // all while Free" would 402 every save for a Free user.
-      const newReviewLink = str(b.google_review_link, 500);
-      if (!pro && newReviewLink && newReviewLink !== (profile && profile.google_review_link)) {
-        return json(res, 402, { error: "pro_required", feature: "google_review" });
-      }
+      //
+      // google_review_link is deliberately NOT handled on this general
+      // write path (2026-08-16, per explicit product direction: the review
+      // link must never be something the owner types in — it's lifted
+      // straight from the connected Google Business Profile). It is written
+      // ONLY by storeBusinessConnection() and nulled ONLY by the
+      // google_business_disconnect handler, both in api/vakilcard/booking.js.
+      // Before this fix, this handler unconditionally wrote
+      // `google_review_link: newReviewLink || null` from whatever the
+      // client's form sent — since autosave resends the whole form on every
+      // save, and the dashboard no longer has a field for this, that would
+      // have silently NULLed out the auto-fetched link on the very next
+      // unrelated save (e.g. editing bio). Leaving the column out of
+      // profileRow entirely means this save path can never touch it.
       const newBusinessUrl = str(b.google_business_url, 500);
       if (!pro && newBusinessUrl && newBusinessUrl !== (profile && profile.google_business_url)) {
         return json(res, 402, { error: "pro_required", feature: "google_business" });
@@ -213,7 +223,6 @@ module.exports = async function handler(req, res) {
         theme_preference: ["light", "dark", "system"].includes(b.theme_preference)
           ? b.theme_preference
           : "system",
-        google_review_link: newReviewLink || null,
         // Deploy-safe: only touch the column when there's something to write
         // or clear — so a deploy that races the additive migration can never
         // break every profile save on an un-migrated database.

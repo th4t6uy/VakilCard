@@ -102,7 +102,17 @@ const EMPTY = {
   // dashboard's Booking & Reviews / Theme panels), but MUST round-trip
   // through every save (me.js rebuilds the whole row from the body) or a
   // save from any step that doesn't know about them would silently wipe a
-  // Pro owner's review link / theme / branding choice / booking windows.
+  // Pro owner's theme / branding choice / booking windows.
+  //
+  // google_review_link is a READ-ONLY passthrough here (2026-08-16): it's
+  // OAuth-only now (see api/vakilcard/me.js and booking.js's
+  // storeBusinessConnection/google_business_disconnect) — no UI in this
+  // wizard ever sets it, and api/vakilcard/me.js's save path no longer
+  // reads b.google_review_link at all, so it's safe to keep round-tripping
+  // it here (it's simply ignored server-side either way). It stays in form
+  // state purely so the live card preview's reviewLabel logic (see
+  // formToDsProfile in vakilcardNormalize.js) can tell "Leave a Review"
+  // apart from "View Reviews" while editing.
   google_review_link: "", google_business_url: "", card_theme: "default", hide_branding: null, booking_windows: [],
 };
 

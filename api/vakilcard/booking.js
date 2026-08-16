@@ -233,7 +233,13 @@ async function storeCalendarConnection(pid, t) {
       prefer: "resolution=merge-duplicates,return=minimal",
     });
     return { ok: true };
-  } catch {
+  } catch (e) {
+    // 2026-08-16: this used to swallow the real error completely — a
+    // profile-store failure here was indistinguishable in Vercel logs from
+    // a Google outage. Log it (db() already logs its own request/response,
+    // so this mainly catches non-db throws) so a support/diagnosis pass
+    // doesn't have to reproduce the failure blind.
+    console.error(`[vakilcard/booking] storeCalendarConnection pid=${pid} failed:`, e && (e.message || e));
     return { ok: false, reason: "exchange_failed" };
   }
 }
@@ -250,7 +256,20 @@ async function storeBusinessConnection(pid, t) {
     });
     if (!accountsRes.ok) throw new Error(`GMB accounts fetch failed: ${await accountsRes.text()}`);
     const accounts = (await accountsRes.json()).accounts || [];
-    if (accounts.length === 0) return { ok: false, reason: "gmb_no_accounts" };
+    if (accounts.length === 0) {
+      // 2026-08-16: neither branch of this function was ever logged, so
+      // "Business Profile didn't connect" was undiagnosable from Vercel
+      // logs alone — you had to ask the user to reproduce it. A zero-length
+      // accounts array here isn't an API failure; it means the Google
+      // account that completed OAuth consent isn't listed as a Manager/
+      // Owner on any Business Profile (that access is granted per-Google-
+      // identity on the listing itself — it does NOT follow automatically
+      // from that identity being "the email the business is registered
+      // under" via Search/Maps, a common source of confusion). Logging pid
+      // only (never the access token) so this is safe to leave on.
+      console.error(`[vakilcard/booking] storeBusinessConnection pid=${pid}: 0 GMB accounts for the connecting Google identity (not a Manager/Owner on any Business Profile listing)`);
+      return { ok: false, reason: "gmb_no_accounts" };
+    }
 
     const accountName = accounts[0].name;
     const locationsRes = await fetchWithTimeout(
@@ -259,7 +278,10 @@ async function storeBusinessConnection(pid, t) {
     );
     if (!locationsRes.ok) throw new Error(`GMB locations fetch failed: ${await locationsRes.text()}`);
     const locations = (await locationsRes.json()).locations || [];
-    if (locations.length === 0) return { ok: false, reason: "gmb_no_locations" };
+    if (locations.length === 0) {
+      console.error(`[vakilcard/booking] storeBusinessConnection pid=${pid}: GMB account ${accountName} has 0 locations`);
+      return { ok: false, reason: "gmb_no_locations" };
+    }
 
     const location = locations[0];
     const businessName = location.title;
@@ -303,7 +325,8 @@ async function storeBusinessConnection(pid, t) {
     });
 
     return { ok: true, businessName };
-  } catch {
+  } catch (e) {
+    console.error(`[vakilcard/booking] storeBusinessConnection pid=${pid} failed:`, e && (e.message || e));
     return { ok: false, reason: "exchange_failed" };
   }
 }
