@@ -1375,7 +1375,109 @@ function VakilCardApp({
       marginTop: 6,
       lineHeight: 1.3
     }
-  }, "Tap to enlarge", /*#__PURE__*/React.createElement("br", null), "Double-tap to download")))) : null, /*#__PURE__*/React.createElement(Section, {
+  }, "Tap to enlarge", /*#__PURE__*/React.createElement("br", null), "Double-tap to download")))) : null, profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
+    eyebrow: "Google Business"
+  }, /*#__PURE__*/React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": "Google Business profile",
+    title: "Open in Google",
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      cursor: 'pointer',
+      borderRadius: 16,
+      border: '1px solid var(--hairline)',
+      background: 'var(--glass-thick)',
+      padding: '12px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      width: 46,
+      height: 46,
+      borderRadius: 12,
+      background: '#fff',
+      border: '1px solid var(--hairline)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 3px 10px rgba(0,0,0,0.22)'
+    }
+  }, /*#__PURE__*/React.createElement(IconImg, {
+    src: "/ds/assets/brands/google-maps.png",
+    size: 30,
+    fallback: /*#__PURE__*/React.createElement(GMapsPin, {
+      size: 28
+    })
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: 13.5,
+      fontWeight: 800,
+      color: 'var(--text-hi)',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, profile.googleBusiness.name), profile.googleBusiness.address ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: 11,
+      color: 'var(--text-low)',
+      marginTop: 2,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, profile.googleBusiness.address) : null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 4
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      display: 'inline-flex',
+      gap: 1,
+      color: 'var(--gold-400, #d9a441)'
+    }
+  }, [0, 1, 2, 3, 4].map(i => /*#__PURE__*/React.createElement("span", {
+    key: i,
+    style: {
+      display: 'inline-flex'
+    }
+  }, Icons.star(10)))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      color: 'var(--text-dim)'
+    }
+  }, "Reviews \xB7 Photos \xB7 Directions"))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 4,
+      color: 'var(--text-mid)'
+    }
+  }, Icons.ext(15), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 8.5,
+      fontWeight: 700,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      color: 'var(--text-dim)'
+    }
+  }, "Google")))) : null, /*#__PURE__*/React.createElement(Section, {
     eyebrow: "Connect"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1597,109 +1699,7 @@ function VakilCardApp({
       fontSize: 11,
       fontWeight: 700
     }
-  }, Icons.ext(13), " Open in Maps")))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
-    eyebrow: "Google Business"
-  }, /*#__PURE__*/React.createElement("div", {
-    role: "button",
-    tabIndex: 0,
-    "aria-label": "Google Business profile",
-    title: "Open in Google",
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      cursor: 'pointer',
-      borderRadius: 16,
-      border: '1px solid var(--hairline)',
-      background: 'var(--glass-thick)',
-      padding: '12px 14px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flexShrink: 0,
-      width: 46,
-      height: 46,
-      borderRadius: 12,
-      background: '#fff',
-      border: '1px solid var(--hairline)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxShadow: '0 3px 10px rgba(0,0,0,0.22)'
-    }
-  }, /*#__PURE__*/React.createElement(IconImg, {
-    src: "/ds/assets/brands/google-maps.png",
-    size: 30,
-    fallback: /*#__PURE__*/React.createElement(GMapsPin, {
-      size: 28
-    })
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'block',
-      fontSize: 13.5,
-      fontWeight: 800,
-      color: 'var(--text-hi)',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }
-  }, profile.googleBusiness.name), profile.googleBusiness.address ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'block',
-      fontSize: 11,
-      color: 'var(--text-low)',
-      marginTop: 2,
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }
-  }, profile.googleBusiness.address) : null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 5,
-      marginTop: 4
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    "aria-hidden": "true",
-    style: {
-      display: 'inline-flex',
-      gap: 1,
-      color: 'var(--gold-400, #d9a441)'
-    }
-  }, [0, 1, 2, 3, 4].map(i => /*#__PURE__*/React.createElement("span", {
-    key: i,
-    style: {
-      display: 'inline-flex'
-    }
-  }, Icons.star(10)))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 10.5,
-      color: 'var(--text-dim)'
-    }
-  }, "Reviews \xB7 Photos \xB7 Directions"))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flexShrink: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 4,
-      color: 'var(--text-mid)'
-    }
-  }, Icons.ext(15), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 8.5,
-      fontWeight: 700,
-      letterSpacing: '0.06em',
-      textTransform: 'uppercase',
-      color: 'var(--text-dim)'
-    }
-  }, "Google")))) : null, /*#__PURE__*/React.createElement("div", {
+  }, Icons.ext(13), " Open in Maps")))), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',

@@ -438,7 +438,11 @@ ${seoHead}
    - The page itself never scrolls (overflow hidden); only the card's
      chamber scrolls — exactly like a native iOS app.
    Fallback: browsers without length-division calc keep the density scale. */
-html, body { overflow: hidden; height: 100%; }
+html, body { overflow: hidden; height: 100%; touch-action: manipulation; }
+/* Double-tap-to-zoom off (native-app feel, and stops it fighting the QR
+   double-tap-to-download gesture) while pinch-zoom accessibility stays
+   intact — touch-action: manipulation removes only the double-tap gesture
+   and the ~300ms tap delay, it does not disable pinch. */
 /* Scroll must feel native: contain overscroll so the chamber never chains
    into the (locked) page and gets stuck at its edges (iOS Safari). */
 .vp-scroll { overscroll-behavior: contain; -webkit-overflow-scrolling: touch; }

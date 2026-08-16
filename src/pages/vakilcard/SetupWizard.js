@@ -188,6 +188,11 @@ export default function SetupWizard() {
   const [fieldErrors, setFieldErrors] = useState({});
   const [loadError, setLoadError] = useState(false);
   const [showMobilePreview, setShowMobilePreview] = useState(false);
+  // Unsaved-changes reminder: true from the moment a field is edited until
+  // the next successful autosave (persist()) — covers the real gap where a
+  // user edits a field mid-step and closes the tab before hitting "Next"
+  // (the only thing that autosaves within a step).
+  const [dirty, setDirty] = useState(false);
   const milestones = useRef(new Set());
   const profileId = useRef(null);
   // Username editing lives inside the wizard (Details step) — one edit area.
@@ -231,8 +236,8 @@ export default function SetupWizard() {
     try { localStorage.setItem(stepKey(profileId.current), String(step)); } catch {}
   }, [step, sectionMode]);
 
-  const set = (k, v) => setF((s) => ({ ...s, [k]: v }));
-  const setNested = (g, k, v) => setF((s) => ({ ...s, [g]: { ...s[g], [k]: v } }));
+  const set = (k, v) => { setF((s) => ({ ...s, [k]: v })); setDirty(true); };
+  const setNested = (g, k, v) => { setF((s) => ({ ...s, [g]: { ...s[g], [k]: v } })); setDirty(true); };
   const setFieldError = (k, msg) => setFieldErrors((e) => ({ ...e, [k]: msg || undefined }));
 
   const persist = async (extra = {}) => {
@@ -245,6 +250,7 @@ export default function SetupWizard() {
         track(`profile_${m}`, profileId.current);
       }
     }
+    setDirty(false);
     return r;
   };
 
@@ -300,6 +306,18 @@ export default function SetupWizard() {
       navigate(f.username ? `/${f.username}/dashboard` : "/");
     } catch {
       setError("Couldn't save. Check your connection and try again.");
+      setSaving(false);
+    }
+  };
+
+  const saveNow = async () => {
+    setError("");
+    setSaving(true);
+    try {
+      await persist();
+    } catch {
+      setError("Couldn't save. Check your connection and try again.");
+    } finally {
       setSaving(false);
     }
   };
@@ -802,6 +820,7 @@ export default function SetupWizard() {
         </div>
         <MobilePreview form={f} open={showMobilePreview} setOpen={setShowMobilePreview} />
       <UpgradeSheet open={!!upgradeFeature} feature={upgradeFeature} onClose={() => setUpgradeFeature(null)} onUpgraded={() => { setUpgradeFeature(null); load(); }} />
+      <UnsavedChangesToast dirty={dirty} saving={saving} onSaveNow={saveNow} />
       </Shell>
     );
   }
@@ -860,7 +879,38 @@ export default function SetupWizard() {
       </div>
       <MobilePreview form={f} open={showMobilePreview} setOpen={setShowMobilePreview} />
       <UpgradeSheet open={!!upgradeFeature} feature={upgradeFeature} onClose={() => setUpgradeFeature(null)} onUpgraded={() => { setUpgradeFeature(null); load(); }} />
+      <UnsavedChangesToast dirty={dirty} saving={saving} onSaveNow={saveNow} />
     </Shell>
+  );
+}
+
+/** Persistent side toast — reminds the owner they have edits that haven't
+ * been saved yet (a field was typed into since the last successful
+ * autosave). Bottom-right on desktop, above-the-fold-safe on mobile; never
+ * blocks any control underneath. Clicking "Save now" calls the same
+ * persist() autosave the step-advance buttons use, without navigating away
+ * or advancing the step. */
+function UnsavedChangesToast({ dirty, saving, onSaveNow }) {
+  if (!dirty) return null;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className="fixed z-[300] bottom-5 right-5 max-w-[calc(100vw-2.5rem)] sm:max-w-xs rounded-2xl border border-amber-200 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.18)] px-4 py-3.5 flex items-center gap-3"
+    >
+      <span className="flex-shrink-0 h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-slate-900">Unsaved changes</p>
+        <p className="text-xs text-slate-500 mt-0.5">These edits aren't saved yet.</p>
+      </div>
+      <button
+        className="flex-shrink-0 rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-3.5 py-2 text-xs font-bold disabled:opacity-50"
+        disabled={saving}
+        onClick={onSaveNow}
+      >
+        {saving ? "Saving…" : "Save now"}
+      </button>
+    </div>
   );
 }
 

@@ -397,7 +397,7 @@ function VakilCardApp({ profile = defaultProfile }) {
         </div>
       </div>
 
-      {/* Scrolling chamber — v2 order: pill, payment, connect, upsell, about, practice, office */}
+      {/* Scrolling chamber — v3 order: pill, payment, google business, connect (incl. social handles), upsell, about, practice, office */}
       <div ref={scroller} onScroll={onScroll} className={scrolling ? 'vp-scroll is-scrolling' : 'vp-scroll'} style={{ position: 'relative', zIndex: 1, flex: 1, overflowY: 'auto', padding: '0 16px calc(48px + env(safe-area-inset-bottom, 0px))', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ height: compact ? 246 : 288, transition: 'height var(--dur-slow) var(--ease-glass)' }} />
 
@@ -433,6 +433,45 @@ function VakilCardApp({ profile = defaultProfile }) {
                 <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
                 <div style={{ fontSize: 9.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.3 }}>Tap to enlarge<br/>Double-tap to download</div>
               </div>
+            </div>
+          </Section>
+        ) : null}
+
+        {/* Google Business tile — native listing-style preview (Pro; the
+            server only populates profile.googleBusiness when entitled and a
+            destination exists). Tapping opens the owner's Google Business
+            profile EXTERNALLY — mount.js matches the aria-label and opens
+            links.googleBusiness in a new tab; here it stays purely visual.
+            No fabricated rating numbers: the star row is decorative and the
+            copy says what the tap gives ("reviews, photos & directions"). */}
+        {profile.googleBusiness ? (
+          <Section eyebrow="Google Business">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Google Business profile"
+              title="Open in Google"
+              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', borderRadius: 16, border: '1px solid var(--hairline)', background: 'var(--glass-thick)', padding: '12px 14px' }}
+            >
+              <span style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 12, background: '#fff', border: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.22)' }}>
+                <IconImg src="/ds/assets/brands/google-maps.png" size={30} fallback={<GMapsPin size={28} />} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.name}</span>
+                {profile.googleBusiness.address ? (
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-low)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.address}</span>
+                ) : null}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                  <span aria-hidden="true" style={{ display: 'inline-flex', gap: 1, color: 'var(--gold-400, #d9a441)' }}>
+                    {[0, 1, 2, 3, 4].map((i) => <span key={i} style={{ display: 'inline-flex' }}>{Icons.star(10)}</span>)}
+                  </span>
+                  <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>Reviews · Photos · Directions</span>
+                </span>
+              </span>
+              <span style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--text-mid)' }}>
+                {Icons.ext(15)}
+                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Google</span>
+              </span>
             </div>
           </Section>
         ) : null}
@@ -514,45 +553,6 @@ function VakilCardApp({ profile = defaultProfile }) {
             </div>
           </div>
         </Section>
-
-        {/* Google Business tile — native listing-style preview (Pro; the
-            server only populates profile.googleBusiness when entitled and a
-            destination exists). Tapping opens the owner's Google Business
-            profile EXTERNALLY — mount.js matches the aria-label and opens
-            links.googleBusiness in a new tab; here it stays purely visual.
-            No fabricated rating numbers: the star row is decorative and the
-            copy says what the tap gives ("reviews, photos & directions"). */}
-        {profile.googleBusiness ? (
-          <Section eyebrow="Google Business">
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Google Business profile"
-              title="Open in Google"
-              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', borderRadius: 16, border: '1px solid var(--hairline)', background: 'var(--glass-thick)', padding: '12px 14px' }}
-            >
-              <span style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 12, background: '#fff', border: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.22)' }}>
-                <IconImg src="/ds/assets/brands/google-maps.png" size={30} fallback={<GMapsPin size={28} />} />
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.name}</span>
-                {profile.googleBusiness.address ? (
-                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-low)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.address}</span>
-                ) : null}
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-                  <span aria-hidden="true" style={{ display: 'inline-flex', gap: 1, color: 'var(--gold-400, #d9a441)' }}>
-                    {[0, 1, 2, 3, 4].map((i) => <span key={i} style={{ display: 'inline-flex' }}>{Icons.star(10)}</span>)}
-                  </span>
-                  <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>Reviews · Photos · Directions</span>
-                </span>
-              </span>
-              <span style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--text-mid)' }}>
-                {Icons.ext(15)}
-                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Google</span>
-              </span>
-            </div>
-          </Section>
-        ) : null}
 
         {/* Footer — every element is a real link (brand → vakilpedia.com,
             icons → Vakilpedia's own LinkedIn / YouTube / Facebook). */}
