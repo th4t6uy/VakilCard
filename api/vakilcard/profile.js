@@ -205,7 +205,17 @@ function toDsProfile(p) {
     .trim()
     .split(/\s+/);
   const firmShort = chamberWords[0] || nameParts[nameParts.length - 1] || "Chambers";
-  const firmSub = (chamberWords.slice(1).join(" ") || "LAW CHAMBERS").toUpperCase();
+  // 2026-08-16: firmSub used to default to the literal "LAW CHAMBERS"
+  // whenever chamber_name had 0 or 1 words — wrong for solo practitioners,
+  // associates, or any non-chambers practice, and impossible to opt out of.
+  // Now: an explicit chamber_type field wins when the lawyer has set one
+  // (the intentional, discoverable way to customize this caption); falls
+  // back to any extra words already typed into chamber_name (unchanged
+  // legacy behavior for existing users relying on that); otherwise the
+  // caption is omitted entirely rather than fabricated. Mirrored client-side
+  // in src/lib/vakilcardNormalize.js formToDsProfile() — keep both in sync.
+  const chamberType = (office.chamber_type || "").trim();
+  const firmSub = (chamberType || chamberWords.slice(1).join(" ")).toUpperCase();
   const addrParts = (office.address || "").split(/,\s*/).filter(Boolean);
   const mid = Math.ceil(addrParts.length / 2);
   const contacts = [];
@@ -238,7 +248,10 @@ function toDsProfile(p) {
     // when absent the card draws a valid QR from the UPI ID instead.
     payQrUrl: pay && pay.show_upi !== false ? pay.upi_qr_url || "" : "",
     social: socialList(p.social_links),
-    firm: chamber || `${firmShort} Law Chambers`,
+    // Same fix as firmSub above: no more fabricated "Law Chambers" — the
+    // Office/Google Business section already hides this line entirely when
+    // falsy (see VakilCardApp.jsx), so an honest empty string is correct.
+    firm: chamber || "",
     address: [
       addrParts.slice(0, mid).join(", "),
       addrParts.slice(mid).join(", "),

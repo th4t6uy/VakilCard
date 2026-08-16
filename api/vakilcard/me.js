@@ -50,6 +50,13 @@ const chamberStr = (v) =>
     ? str(v.replace(/[<>\x00-\x1f\x7f]/g, "").replace(/\s+/g, " "), 60)
     : null;
 
+// Chamber type (2026-08-16): same sanitization, shorter cap — see
+// CHAMBER_TYPE_MAX in src/lib/vakilcardNormalize.js.
+const chamberTypeStr = (v) =>
+  typeof v === "string"
+    ? str(v.replace(/[<>\x00-\x1f\x7f]/g, "").replace(/\s+/g, " "), 30)
+    : null;
+
 async function usernameAvailable(raw, ownProfileId) {
   const v = validateUsername(raw);
   if (!v.ok)
@@ -258,12 +265,13 @@ module.exports = async function handler(req, res) {
           prefer: "return=minimal",
         });
         const o = b.office;
-        if (o.chamber_name || o.address || o.timings || o.maps_url) {
+        if (o.chamber_name || o.chamber_type || o.address || o.timings || o.maps_url) {
           await db("vakilcard_offices", {
             method: "POST",
             body: {
               profile_id: saved.id,
               chamber_name: chamberStr(o.chamber_name),
+              chamber_type: chamberTypeStr(o.chamber_type),
               address: str(o.address, 500),
               maps_url: str(o.maps_url, 1000),
               timings: str(o.timings, 200),

@@ -57,6 +57,37 @@ export function chamberNameError(raw) {
   return null;
 }
 
+/* ---------------- chamber type (2026-08-16) ----------------
+   The small caption line under the chamber name on the card (e.g.
+   "LAW CHAMBERS", "LEGAL ASSOCIATES", "ADVOCATES", "& CO") used to be
+   forced to the literal "LAW CHAMBERS" whenever chamber_name had 0 or 1
+   words — wrong for solo practitioners, associates, firms, or any
+   non-chambers practice, and not something a lawyer could opt out of.
+   This is its own free-text field (same validation shape as chamber name,
+   just a shorter cap since it renders as an all-caps single-line caption)
+   so it never has to be guessed from chamber_name's word count. Blank is
+   valid and means the caption line is omitted entirely — no forced
+   default. Mirrored server-side in api/vakilcard/me.js. */
+export const CHAMBER_TYPE_MAX = 30;
+
+/** Strip prohibited chars, collapse whitespace, cap length. Never throws. */
+export function sanitizeChamberType(raw) {
+  return String(raw || "")
+    .replace(/[<>\x00-\x1f\x7f]/g, "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, CHAMBER_TYPE_MAX);
+}
+
+/** Null when valid/empty; otherwise a short human error message. */
+export function chamberTypeError(raw) {
+  const v = String(raw || "");
+  if (!v.trim()) return null; // optional
+  if (v.trim().length > CHAMBER_TYPE_MAX) return `Keep it under ${CHAMBER_TYPE_MAX} characters.`;
+  if (CHAMBER_FORBIDDEN.test(v)) return "Please remove special characters like < or >.";
+  return null;
+}
+
 /* ---------------- UPI ---------------- */
 
 // NPCI VPA: handle@psp — letters/digits/. /- in the handle, letters in the PSP.
@@ -263,7 +294,16 @@ export function formToDsProfile(f) {
     .trim()
     .split(/\s+/);
   const firmShort = chamberWords[0] || nameParts[nameParts.length - 1] || "Chambers";
-  const firmSub = (chamberWords.slice(1).join(" ") || "LAW CHAMBERS").toUpperCase();
+  // 2026-08-16: firmSub used to default to the literal "LAW CHAMBERS"
+  // whenever chamber_name had 0 or 1 words — wrong for solo practitioners,
+  // associates, or any non-chambers practice, and impossible to opt out of.
+  // Now: an explicit chamber_type field wins when the lawyer has set one
+  // (the intentional, discoverable way to customize this caption); falls
+  // back to any extra words already typed into chamber_name (unchanged
+  // legacy behavior for existing users relying on that); otherwise the
+  // caption is omitted entirely rather than fabricated.
+  const chamberType = (office.chamber_type || "").trim();
+  const firmSub = (chamberType || chamberWords.slice(1).join(" ")).toUpperCase();
   const addrParts = (office.address || "").split(/,\s*/).filter(Boolean);
   const mid = Math.ceil(addrParts.length / 2);
   const contacts = [];
@@ -286,7 +326,10 @@ export function formToDsProfile(f) {
     practice: f.practice_areas || [],
     upi: pay.show_upi !== false ? pay.upi_id || "" : "",
     social: socialDisplayList(f.social_links),
-    firm: chamber || `${firmShort} Law Chambers`,
+    // Same fix as firmSub above: no more fabricated "Law Chambers" — the
+    // Office/Google Business section already hides this line entirely when
+    // falsy (see VakilCardApp.jsx), so an honest empty string is correct.
+    firm: chamber || "",
     address: [addrParts.slice(0, mid).join(", "), addrParts.slice(mid).join(", ")],
     // Mirrors profile.js: Pro shows "Leave a Review" once a link is set,
     // Free/no-link falls back to "View Reviews" (reuses the office's Maps

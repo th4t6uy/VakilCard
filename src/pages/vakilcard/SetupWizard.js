@@ -18,6 +18,7 @@ import { uploadOptimized, removeUpload } from "../../lib/vakilcardImage";
 import {
   normalizeWebsite, isValidWebsite, isValidUpi, isValidIndianMobile,
   normalizeSocial, publishBlockers, chamberNameError, CHAMBER_NAME_MAX,
+  chamberTypeError, CHAMBER_TYPE_MAX,
 } from "../../lib/vakilcardNormalize";
 import { qaActive, qaPreviewSrc, QaBadge } from "../../lib/vakilcardQa";
 import QaStepJumper from "../../components/QaStepJumper";
@@ -94,7 +95,7 @@ const EMPTY = {
   email: "", phone: "", whatsapp: "", website: "",
   show_email: true, show_phone: true,
   practice_areas: [],
-  office: { chamber_name: "", address: "", maps_url: "", timings: "" },
+  office: { chamber_name: "", chamber_type: "", address: "", maps_url: "", timings: "" },
   payment: { upi_id: "", upi_qr_url: "", consultation_fee: "", show_upi: true },
   social_links: {},
   // Phase 5 fields — not yet editable from the wizard itself (set from the
@@ -120,7 +121,8 @@ export function profileToForm(p) {
     show_email: p.show_email !== false, show_phone: p.show_phone !== false,
     practice_areas: (p.vakilcard_practice_areas || []).sort((a, b) => a.position - b.position).map((x) => x.area),
     office: {
-      chamber_name: office.chamber_name || "", address: office.address || "",
+      chamber_name: office.chamber_name || "", chamber_type: office.chamber_type || "",
+      address: office.address || "",
       maps_url: office.maps_url || "", timings: office.timings || "",
     },
     payment: {
@@ -669,6 +671,20 @@ export default function SetupWizard() {
               onChange={(e) => { setNested("office", "chamber_name", e.target.value); if (fieldErrors.chamber_name) setFieldError("chamber_name", chamberNameError(e.target.value)); }}
               onBlur={(e) => setFieldError("chamber_name", chamberNameError(e.target.value))}
               placeholder="e.g. Sidharth Gautam Law Chambers"
+            />
+          </Field>
+          {/* 2026-08-16: was implicit (any words after the first in Chamber
+              name, else a forced "LAW CHAMBERS") — not every practice IS a
+              chambers. Now its own optional field; leave blank for no
+              caption at all. */}
+          <Field label="Firm type" hint="Shown as a small label under your name. Not every practice is a “chambers” — use whatever fits (Associates, Advocates, & Co.), or leave blank for none." error={fieldErrors.chamber_type}>
+            <input
+              className={fieldErrors.chamber_type ? inputErrCls : inputCls}
+              maxLength={CHAMBER_TYPE_MAX}
+              value={f.office.chamber_type}
+              onChange={(e) => { setNested("office", "chamber_type", e.target.value); if (fieldErrors.chamber_type) setFieldError("chamber_type", chamberTypeError(e.target.value)); }}
+              onBlur={(e) => setFieldError("chamber_type", chamberTypeError(e.target.value))}
+              placeholder="e.g. Law Chambers, Legal Associates, Advocates"
             />
           </Field>
           <Field label="Office timings" hint="Pick one or write your own.">
