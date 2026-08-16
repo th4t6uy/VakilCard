@@ -130,12 +130,24 @@ function EcosystemRail({ compactGrid = false }) {
 }
 
 // Every editable section opens DIRECTLY — no wizard replay.
+// 2026-08-16: the "office" entry used to be labelled just "Office address"
+// — the chamber-name field (SetupWizard.js step 4, "Your chamber") already
+// lived under it, already free-text, already saved correctly, but nothing
+// on the dashboard signalled that a lawyer's on-card firm name ("<Surname>
+// Law Chambers", computed as a display fallback — see toDsProfile() in
+// api/vakilcard/profile.js — whenever chamber_name is blank) was something
+// they could change here. Relabelled, and given a live subtitle (4th tuple
+// element, optional `(form) => string`) so the current chamber name — or
+// an explicit "using the default" nudge — shows right on the button.
 const EDIT_SECTIONS = [
   ["photo", "Profile picture", ImageIcon],
   ["details", "Profile & bio", UserRound],
   ["practice", "Practice areas", Briefcase],
   ["contact", "Contact & website", Phone],
-  ["office", "Office address", Landmark],
+  ["office", "Chamber name & office", Landmark, (form) => {
+    const name = ((form.office && form.office.chamber_name) || "").trim();
+    return name ? `"${name}"` : "Using your surname as the default — tap to set your own";
+  }],
   ["payment", "Payment settings", Banknote],
   ["presence", "Social links", Globe2],
 ];
@@ -1226,16 +1238,22 @@ export default function VakilCardPage() {
           <div className={panel}>
             <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Edit your card</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {EDIT_SECTIONS.map(([key, label, Icon]) => (
-                <button
-                  key={key}
-                  onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
-                  className="rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
-                >
-                  <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
-                  <p className="text-sm font-bold text-slate-800 hyphens-none">{label}</p>
-                </button>
-              ))}
+              {EDIT_SECTIONS.map(([key, label, Icon, subtitle]) => {
+                const sub = subtitle ? subtitle(form) : null;
+                return (
+                  <button
+                    key={key}
+                    onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
+                    className="rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
+                  >
+                    <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
+                    <span className="min-w-0 flex-1">
+                      <p className="text-sm font-bold text-slate-800 hyphens-none">{label}</p>
+                      {sub && <p className="text-xs text-slate-500 mt-0.5 truncate hyphens-none">{sub}</p>}
+                    </span>
+                  </button>
+                );
+              })}
               <button
                 onClick={() => navigate("/setup")}
                 className="rounded-2xl bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
