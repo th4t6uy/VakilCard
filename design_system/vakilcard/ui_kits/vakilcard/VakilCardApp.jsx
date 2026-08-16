@@ -154,8 +154,10 @@ const demoProfile = {
   upi: 'sidharthgautam@example', firm: 'Sidharth Gautam Law Chambers',
   social: [['linkedin', 'https://www.linkedin.com/in/example'], ['instagram', 'https://www.instagram.com/example'], ['youtube', 'https://www.youtube.com/@example']],
   address: ['123 Legal Street', 'Example City – 110001'],
-  // Demo renders as Pro — showcase the Google Business tile too.
+  // Demo renders as Pro — showcase the Google Business tile too, and (as of
+  // the merged-pill rework) the Pro payment QR rather than the locked state.
   googleBusiness: { name: 'Sidharth Gautam Law Chambers', address: '123 Legal Street, Example City' },
+  pro: true,
 };
 window.vakilDefaultProfile = defaultProfile;
 window.vakilDemoProfile = demoProfile;
@@ -291,10 +293,20 @@ function VisitingCard({ compact, onSave, profile }) {
       <div style={{ position: 'relative', display: 'flex', gap: 14, alignItems: 'stretch' }}>
         {/* Left — photo DP + chamber lockup (custom logo is Premium) */}
         <div style={{ flex: '0 0 30%', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', textAlign: 'center', borderRight: '1px solid rgba(40,36,52,0.18)', paddingRight: 12 }}>
-          <div style={{ width: 96, height: 96, borderRadius: '50%', padding: 3, background: 'linear-gradient(135deg, #c9a24a, #efe0bb 45%, #9a7a35)', boxShadow: '0 4px 14px rgba(0,0,0,0.18)' }}>
+          {/* data-card-avatar-ring: the PNG export (mount.js dblclick handler)
+              neutralises this ring's own box-shadow for the capture only —
+              rendered through the export's SVG-foreignObject path it read as
+              an oversized/misplaced "eccentric" shadow, unlike the live DOM
+              where the browser paints it normally. data-card-photo on the
+              <img>: the export pre-fetches profile.photoUrl as a same-origin
+              blob and swaps it in before shooting, since a photo hosted on a
+              different origin (Supabase Storage) can silently fail to embed
+              in the exported PNG even though crossOrigin="anonymous" lets it
+              display fine live — the two use different fetch paths. */}
+          <div data-card-avatar-ring style={{ width: 96, height: 96, borderRadius: '50%', padding: 3, background: 'linear-gradient(135deg, #c9a24a, #efe0bb 45%, #9a7a35)', boxShadow: '0 4px 14px rgba(0,0,0,0.18)' }}>
             <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: 'linear-gradient(160deg, #2b2d3a, #14151d)', display: 'flex', alignItems: profile.photoUrl ? 'center' : 'flex-end', justifyContent: 'center' }}>
               {profile.photoUrl
-                ? <img src={profile.photoUrl} alt={profile.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                ? <img data-card-photo src={profile.photoUrl} alt={profile.name} crossOrigin="anonymous" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                 : <svg width="70" height="70" viewBox="0 0 64 64" fill="none"><circle cx="32" cy="24" r="13" fill="#8a8ea0"/><path d="M10 62c1-13 10-20 22-20s21 7 22 20Z" fill="#8a8ea0"/></svg>}
             </div>
           </div>
@@ -397,84 +409,77 @@ function VakilCardApp({ profile = defaultProfile }) {
         </div>
       </div>
 
-      {/* Scrolling chamber — v3 order: pill, payment, google business, connect (incl. social handles), upsell, about, practice, office */}
+      {/* Scrolling chamber — v4 order (founder direction 2026-08-16): one
+          merged Vakilpedia+Share+Theme+Payment pill (payment shrunk to make
+          room below), then the hero cluster — Connect (incl. social
+          handles) first, Google Business at the bottom of that same hero
+          cluster — then upsell, about, practice, office. */}
       <div ref={scroller} onScroll={onScroll} className={scrolling ? 'vp-scroll is-scrolling' : 'vp-scroll'} style={{ position: 'relative', zIndex: 1, flex: 1, overflowY: 'auto', padding: '0 16px calc(48px + env(safe-area-inset-bottom, 0px))', WebkitOverflowScrolling: 'touch' }}>
         <div style={{ height: compact ? 246 : 288, transition: 'height var(--dur-slow) var(--ease-glass)' }} />
 
-        {/* Vakilpedia pill — same Share + theme controls, scrolls with the page */}
-<div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, height: 56, padding: '0 8px 0 14px', marginBottom: 16, borderRadius: 'var(--r-pill)', background: 'var(--glass-frost)', backdropFilter: 'blur(24px) saturate(1.4)', WebkitBackdropFilter: 'blur(24px) saturate(1.4)', border: '1px solid var(--hairline-strong)', boxShadow: '0 6px 18px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04), var(--inset-edge)' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
-            <img src="../../assets/logos/vakilpedia.png" alt="" style={{ height: 26 }} />
-            <span style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--text-hi)' }}>Vakilpedia<sup style={{ fontSize: '0.42em', fontWeight: 500, opacity: 0.5 }}>TM</sup></span>
+        {/* Merged Vakilpedia + Payment pill. Brand row: Theme toggle then
+            Share — Share is deliberately the corner-most (rightmost)
+            control. Payment row only renders when a UPI ID exists, and is
+            now compact (no inline QR by default — added back only for Pro,
+            right above the button, so it doesn't compete with Connect for
+            hero space below). Pay Now stays a plain button (not native
+            `disabled`) even when locked for Free, because mount.js's single
+            delegated document click-handler is what actually drives it —
+            see the "pay now" branch there for the Free vs Pro split. */}
+        <div style={{ borderRadius: 'var(--r-xl)', marginBottom: 16, overflow: 'hidden', background: 'var(--glass-frost)', backdropFilter: 'blur(24px) saturate(1.4)', WebkitBackdropFilter: 'blur(24px) saturate(1.4)', border: '1px solid var(--hairline-strong)', boxShadow: '0 6px 18px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04), var(--inset-edge)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, height: 56, padding: '0 8px 0 14px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 9, minWidth: 0 }}>
+              <img src="../../assets/logos/vakilpedia.png" alt="" style={{ height: 26 }} />
+              <span style={{ fontSize: 17, fontWeight: 900, letterSpacing: '-0.04em', color: 'var(--text-hi)' }}>Vakilpedia<sup style={{ fontSize: '0.42em', fontWeight: 500, opacity: 0.5 }}>TM</sup></span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+              <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
+              <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 18px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)' }}>{Icons.share(15)}Share</button>
+            </div>
           </div>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-            <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 18px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)' }}>{Icons.share(15)}Share</button>
-            <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
-          </div>
+
+          {profile.upi ? (
+            <div style={{ padding: '14px 16px 16px', borderTop: '1px solid var(--hairline)' }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                <div style={{ minWidth: 0 }}>
+                  <div style={{ fontSize: 10.5, color: 'var(--text-low)' }}>UPI ID</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 2 }}>
+                    <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--text-hi)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
+                    <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(14)}</button>
+                  </div>
+                </div>
+                <VerifiedShield size="sm" label="" style={{ gap: 0, flexShrink: 0 }} />
+              </div>
+
+              {/* Pro only — the same QR the pay sheet and dashboard's own
+                  payment-QR draw from (one shared window.qrcode renderer,
+                  never a second implementation). Removed from Free's view
+                  entirely, not just visually — Free's Pay Now opens the
+                  locked/upsell sheet instead of a working pay flow now, so a
+                  QR here would be a real payment path Free hasn't earned. */}
+              {profile.pro ? (
+                <div style={{ display: 'flex', justifyContent: 'center', margin: '12px 0 4px' }}>
+                  <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
+                </div>
+              ) : null}
+              {profile.pro && (
+                <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.3 }}>Tap to enlarge · Double-tap to download</div>
+              )}
+
+              <Button
+                aria-label="Pay Now"
+                variant="primary"
+                icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}
+                style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
+              >
+                Pay Now
+              </Button>
+              {!profile.pro && (
+                <div style={{ fontSize: 10.5, color: 'var(--text-dim)', marginTop: 8, textAlign: 'center' }}>Online UPI payments are a Pro feature — tap to see what unlocks.</div>
+              )}
+            </div>
+          ) : null}
         </div>
-
-        {profile.upi ? (
-          <Section eyebrow="Payment">
-            <div style={{ display: 'flex', gap: 16, alignItems: 'flex-start' }}>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontSize: 11, color: 'var(--text-low)', marginBottom: 4 }}>UPI ID</div>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 14 }}>
-                  <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--text-hi)', fontFamily: 'var(--font-mono)' }}>{profile.upi}</span>
-                  <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(15)}</button>
-                </div>
-                <Button variant="primary" icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}>Pay Now</Button>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginTop: 14, fontSize: 11, color: 'var(--text-dim)' }}>
-                  <VerifiedShield size="sm" label="" style={{ gap: 0 }} />
-                  <span>Secured via UPI. No payment goes through Vakilpedia.</span>
-                </div>
-              </div>
-              <div style={{ flexShrink: 0, textAlign: 'center' }}>
-                <div style={{ fontSize: 10, color: 'var(--text-low)', marginBottom: 6 }}>Scan &amp; Pay</div>
-                <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} />
-                <div style={{ fontSize: 9.5, color: 'var(--text-dim)', marginTop: 6, lineHeight: 1.3 }}>Tap to enlarge<br/>Double-tap to download</div>
-              </div>
-            </div>
-          </Section>
-        ) : null}
-
-        {/* Google Business tile — native listing-style preview (Pro; the
-            server only populates profile.googleBusiness when entitled and a
-            destination exists). Tapping opens the owner's Google Business
-            profile EXTERNALLY — mount.js matches the aria-label and opens
-            links.googleBusiness in a new tab; here it stays purely visual.
-            No fabricated rating numbers: the star row is decorative and the
-            copy says what the tap gives ("reviews, photos & directions"). */}
-        {profile.googleBusiness ? (
-          <Section eyebrow="Google Business">
-            <div
-              role="button"
-              tabIndex={0}
-              aria-label="Google Business profile"
-              title="Open in Google"
-              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', borderRadius: 16, border: '1px solid var(--hairline)', background: 'var(--glass-thick)', padding: '12px 14px' }}
-            >
-              <span style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 12, background: '#fff', border: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.22)' }}>
-                <IconImg src="/ds/assets/brands/google-maps.png" size={30} fallback={<GMapsPin size={28} />} />
-              </span>
-              <span style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.name}</span>
-                {profile.googleBusiness.address ? (
-                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-low)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.address}</span>
-                ) : null}
-                <span style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
-                  <span aria-hidden="true" style={{ display: 'inline-flex', gap: 1, color: 'var(--gold-400, #d9a441)' }}>
-                    {[0, 1, 2, 3, 4].map((i) => <span key={i} style={{ display: 'inline-flex' }}>{Icons.star(10)}</span>)}
-                  </span>
-                  <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>Reviews · Photos · Directions</span>
-                </span>
-              </span>
-              <span style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--text-mid)' }}>
-                {Icons.ext(15)}
-                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Google</span>
-              </span>
-            </div>
-          </Section>
-        ) : null}
 
         <Section eyebrow="Connect">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
@@ -517,6 +522,59 @@ function VakilCardApp({ profile = defaultProfile }) {
             </>
           )}
         </Section>
+
+        {/* Google Business tile — native listing-style preview (Pro; the
+            server only populates profile.googleBusiness when entitled and a
+            destination exists). Bottom of the hero cluster, right after
+            Connect. Tapping opens the owner's Google Business profile
+            EXTERNALLY — mount.js matches the aria-label and opens
+            links.googleBusiness in a new tab; here it stays purely visual.
+            No fabricated rating numbers when there's no real rating data:
+            see the rating/reviewCount branch below (server-supplied only). */}
+        {profile.googleBusiness ? (
+          <Section eyebrow="Google Business">
+            <div
+              role="button"
+              tabIndex={0}
+              aria-label="Google Business profile"
+              title="Open in Google"
+              style={{ display: 'flex', alignItems: 'center', gap: 12, cursor: 'pointer', borderRadius: 16, border: '1px solid var(--hairline)', background: 'var(--glass-thick)', padding: '12px 14px' }}
+            >
+              <span style={{ flexShrink: 0, width: 46, height: 46, borderRadius: 12, background: '#fff', border: '1px solid var(--hairline)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 3px 10px rgba(0,0,0,0.22)' }}>
+                <IconImg src="/ds/assets/brands/google-maps.png" size={30} fallback={<GMapsPin size={28} />} />
+              </span>
+              <span style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ display: 'block', fontSize: 13.5, fontWeight: 800, color: 'var(--text-hi)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.name}</span>
+                {profile.googleBusiness.address ? (
+                  <span style={{ display: 'block', fontSize: 11, color: 'var(--text-low)', marginTop: 2, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{profile.googleBusiness.address}</span>
+                ) : null}
+                <span style={{ display: 'flex', alignItems: 'center', gap: 5, marginTop: 4 }}>
+                  {profile.googleBusiness.rating ? (
+                    <>
+                      <span aria-hidden="true" style={{ display: 'inline-flex', alignItems: 'center', gap: 3 }}>
+                        {Icons.star(11)}
+                        <span style={{ fontSize: 11, fontWeight: 800, color: 'var(--text-hi)' }}>{profile.googleBusiness.rating.toFixed(1)}</span>
+                      </span>
+                      <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>
+                        {profile.googleBusiness.reviewCount ? `(${profile.googleBusiness.reviewCount}) · ` : ''}Photos · Directions
+                      </span>
+                    </>
+                  ) : (
+                    // No verified rating on file (owner hasn't connected
+                    // Google Business yet, or Google returned none) — say so
+                    // plainly rather than drawing 5 decorative stars that
+                    // read as a fabricated rating.
+                    <span style={{ fontSize: 10.5, color: 'var(--text-dim)' }}>Reviews · Photos · Directions</span>
+                  )}
+                </span>
+              </span>
+              <span style={{ flexShrink: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 4, color: 'var(--text-mid)' }}>
+                {Icons.ext(15)}
+                <span style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Google</span>
+              </span>
+            </div>
+          </Section>
+        ) : null}
 
         {/* Premium upsell — deliberately the first tile revealed on scroll */}
         <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 12, padding: 16, marginBottom: 16, borderRadius: 'var(--r-xl)', background: 'linear-gradient(120deg, var(--glass-tint-violet), var(--glass-tint-gold))', border: '1px solid var(--hairline)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>

@@ -214,7 +214,13 @@ function toDsProfile(p) {
   if (addrParts.length) contacts.push(["pin", addrParts.slice(-2).join(", ")]);
   if (p.enrollment_number) contacts.push(["scale", `Enrol. No. ${p.enrollment_number}`]);
   const pay = p.payment;
+  // Exposed directly to the client component (2026-08-16 fix batch): the
+  // merged payment pill needs to know Free vs Pro itself now (QR shown only
+  // for Pro, Pay Now locked + upsell for Free) — previously only the
+  // server-side `links` object (mount.js's wiring layer) knew this.
+  const pro = isProActive(p);
   return {
+    pro,
     firmShort,
     firmSub,
     tagline:
@@ -246,10 +252,20 @@ function toDsProfile(p) {
     // links.googleBusiness (mount.js opens it externally), matching how
     // every other tile works. Rendered only when a real destination exists:
     // the owner's saved Google Business link, else their office Maps listing.
+    // Name prefers google_business_name — the exact listing title Google
+    // returned when the owner connected via OAuth (booking.js's
+    // google_business_start/gcal_callback flow) — falling back to the
+    // office/chamber name for owners who haven't connected yet (still on
+    // the older manual-URL path). No `rating`/`reviewCount` field yet: that
+    // needs the separate Business Profile Reviews API, which Google gates
+    // behind its own per-project quota approval on top of OAuth — not
+    // wired up yet, see the phase report. The component already renders a
+    // real rating the moment one is ever present here; until then it shows
+    // honest unrated copy instead of fabricating stars.
     googleBusiness:
-      isProActive(p) && (p.google_business_url || office.maps_url)
+      isProActive(p) && (p.google_business_url || p.google_business_embed || office.maps_url)
         ? {
-            name: chamber || p.full_name,
+            name: p.google_business_name || chamber || p.full_name,
             address: addrParts.slice(-2).join(", ") || null,
           }
         : null,

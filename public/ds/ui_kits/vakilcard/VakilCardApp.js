@@ -491,11 +491,13 @@ const demoProfile = {
   firm: 'Sidharth Gautam Law Chambers',
   social: [['linkedin', 'https://www.linkedin.com/in/example'], ['instagram', 'https://www.instagram.com/example'], ['youtube', 'https://www.youtube.com/@example']],
   address: ['123 Legal Street', 'Example City – 110001'],
-  // Demo renders as Pro — showcase the Google Business tile too.
+  // Demo renders as Pro — showcase the Google Business tile too, and (as of
+  // the merged-pill rework) the Pro payment QR rather than the locked state.
   googleBusiness: {
     name: 'Sidharth Gautam Law Chambers',
     address: '123 Legal Street, Example City'
-  }
+  },
+  pro: true
 };
 window.vakilDefaultProfile = defaultProfile;
 window.vakilDemoProfile = demoProfile;
@@ -819,6 +821,7 @@ function VisitingCard({
       paddingRight: 12
     }
   }, /*#__PURE__*/React.createElement("div", {
+    "data-card-avatar-ring": true,
     style: {
       width: 96,
       height: 96,
@@ -839,6 +842,7 @@ function VisitingCard({
       justifyContent: 'center'
     }
   }, profile.photoUrl ? /*#__PURE__*/React.createElement("img", {
+    "data-card-photo": true,
     src: profile.photoUrl,
     alt: profile.name,
     crossOrigin: "anonymous",
@@ -1219,19 +1223,23 @@ function VakilCardApp({
     }
   }), /*#__PURE__*/React.createElement("div", {
     style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      gap: 10,
-      height: 56,
-      padding: '0 8px 0 14px',
+      borderRadius: 'var(--r-xl)',
       marginBottom: 16,
-      borderRadius: 'var(--r-pill)',
+      overflow: 'hidden',
       background: 'var(--glass-frost)',
       backdropFilter: 'blur(24px) saturate(1.4)',
       WebkitBackdropFilter: 'blur(24px) saturate(1.4)',
       border: '1px solid var(--hairline-strong)',
       boxShadow: '0 6px 18px rgba(0,0,0,0.30), 0 0 0 1px rgba(255,255,255,0.04), var(--inset-edge)'
+    }
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10,
+      height: 56,
+      padding: '0 8px 0 14px'
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1265,7 +1273,10 @@ function VakilCardApp({
       alignItems: 'center',
       gap: 6
     }
-  }, /*#__PURE__*/React.createElement("button", {
+  }, /*#__PURE__*/React.createElement(ThemeToggle, {
+    theme: theme,
+    onToggle: () => setTheme(t => t === 'dark' ? 'light' : 'dark')
+  }), /*#__PURE__*/React.createElement("button", {
     "aria-label": "Share card",
     style: {
       display: 'inline-flex',
@@ -1283,40 +1294,43 @@ function VakilCardApp({
       cursor: 'pointer',
       boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)'
     }
-  }, Icons.share(15), "Share"), /*#__PURE__*/React.createElement(ThemeToggle, {
-    theme: theme,
-    onToggle: () => setTheme(t => t === 'dark' ? 'light' : 'dark')
-  }))), profile.upi ? /*#__PURE__*/React.createElement(Section, {
-    eyebrow: "Payment"
+  }, Icons.share(15), "Share"))), profile.upi ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      padding: '14px 16px 16px',
+      borderTop: '1px solid var(--hairline)'
+    }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
-      gap: 16,
-      alignItems: 'flex-start'
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 10
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      flex: 1
+      minWidth: 0
     }
   }, /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 11,
-      color: 'var(--text-low)',
-      marginBottom: 4
+      fontSize: 10.5,
+      color: 'var(--text-low)'
     }
   }, "UPI ID"), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
-      gap: 8,
-      marginBottom: 14
+      gap: 7,
+      marginTop: 2
     }
   }, /*#__PURE__*/React.createElement("span", {
     style: {
-      fontSize: 15,
+      fontSize: 14,
       fontWeight: 700,
       color: 'var(--text-hi)',
-      fontFamily: 'var(--font-mono)'
+      fontFamily: 'var(--font-mono)',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis',
+      whiteSpace: 'nowrap'
     }
   }, profile.upi), /*#__PURE__*/React.createElement("button", {
     onClick: () => {
@@ -1324,160 +1338,59 @@ function VakilCardApp({
       setTimeout(() => setCopied(false), 1200);
     },
     style: {
+      flexShrink: 0,
       background: 'none',
       border: 'none',
       color: copied ? 'var(--success)' : 'var(--text-low)',
       cursor: 'pointer',
       display: 'flex'
     }
-  }, Icons.copy(15))), /*#__PURE__*/React.createElement(Button, {
+  }, Icons.copy(14)))), /*#__PURE__*/React.createElement(VerifiedShield, {
+    size: "sm",
+    label: "",
+    style: {
+      gap: 0,
+      flexShrink: 0
+    }
+  })), profile.pro ? /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      justifyContent: 'center',
+      margin: '12px 0 4px'
+    }
+  }, /*#__PURE__*/React.createElement(InlineUpiQr, {
+    upi: profile.upi,
+    name: profile.name,
+    qrUrl: profile.payQrUrl
+  })) : null, profile.pro && /*#__PURE__*/React.createElement("div", {
+    style: {
+      textAlign: 'center',
+      fontSize: 9.5,
+      color: 'var(--text-dim)',
+      marginBottom: 10,
+      lineHeight: 1.3
+    }
+  }, "Tap to enlarge \xB7 Double-tap to download"), /*#__PURE__*/React.createElement(Button, {
+    "aria-label": "Pay Now",
     variant: "primary",
     icon: /*#__PURE__*/React.createElement(IconImg, {
       src: "/ds/assets/actions/pay.png",
       size: 16,
       invert: true,
       fallback: Icons.rupee(16)
-    })
-  }, "Pay Now"), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 7,
-      marginTop: 14,
-      fontSize: 11,
-      color: 'var(--text-dim)'
-    }
-  }, /*#__PURE__*/React.createElement(VerifiedShield, {
-    size: "sm",
-    label: "",
-    style: {
-      gap: 0
-    }
-  }), /*#__PURE__*/React.createElement("span", null, "Secured via UPI. No payment goes through Vakilpedia."))), /*#__PURE__*/React.createElement("div", {
-    style: {
-      flexShrink: 0,
-      textAlign: 'center'
-    }
-  }, /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 10,
-      color: 'var(--text-low)',
-      marginBottom: 6
-    }
-  }, "Scan & Pay"), /*#__PURE__*/React.createElement(InlineUpiQr, {
-    upi: profile.upi,
-    name: profile.name,
-    qrUrl: profile.payQrUrl
-  }), /*#__PURE__*/React.createElement("div", {
-    style: {
-      fontSize: 9.5,
-      color: 'var(--text-dim)',
-      marginTop: 6,
-      lineHeight: 1.3
-    }
-  }, "Tap to enlarge", /*#__PURE__*/React.createElement("br", null), "Double-tap to download")))) : null, profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
-    eyebrow: "Google Business"
-  }, /*#__PURE__*/React.createElement("div", {
-    role: "button",
-    tabIndex: 0,
-    "aria-label": "Google Business profile",
-    title: "Open in Google",
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 12,
-      cursor: 'pointer',
-      borderRadius: 16,
-      border: '1px solid var(--hairline)',
-      background: 'var(--glass-thick)',
-      padding: '12px 14px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      flexShrink: 0,
-      width: 46,
-      height: 46,
-      borderRadius: 12,
-      background: '#fff',
-      border: '1px solid var(--hairline)',
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      boxShadow: '0 3px 10px rgba(0,0,0,0.22)'
-    }
-  }, /*#__PURE__*/React.createElement(IconImg, {
-    src: "/ds/assets/brands/google-maps.png",
-    size: 30,
-    fallback: /*#__PURE__*/React.createElement(GMapsPin, {
-      size: 28
-    })
-  })), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flex: 1,
-      minWidth: 0
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'block',
-      fontSize: 13.5,
-      fontWeight: 800,
-      color: 'var(--text-hi)',
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }
-  }, profile.googleBusiness.name), profile.googleBusiness.address ? /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'block',
-      fontSize: 11,
-      color: 'var(--text-low)',
-      marginTop: 2,
-      whiteSpace: 'nowrap',
-      overflow: 'hidden',
-      textOverflow: 'ellipsis'
-    }
-  }, profile.googleBusiness.address) : null, /*#__PURE__*/React.createElement("span", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      gap: 5,
-      marginTop: 4
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    "aria-hidden": "true",
-    style: {
-      display: 'inline-flex',
-      gap: 1,
-      color: 'var(--gold-400, #d9a441)'
-    }
-  }, [0, 1, 2, 3, 4].map(i => /*#__PURE__*/React.createElement("span", {
-    key: i,
-    style: {
-      display: 'inline-flex'
-    }
-  }, Icons.star(10)))), /*#__PURE__*/React.createElement("span", {
+    }),
+    style: !profile.pro ? {
+      opacity: 0.45,
+      filter: 'grayscale(1)'
+    } : undefined
+  }, "Pay Now"), !profile.pro && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10.5,
-      color: 'var(--text-dim)'
+      color: 'var(--text-dim)',
+      marginTop: 8,
+      textAlign: 'center'
     }
-  }, "Reviews \xB7 Photos \xB7 Directions"))), /*#__PURE__*/React.createElement("span", {
-    style: {
-      flexShrink: 0,
-      display: 'flex',
-      flexDirection: 'column',
-      alignItems: 'center',
-      gap: 4,
-      color: 'var(--text-mid)'
-    }
-  }, Icons.ext(15), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 8.5,
-      fontWeight: 700,
-      letterSpacing: '0.06em',
-      textTransform: 'uppercase',
-      color: 'var(--text-dim)'
-    }
-  }, "Google")))) : null, /*#__PURE__*/React.createElement(Section, {
+  }, "Online UPI payments are a Pro feature \u2014 tap to see what unlocks.")) : null), /*#__PURE__*/React.createElement(Section, {
     eyebrow: "Connect"
   }, /*#__PURE__*/React.createElement("div", {
     style: {
@@ -1560,7 +1473,121 @@ function VakilCardApp({
         cursor: 'pointer'
       }
     }, icon(18));
-  })))), /*#__PURE__*/React.createElement("div", {
+  })))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
+    eyebrow: "Google Business"
+  }, /*#__PURE__*/React.createElement("div", {
+    role: "button",
+    tabIndex: 0,
+    "aria-label": "Google Business profile",
+    title: "Open in Google",
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 12,
+      cursor: 'pointer',
+      borderRadius: 16,
+      border: '1px solid var(--hairline)',
+      background: 'var(--glass-thick)',
+      padding: '12px 14px'
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      width: 46,
+      height: 46,
+      borderRadius: 12,
+      background: '#fff',
+      border: '1px solid var(--hairline)',
+      display: 'flex',
+      alignItems: 'center',
+      justifyContent: 'center',
+      boxShadow: '0 3px 10px rgba(0,0,0,0.22)'
+    }
+  }, /*#__PURE__*/React.createElement(IconImg, {
+    src: "/ds/assets/brands/google-maps.png",
+    size: 30,
+    fallback: /*#__PURE__*/React.createElement(GMapsPin, {
+      size: 28
+    })
+  })), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flex: 1,
+      minWidth: 0
+    }
+  }, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: 13.5,
+      fontWeight: 800,
+      color: 'var(--text-hi)',
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, profile.googleBusiness.name), profile.googleBusiness.address ? /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'block',
+      fontSize: 11,
+      color: 'var(--text-low)',
+      marginTop: 2,
+      whiteSpace: 'nowrap',
+      overflow: 'hidden',
+      textOverflow: 'ellipsis'
+    }
+  }, profile.googleBusiness.address) : null, /*#__PURE__*/React.createElement("span", {
+    style: {
+      display: 'flex',
+      alignItems: 'center',
+      gap: 5,
+      marginTop: 4
+    }
+  }, profile.googleBusiness.rating ? /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
+    "aria-hidden": "true",
+    style: {
+      display: 'inline-flex',
+      alignItems: 'center',
+      gap: 3
+    }
+  }, Icons.star(11), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 800,
+      color: 'var(--text-hi)'
+    }
+  }, profile.googleBusiness.rating.toFixed(1))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      color: 'var(--text-dim)'
+    }
+  }, profile.googleBusiness.reviewCount ? `(${profile.googleBusiness.reviewCount}) · ` : '', "Photos \xB7 Directions")) :
+  /*#__PURE__*/
+  // No verified rating on file (owner hasn't connected
+  // Google Business yet, or Google returned none) — say so
+  // plainly rather than drawing 5 decorative stars that
+  // read as a fabricated rating.
+  React.createElement("span", {
+    style: {
+      fontSize: 10.5,
+      color: 'var(--text-dim)'
+    }
+  }, "Reviews \xB7 Photos \xB7 Directions"))), /*#__PURE__*/React.createElement("span", {
+    style: {
+      flexShrink: 0,
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'center',
+      gap: 4,
+      color: 'var(--text-mid)'
+    }
+  }, Icons.ext(15), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 8.5,
+      fontWeight: 700,
+      letterSpacing: '0.06em',
+      textTransform: 'uppercase',
+      color: 'var(--text-dim)'
+    }
+  }, "Google")))) : null, /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       overflow: 'hidden',

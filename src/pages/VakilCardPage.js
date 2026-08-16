@@ -19,6 +19,7 @@ import {
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
   googleCalendarConnectUrl, disconnectGoogleCalendar,
+  googleBusinessConnectUrl, disconnectGoogleBusiness,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
@@ -206,23 +207,22 @@ function flattenGroups(groups) {
 }
 let groupIdSeq = 0;
 
-function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReviewLink, onSaveBusinessUrl, onUpgrade }) {
+function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [reviewLink, setReviewLink] = useState("");
   const [savingReview, setSavingReview] = useState(false);
-  const [businessUrl, setBusinessUrl] = useState("");
-  const [savingBusiness, setSavingBusiness] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
 
-  // Prefill the Pro link inputs with what's already saved — previously the
+  // Prefill the Pro link input with what's already saved — previously the
   // review-link box always opened empty, so "Save" with a blank box could
-  // silently wipe an existing link.
+  // silently wipe an existing link. (Google Business is OAuth-connected now,
+  // not a pasted link — see connectBusiness/disconnectBusiness below — so it
+  // has no equivalent prefill.)
   useEffect(() => { if (initialReviewLink) setReviewLink(initialReviewLink); }, [initialReviewLink]);
-  useEffect(() => { if (initialBusinessUrl) setBusinessUrl(initialBusinessUrl); }, [initialBusinessUrl]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -266,23 +266,19 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
     }
   };
 
-  const saveBusinessUrl = async () => {
-    setSavingBusiness(true);
-    setErr("");
-    try {
-      await onSaveBusinessUrl(businessUrl);
-    } catch {
-      setErr("Couldn't save your Google Business link.");
-    } finally {
-      setSavingBusiness(false);
-    }
-  };
-
   const connectCalendar = async () => {
     window.location.href = await googleCalendarConnectUrl();
   };
   const disconnectCalendar = async () => {
     await disconnectGoogleCalendar();
+    load();
+  };
+
+  const connectBusiness = async () => {
+    window.location.href = await googleBusinessConnectUrl();
+  };
+  const disconnectBusiness = async () => {
+    await disconnectGoogleBusiness();
     load();
   };
 
@@ -326,9 +322,9 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 text-base px-2 py-1.5" />
                 <span className="text-slate-400 text-sm">to</span>
-                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 text-base px-2 py-1.5" />
                 <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5">
                   {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
                 </select>
@@ -382,7 +378,7 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
               value={reviewLink}
               onChange={(e) => setReviewLink(e.target.value)}
               placeholder="https://g.page/r/.../review"
-              className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
+              className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-base px-3 py-2"
             />
             <button type="button" onClick={saveReviewLink} disabled={savingReview} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
               {savingReview ? "Saving…" : "Save"}
@@ -401,20 +397,17 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
             <p className="text-xs text-slate-500 mt-1 hyphens-none">A native Google tile on your card — visitors tap it to open your Google Business profile with all your reviews and photos.</p>
             <button type="button" onClick={() => onUpgrade("google_business")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
           </>
+        ) : !cfg || !cfg.calendar_platform_configured ? (
+          <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
+        ) : cfg.google_business_connected ? (
+          <div className="flex items-center gap-3 mt-2 flex-wrap">
+            <span className="text-sm text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected{cfg.google_business_name ? `: ${cfg.google_business_name}` : ""}</span>
+            <button type="button" onClick={disconnectBusiness} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
+          </div>
         ) : (
           <>
-            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">Paste your Google Business / Maps listing link (from your listing's Share button). Without one, the tile uses your office's Maps link automatically.</p>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={businessUrl}
-                onChange={(e) => setBusinessUrl(e.target.value)}
-                placeholder="https://maps.app.goo.gl/…  or  https://g.co/kgs/…"
-                className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
-              />
-              <button type="button" onClick={saveBusinessUrl} disabled={savingBusiness} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
-                {savingBusiness ? "Saving…" : "Save"}
-              </button>
-            </div>
+            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">Connect your Google Business Profile — no more copying links by hand. We pull your listing's real name, address, and Maps link, and keep it in sync.</p>
+            <button type="button" onClick={connectBusiness} className={btn + " mt-1"}><MapPin className="h-4 w-4" />Connect Google Business</button>
           </>
         )}
       </div>
@@ -987,7 +980,7 @@ export default function VakilCardPage() {
                           value={phoneInput}
                           onChange={(e) => setPhoneInput(e.target.value)}
                           placeholder="+91 98765 43210"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-base focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
                         {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
@@ -1008,7 +1001,7 @@ export default function VakilCardPage() {
                           value={phoneCode}
                           onChange={(e) => setPhoneCode(e.target.value)}
                           placeholder="123456"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-base tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
                         {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
@@ -1147,14 +1140,9 @@ export default function VakilCardPage() {
           <BookingPanel
             pro={pro}
             initialReviewLink={profile.google_review_link || ""}
-            initialBusinessUrl={profile.google_business_url || ""}
             onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
             onSaveReviewLink={async (link) => {
               await saveFull({ google_review_link: link });
-              await load();
-            }}
-            onSaveBusinessUrl={async (link) => {
-              await saveFull({ google_business_url: link });
               await load();
             }}
           />

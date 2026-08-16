@@ -95,15 +95,20 @@
       // "Book Appointment" (Payment section fallback wording) and the
       // CONNECT tile — now labelled just "Appointment" — both route here.
       else if (label.indexOf("book") === 0 || label.indexOf("appointment") === 0) { track("appointment"); showBookSheet(); return; }
-      // Only the big Payment-section "Pay Now" button reaches this branch
-      // now — the CONNECT grid's duplicate "Pay UPI" tile was removed in
-      // favour of the Vakilpedia upgrade tile below, so it no longer needs
-      // its own label match.
+      // Only the merged pill's "Pay Now" button reaches this branch now —
+      // the CONNECT grid's duplicate "Pay UPI" tile was removed in favour
+      // of the Vakilpedia upgrade tile below, so it no longer needs its own
+      // label match.
       else if (label.indexOf("pay now") === 0) {
         // Pro: native upi:// intents (links.upi is only ever set for Pro —
-        // decided server-side). Free: the lawyer's uploaded QR + UPI ID.
+        // decided server-side). Free (2026-08-16 fix batch): online
+        // payments through the card are Pro-only now — the button is
+        // styled locked (see VakilCardApp.jsx) but stays a plain,
+        // non-native-disabled element specifically so this click still
+        // reaches here; tapping opens the upsell instead of the old
+        // showFreePaySheet() QR+UPI-ID flow.
         if (links.upi) { track("pay"); showPaySheet(); }
-        else if (boot.payQr || boot.upiId) { track("pay"); showFreePaySheet(); }
+        else { track("pay_locked"); showPayLockedSheet(); }
         return;
       }
       else if (label.indexOf("directions") === 0) { go = links.maps; ev = "directions"; newTab = true; }
@@ -202,16 +207,24 @@
   /* ---------- Shared UPI app launcher set ----------
      One brand list drives the Pro pay sheet, the free Pay Now sheet AND the
      booking payment step, so iconography and ordering never drift apart.
-     Exactly the apps whose real icons exist in Assets/Logos (founder
-     direction 2026-08-15): GPay / PhonePe / Paytm, each launched by its own
-     scheme so a bare upi:// can't be hijacked by the device's default
-     handler. Everything else rides the "Any UPI app" row below (standard
-     upi:// intent → the OS chooser / default app — never a dead tap). */
+     GPay / PhonePe / Paytm / BHIM / CRED, each launched by its own scheme so
+     a bare upi:// can't be hijacked by the device's default handler.
+     Everything else rides the "Any UPI app" row below (standard upi://
+     intent → the OS chooser / default app — never a dead tap).
+     Scheme confidence (2026-08-16 fix batch): tez:// / phonepe:// /
+     paytmmp:// were already live and working. bhim:// is NPCI's own
+     reference-app scheme, high confidence. credpay:// is community-sourced,
+     not NPCI-verified — flagged here in case it needs a follow-up fix once
+     tested on a real device with CRED installed. Brand icons for bhim/cred
+     don't exist yet under /ds/assets/upi/ — appTile() already falls back to
+     the plain ₹ tile (never a broken image) until real PNGs are added. */
   function upiLauncherApps(q) {
     return [
       ["gpay", "Google Pay", "#fff", "tez://upi/pay?" + q],
       ["phonepe", "PhonePe", "#fff", "phonepe://pay?" + q],
       ["paytm", "Paytm", "#fff", "paytmmp://pay?" + q],
+      ["bhim", "BHIM UPI", "#fff", "bhim://upi/pay?" + q],
+      ["cred", "CRED", "#fff", "credpay://upi/pay?" + q],
     ];
   }
 
@@ -226,7 +239,16 @@
     );
   }
 
-  /** The launcher block: 3-across brand grid + full-width "Any UPI app" row. */
+  /** The launcher block: 3-across brand grid (wraps to 2 rows for 5 apps) +
+      full-width "Any UPI app" row. That fallback row is a bare upi:// link —
+      the OS decides which app opens it. On a phone where WhatsApp has been
+      set as the DEFAULT app for upi:// links, WhatsApp opens instead of a
+      chooser: that's the device's own "open by default" setting (Android:
+      Settings > Apps > WhatsApp > Open by default; iOS has no equivalent
+      per-scheme override at all), not something a webpage can force past —
+      naming GPay/PhonePe/Paytm/BHIM/CRED explicitly above (each its own
+      scheme) is the real fix, since it lets most payers skip this row
+      entirely instead of hitting the ambiguous fallback. */
   function upiLauncherHtml(q, upiUri) {
     return (
       '<div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px 4px;justify-items:center;padding:6px 0 2px">' +
@@ -234,7 +256,7 @@
       "</div>" +
       '<a href="' + upiUri.replace(/"/g, "&quot;") + '" aria-label="Pay with any UPI app" style="' + sheetBtnCss + ';justify-content:center">' +
       nounIcon("pay") +
-      "Any UPI app</a>"
+      "Other UPI app</a>"
     );
   }
 
@@ -344,7 +366,10 @@
       '<button id="vc-amt-custom" style="' + segBtnCss + (fee ? "" : segBtnOnCss) + '">Custom amount<span style="display:block;font-size:10px;font-weight:600;color:var(--text-low);margin-top:2px">you choose</span></button>' +
       "</div>" +
       '<input id="vc-amt-input" type="number" min="1" inputmode="numeric" placeholder="Enter amount (₹)" ' +
-      'style="display:' + (fee ? "none" : "block") + ';width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:14px">';
+      // font-size MUST be >=16px: iOS Safari auto-zooms the whole page on
+      // focus of any text input styled smaller than that, and never zooms
+      // back out on blur — feels broken on a card meant to feel native.
+      'style="display:' + (fee ? "none" : "block") + ';width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">';
 
     var s = openSheet(
       isMobile ? "Pay with UPI" : "Scan to pay with any UPI app",
@@ -416,7 +441,51 @@
     renderBody();
   }
 
-  /* ---------- FREE pay: the lawyer's own uploaded QR + UPI ID ---------- */
+  /* ---------- Pay Now, locked (Free) ----------
+     2026-08-16 fix batch, founder direction: online payments through the
+     card are Pro-only now — Free's Pay Now opens this instead of a working
+     pay flow. Copy adapts to who's actually looking: the owner (previewing
+     their own Free card) gets the upgrade pitch; an actual visitor/client
+     — who can't upgrade someone else's plan — gets a neutral explanation
+     instead, never a pitch aimed at the wrong person. */
+  function showPayLockedSheet() {
+    var isOwner = ownerViewing;
+    var body =
+      '<div style="display:flex;flex-direction:column;align-items:center;text-align:center;gap:10px;padding:6px 0 4px">' +
+      '<div style="width:44px;height:44px;border-radius:14px;background:var(--glass-thick);border:1px solid var(--hairline);display:flex;align-items:center;justify-content:center;color:var(--violet-400)">' +
+      '<svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>' +
+      "</div>" +
+      (isOwner
+        ? '<div style="font-size:13.5px;font-weight:800;color:var(--text-hi)">Online payments are a Pro feature</div>' +
+          '<div style="font-size:12px;color:var(--text-low);line-height:1.5;max-width:280px">Upgrade to let clients pay you by UPI directly from your card — native app buttons, a scannable QR, and one-tap consultation-fee collection.</div>' +
+          '<a href="' + ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center;margin-top:6px">Upgrade to Pro →</a>'
+        : '<div style="font-size:13.5px;font-weight:800;color:var(--text-hi)">Online payment isn\'t set up here</div>' +
+          '<div style="font-size:12px;color:var(--text-low);line-height:1.5;max-width:280px">This card doesn\'t take payments through VakilCard yet — please contact ' +
+          esc((profile && profile.name) || "the owner") +
+          " directly to arrange payment.</div>" +
+          (links.whatsapp || links.tel
+            ? '<div style="display:flex;gap:8px;width:100%;margin-top:6px">' +
+              (links.whatsapp ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center;margin-top:0;flex:1">' + nounIcon("whatsapp") + "WhatsApp</a>" : "") +
+              (links.tel ? '<a href="' + links.tel + '" style="' + sheetBtnCss + ';justify-content:center;margin-top:0;flex:1">' + nounIcon("call") + "Call</a>" : "") +
+              "</div>"
+            : "")) +
+      "</div>";
+    openSheet("Pay Now", body);
+  }
+
+  function esc(s) {
+    return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+
+  /* ---------- FREE pay: the lawyer's own uploaded QR + UPI ID ----------
+     ORPHANED as of the 2026-08-16 change above — Free's Pay Now now opens
+     showPayLockedSheet() instead of this. Left intact (not deleted) in case
+     "Free payments fully gated behind Pro" turns out not to be the
+     intended read of that instruction — reverting is then a one-line
+     change back to calling this, instead of rebuilding a tested sheet from
+     scratch. Delete this block once the gating decision is confirmed. ---- */
 
   function showFreePaySheet() {
     // Free Pay Now sheet (founder direction 2026-08-15): the UPI app
@@ -579,9 +648,11 @@
     var payReq = pro && data.payment && data.payment.required;
     var body =
       '<div style="font-size:12.5px;font-weight:700;color:var(--text-hi);margin-bottom:10px">' + fmt(slot.start) + "</div>" +
-      '<input id="vc-bk-name" placeholder="Your name" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px">' +
-      '<input id="vc-bk-phone" placeholder="Phone number" type="tel" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px">' +
-      '<textarea id="vc-bk-purpose" placeholder="What\'s this about? (optional)" rows="2" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px;resize:vertical"></textarea>';
+      // font-size 16px on every real text input in this sheet — below that,
+      // iOS Safari force-zooms the page on focus and never un-zooms.
+      '<input id="vc-bk-name" placeholder="Your name" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">' +
+      '<input id="vc-bk-phone" placeholder="Phone number" type="tel" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">' +
+      '<textarea id="vc-bk-purpose" placeholder="What\'s this about? (optional)" rows="2" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px;resize:vertical"></textarea>';
 
     if (payReq) {
       var fee = data.payment.consultation_fee;
@@ -590,7 +661,7 @@
         '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);font-size:12.5px;color:var(--text-hi)"><input type="radio" name="vc-bk-type" value="consultation" checked>Consultation' + (fee ? " (₹" + fee + ")" : "") + "</label>" +
         '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);font-size:12.5px;color:var(--text-hi)"><input type="radio" name="vc-bk-type" value="custom">Other amount</label>' +
         "</div>" +
-        '<input id="vc-bk-amount" placeholder="Amount (₹)" type="number" min="1" style="display:none;width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:13.5px">';
+        '<input id="vc-bk-amount" placeholder="Amount (₹)" type="number" min="1" style="display:none;width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">';
     }
     body += '<button id="vc-bk-submit" style="' + sheetBtnCss + ';justify-content:center;margin-top:4px">Request this slot</button>' +
       '<div id="vc-bk-err" style="font-size:11.5px;color:var(--danger,#f66);margin-top:6px;display:none"></div>';
@@ -936,9 +1007,42 @@
           var fs = parseFloat(getComputedStyle(nameEl).fontSize) || 22;
           nameEl.style.fontSize = Math.max(12, fs - 1) + "px";
         }
+        // The gold avatar ring's own box-shadow renders oversized/misplaced
+        // through html-to-image's SVG capture path (a known renderer quirk
+        // with shadows on circular clipped elements) even though it looks
+        // fine live — drop it for the capture only, restore after.
+        var ringEl = card.querySelector("[data-card-avatar-ring]");
+        var savedRingShadow = ringEl ? ringEl.style.boxShadow : null;
+        if (ringEl) ringEl.style.boxShadow = "none";
+        // The photo, if any, is hosted off-origin (Supabase Storage). It
+        // displays fine live via crossOrigin="anonymous", but html-to-image
+        // fetches images through its own path when inlining them into the
+        // capture and can silently drop one that fetch can't read (opaque/
+        // CORS-blocked response) — the export comes out with the DP missing
+        // even though nothing else looks wrong. Swap in a same-origin blob
+        // URL for the capture only; any failure here just leaves the photo
+        // as before, never worse than the pre-fix behaviour.
+        var photoEl = card.querySelector("[data-card-photo]");
+        var savedPhotoSrc = photoEl ? photoEl.src : null;
+        var photoSwap = Promise.resolve();
+        if (photoEl && savedPhotoSrc) {
+          photoSwap = fetch(savedPhotoSrc, { mode: "cors", cache: "force-cache" })
+            .then(function (r) { if (!r.ok) throw new Error("photo fetch " + r.status); return r.blob(); })
+            .then(function (blob) {
+              return new Promise(function (resolve) {
+                var reader = new FileReader();
+                reader.onload = function () { photoEl.src = reader.result; resolve(); };
+                reader.onerror = function () { resolve(); };
+                reader.readAsDataURL(blob);
+              });
+            })
+            .catch(function () { /* keep the original src — no worse than before */ });
+        }
         var restore = function () {
           touched.forEach(function (p) { card.style[p] = saved[p]; });
           if (nameEl) nameEl.style.fontSize = savedNameFs;
+          if (ringEl) ringEl.style.boxShadow = savedRingShadow;
+          if (photoEl && savedPhotoSrc) photoEl.src = savedPhotoSrc;
         };
         // Premium frosted-glass export: a diagonal top-left sheen + pearl tint
         // over a lightly-frosted base. Kept opaque enough (≈0.9) that dark text
@@ -992,7 +1096,17 @@
             });
         };
         var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
-        fontsReady.then(function () { requestAnimationFrame(shoot); }, shoot);
+        // Wait for BOTH web fonts and the swapped-in photo blob to actually
+        // decode before shooting — setting .src is async, and capturing one
+        // frame too early is exactly how a DP goes missing from the export.
+        var photoDecoded = photoSwap.then(function () {
+          if (!photoEl || typeof photoEl.decode !== "function") return;
+          return photoEl.decode().catch(function () {});
+        });
+        Promise.all([fontsReady, photoDecoded]).then(
+          function () { requestAnimationFrame(shoot); },
+          shoot
+        );
       };
       if (window.htmlToImage) run();
       else {
