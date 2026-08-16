@@ -53,6 +53,13 @@ const GCAL_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
 const GCAL_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || "";
 const GCAL_DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
+const GMB_SCOPE = "https://www.googleapis.com/auth/business.manage";
+// Combined scope for the single "Connect Google" flow — one consent screen
+// grants both Calendar free/busy + Business Profile management. Kept as a
+// separate constant (rather than always requesting both) because the
+// secondary "different Google account for Calendar" flow still needs to
+// request GCAL_SCOPE alone — see ?action=gcal_start below.
+const GCAL_BUSINESS_SCOPE = `${GCAL_SCOPE} ${GMB_SCOPE}`;
 
 function calendarConfigured() {
   return !!(GCAL_CLIENT_ID && GCAL_CLIENT_SECRET && GCAL_REDIRECT_URI);
@@ -188,6 +195,101 @@ async function loadPublicProfile(username) {
   return p;
 }
 
+/** Stores a Calendar connection for `pid` from an already-exchanged token
+ *  response `t`. Returns { ok, reason }. Never throws — a Google outage or
+ *  missing refresh_token degrades to "not connected", never a crash. */
+async function storeCalendarConnection(pid, t) {
+  if (!t.refresh_token) return { ok: false, reason: "no_refresh_token_reconnect_required" };
+  try {
+    const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
+    await db("vakilcard_calendar_connections?on_conflict=profile_id", {
+      method: "POST",
+      body: {
+        profile_id: pid,
+        provider: "google",
+        access_token: t.access_token,
+        refresh_token: t.refresh_token,
+        token_expires_at: expires_at,
+        calendar_id: "primary",
+      },
+      prefer: "resolution=merge-duplicates,return=minimal",
+    });
+    return { ok: true };
+  } catch {
+    return { ok: false, reason: "exchange_failed" };
+  }
+}
+
+/** Stores a Google Business Profile connection for `pid` from an
+ *  already-exchanged token response `t`, fetching the account/location
+ *  details Google requires a second round-trip for. Returns
+ *  { ok, reason, businessName }. Never throws. */
+async function storeBusinessConnection(pid, t) {
+  try {
+    const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
+    const accountsRes = await fetch("https://mybusinessbusinessinformation.googleapis.com/v1/accounts", {
+      headers: { Authorization: `Bearer ${t.access_token}` },
+    });
+    if (!accountsRes.ok) throw new Error(`GMB accounts fetch failed: ${await accountsRes.text()}`);
+    const accounts = (await accountsRes.json()).accounts || [];
+    if (accounts.length === 0) return { ok: false, reason: "gmb_no_accounts" };
+
+    const accountName = accounts[0].name;
+    const locationsRes = await fetch(
+      `https://mybusinessbusinessinformation.googleapis.com/v1/${accountName}/locations?readMask=name,title,metadata`,
+      { headers: { Authorization: `Bearer ${t.access_token}` } }
+    );
+    if (!locationsRes.ok) throw new Error(`GMB locations fetch failed: ${await locationsRes.text()}`);
+    const locations = (await locationsRes.json()).locations || [];
+    if (locations.length === 0) return { ok: false, reason: "gmb_no_locations" };
+
+    const location = locations[0];
+    const businessName = location.title;
+    const mapsUri = location.metadata?.mapsUri || "";
+    const newReviewUrl = location.metadata?.newReviewUrl || "";
+
+    let embedUrl = null;
+    if (mapsUri) {
+      const match = mapsUri.match(/[?&]cid=(\d+)/);
+      if (match && match[1]) embedUrl = `https://maps.google.com/maps?q=cid:${match[1]}&output=embed`;
+    }
+    if (!embedUrl && businessName) {
+      embedUrl = `https://maps.google.com/maps?q=${encodeURIComponent(businessName)}&output=embed`;
+    }
+
+    await db("vakilcard_google_business_connections?on_conflict=profile_id", {
+      method: "POST",
+      body: {
+        profile_id: pid,
+        access_token: t.access_token,
+        refresh_token: t.refresh_token || null,
+        token_expires_at: expires_at,
+        business_account_id: accounts[0].name,
+        business_location_id: location.name,
+        business_name: businessName,
+      },
+      prefer: "resolution=merge-duplicates,return=minimal",
+    });
+
+    // Update profile with fetched map embed, reviews link & verified
+    // business name (google_business_name — public card's display-name
+    // source; see supabase/migrations/202608160001_add_google_business_name.sql)
+    await db(`vakilcard_profiles?id=eq.${pid}`, {
+      method: "PATCH",
+      body: {
+        google_business_embed: embedUrl,
+        google_review_link: newReviewUrl || null,
+        google_business_name: businessName || null,
+      },
+      prefer: "return=minimal",
+    });
+
+    return { ok: true, businessName };
+  } catch {
+    return { ok: false, reason: "exchange_failed" };
+  }
+}
+
 function upiDeepLink({ upiId, name, amountInr, note }) {
   if (!upiId) return null;
   const params = new URLSearchParams({
@@ -233,40 +335,133 @@ module.exports = async function handler(req, res) {
       return;
     }
 
+    // ---- GET ?action=google_business_start — owner auth, Pro. Business-only
+    // (no Calendar scope). Kept for backward compatibility — the dashboard's
+    // primary CTA now uses the combined ?action=google_connect_start below,
+    // but this endpoint stays live in case anything still links to it.
+    if (req.method === "GET" && action === "google_business_start") {
+      if (!calendarConfigured()) return notConfigured(res);
+      const who = await resolveAccountForGcalStart(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(
+        `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,subscription_plan,subscription_status,subscription_expires_at`
+      );
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+      if (!requirePro(res, gprofile, "google_business_embed")) return;
+      const state = sign({ pid: gprofile.id, typ: "gmb_state" }, { expiresInSec: 600 });
+      const url =
+        "https://accounts.google.com/o/oauth2/v2/auth?" +
+        new URLSearchParams({
+          client_id: GCAL_CLIENT_ID,
+          redirect_uri: GCAL_REDIRECT_URI,
+          response_type: "code",
+          access_type: "offline",
+          prompt: "consent",
+          scope: GMB_SCOPE,
+          state,
+        });
+      res.statusCode = 302;
+      res.setHeader("Location", url);
+      res.end();
+      return;
+    }
+
+    // ---- GET ?action=google_connect_start — owner auth, Pro. THE primary
+    // dashboard CTA: one consent screen grants both Calendar free/busy and
+    // Business Profile management, and the callback below stores both
+    // connections from the single resulting token. requirePro's `feature`
+    // label is informational only (never validated against PRO_FEATURES —
+    // see _entitlements.js), so "booking" is fine even though this also
+    // covers google_business.
+    if (req.method === "GET" && action === "google_connect_start") {
+      if (!calendarConfigured()) return notConfigured(res);
+      const who = await resolveAccountForGcalStart(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(
+        `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,subscription_plan,subscription_status,subscription_expires_at`
+      );
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+      if (!requirePro(res, gprofile, "booking")) return;
+      const state = sign({ pid: gprofile.id, typ: "gcal_business_state" }, { expiresInSec: 600 });
+      const url =
+        "https://accounts.google.com/o/oauth2/v2/auth?" +
+        new URLSearchParams({
+          client_id: GCAL_CLIENT_ID,
+          redirect_uri: GCAL_REDIRECT_URI,
+          response_type: "code",
+          access_type: "offline",
+          prompt: "consent",
+          scope: GCAL_BUSINESS_SCOPE,
+          state,
+        });
+      res.statusCode = 302;
+      res.setHeader("Location", url);
+      res.end();
+      return;
+    }
+
     // ---- GET ?action=gcal_callback — Google's own redirect, no auth ------
+    // Shared by all three connect flows (calendar-only, business-only, and
+    // the combined primary flow) — `claims.typ` picks the branch, and the
+    // combined branch just calls both storage helpers off the one token.
     if (req.method === "GET" && action === "gcal_callback") {
       if (!calendarConfigured()) return notConfigured(res);
+      let claims;
+      try {
+        claims = verify(String(req.query.state || ""));
+      } catch (e) {
+        claims = null;
+      }
+      const typ = claims && claims.typ;
+      const kind = typ === "gmb_state" ? "gmb" : typ === "gcal_business_state" ? "google" : "gcal";
+      let username = null;
+      if (claims && claims.pid) {
+        try {
+          const profileRows = await db(`vakilcard_profiles?id=eq.${claims.pid}&select=username`);
+          username = profileRows[0]?.username || null;
+        } catch (dbErr) {}
+      }
       const redirectBack = (ok, msg) => {
         res.statusCode = 302;
-        res.setHeader("Location", `${GCAL_DASHBOARD_SITE}/setup?s=payment&gcal=${ok ? "connected" : "error"}${msg ? "&msg=" + encodeURIComponent(msg) : ""}`);
+        const page = username ? `${username}/dashboard` : "setup";
+        const search = `?s=payment&${kind}=${ok ? "connected" : "error"}${msg ? "&msg=" + encodeURIComponent(msg) : ""}`;
+        res.setHeader("Location", `${GCAL_DASHBOARD_SITE}/${page}${search}`);
         res.end();
       };
+      if (!claims || !claims.pid || !["gcal_state", "gmb_state", "gcal_business_state"].includes(typ)) {
+        return redirectBack(false, "expired_state");
+      }
+      const code = String(req.query.code || "");
+      if (!code) return redirectBack(false, req.query.error || "no_code");
+
+      let t;
       try {
-        const claims = verify(String(req.query.state || ""));
-        if (!claims || claims.typ !== "gcal_state" || !claims.pid) return redirectBack(false, "expired_state");
-        const code = String(req.query.code || "");
-        if (!code) return redirectBack(false, req.query.error || "no_code");
-        const t = await gcalExchangeCode(code);
-        if (!t.refresh_token) {
-          return redirectBack(false, "no_refresh_token_reconnect_required");
-        }
-        const expires_at = new Date(Date.now() + (t.expires_in || 3600) * 1000).toISOString();
-        await db("vakilcard_calendar_connections?on_conflict=profile_id", {
-          method: "POST",
-          body: {
-            profile_id: claims.pid,
-            provider: "google",
-            access_token: t.access_token,
-            refresh_token: t.refresh_token,
-            token_expires_at: expires_at,
-            calendar_id: "primary",
-          },
-          prefer: "resolution=merge-duplicates,return=minimal",
-        });
-        return redirectBack(true);
+        t = await gcalExchangeCode(code);
       } catch (e) {
         return redirectBack(false, "exchange_failed");
       }
+
+      if (typ === "gmb_state") {
+        const r = await storeBusinessConnection(claims.pid, t);
+        return redirectBack(r.ok, r.ok ? null : r.reason);
+      }
+      if (typ === "gcal_state") {
+        const r = await storeCalendarConnection(claims.pid, t);
+        return redirectBack(r.ok, r.ok ? null : r.reason);
+      }
+      // gcal_business_state — the combined flow: store both from the one
+      // token. Treat it as connected if at least one side succeeded (e.g. a
+      // business with no locations set up yet shouldn't block Calendar sync
+      // from turning on); surface the other side's failure reason via `msg`
+      // so the dashboard can still show what didn't come through.
+      const [calRes, gmbRes] = await Promise.all([
+        storeCalendarConnection(claims.pid, t),
+        storeBusinessConnection(claims.pid, t),
+      ]);
+      if (!calRes.ok && !gmbRes.ok) return redirectBack(false, gmbRes.reason || calRes.reason);
+      return redirectBack(true, !calRes.ok ? calRes.reason : !gmbRes.ok ? gmbRes.reason : null);
     }
 
     // ---- POST {action:"gcal_disconnect"} — owner auth --------------------
@@ -280,6 +475,32 @@ module.exports = async function handler(req, res) {
         method: "DELETE",
         prefer: "return=minimal",
       });
+      return json(res, 200, { ok: true });
+    }
+
+    // ---- POST {action:"google_business_disconnect"} — owner auth -----------
+    if (req.method === "POST" && action === "google_business_disconnect") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(`vakilcard_profiles?account_id=eq.${who.accountId}&select=id`);
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+
+      await db(`vakilcard_google_business_connections?profile_id=eq.${gprofile.id}`, {
+        method: "DELETE",
+        prefer: "return=minimal",
+      });
+
+      await db(`vakilcard_profiles?id=eq.${gprofile.id}`, {
+        method: "PATCH",
+        body: {
+          google_business_embed: null,
+          google_review_link: null,
+          google_business_name: null,
+        },
+        prefer: "return=minimal",
+      });
+
       return json(res, 200, { ok: true });
     }
 
@@ -392,10 +613,13 @@ module.exports = async function handler(req, res) {
     const pro = isProActive(profile);
 
     if (req.method === "GET") {
-      const [requests, connRows] = await Promise.all([
+      const [requests, connRows, connGBRows] = await Promise.all([
         db(`vakilcard_appointment_requests?profile_id=eq.${profile.id}&select=*&order=created_at.desc&limit=100`),
         pro
           ? db(`vakilcard_calendar_connections?profile_id=eq.${profile.id}&select=profile_id`)
+          : Promise.resolve([]),
+        pro
+          ? db(`vakilcard_google_business_connections?profile_id=eq.${profile.id}&select=business_name`)
           : Promise.resolve([]),
       ]);
       return json(res, 200, {
@@ -403,6 +627,8 @@ module.exports = async function handler(req, res) {
         windows: sanitizeBookingWindows(profile.booking_windows),
         calendar_platform_configured: calendarConfigured(),
         calendar_connected: connRows.length > 0,
+        google_business_connected: connGBRows.length > 0,
+        google_business_name: connGBRows[0]?.business_name || null,
         requests,
       });
     }

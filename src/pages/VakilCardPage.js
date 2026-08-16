@@ -18,7 +18,8 @@ import {
   logout as apiLogout, changePassword as apiChangePassword,
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
-  googleCalendarConnectUrl, disconnectGoogleCalendar,
+  googleConnectUrl, googleCalendarConnectUrl, disconnectGoogleCalendar,
+  disconnectGoogleBusiness,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
@@ -153,25 +154,72 @@ const PRO_TOOLS = [
   { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Add your Google Business link in Booking & Reviews below — the tile appears on your card." },
 ];
 
-function ProToolRow({ tool, pro, onLocked }) {
-  const Icon = tool.icon;
+// Compact top-of-page strip — replaces the old full-height "Pro tools" panel
+// (moved here from below "Edit your card" per founder direction 2026-08-16).
+// Free-only: Pro owners already have every one of these, so showing it to
+// them would just be dead weight at the top of their dashboard.
+function ProToolsStrip({ tools, onLocked }) {
   return (
-    <button
-      type="button"
-      onClick={() => (pro ? null : onLocked(tool.key))}
-      className={`w-full rounded-2xl border p-4 text-left transition-colors flex items-start gap-3 ${pro ? "border-slate-200 bg-slate-50 cursor-default" : "border-slate-200 bg-white hover:border-[#635BFF]/50"}`}
-    >
-      <span className={`h-9 w-9 rounded-xl flex items-center justify-center flex-none ${pro ? "bg-emerald-100" : "bg-[#635BFF]/10"}`}>
-        <Icon className={`h-4 w-4 ${pro ? "text-emerald-700" : "text-[#635BFF]"}`} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-black text-slate-900">{tool.title}</p>
-          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none">Pro</span>}
-        </div>
-        <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">{pro ? tool.proDesc : tool.freeDesc}</p>
+    <div className="rounded-[1.75rem] border border-[#635BFF]/20 bg-gradient-to-r from-[#635BFF]/6 to-transparent p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-black text-slate-900">Unlock with Pro</p>
+        <button type="button" onClick={() => onLocked("pro")} className="text-xs font-bold text-[#635BFF]">See all →</button>
       </div>
-    </button>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
+        {tools.map((tool) => {
+          const Icon = tool.icon;
+          return (
+            <button
+              key={tool.key}
+              type="button"
+              onClick={() => onLocked(tool.key)}
+              className="flex-none snap-start rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 transition-colors px-3.5 py-2.5 flex items-center gap-2 min-w-[168px]"
+            >
+              <span className="h-8 w-8 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
+              <p className="text-xs font-bold text-slate-800 text-left hyphens-none leading-tight">{tool.title}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Pro-only hero CTA — surfaces the one actionable Pro setup step (connecting
+// Google) right under the header, instead of burying it at the bottom of
+// Booking & Reviews. One click grants both Calendar sync and the Business
+// Profile tile (see googleConnectUrl / ?action=google_connect_start). Does
+// its own lightweight config fetch (same getBookingConfig() BookingPanel
+// already uses) so it doesn't need state lifted through the tree. Self-hides
+// once both are connected, or if this deployment hasn't got Calendar/
+// Business OAuth switched on — no dead-end CTA.
+function GoogleConnectHero({ pro }) {
+  const [cfg, setCfg] = useState(null);
+  useEffect(() => {
+    if (!pro) return;
+    getBookingConfig().then(setCfg).catch(() => setCfg(null));
+  }, [pro]);
+  if (!pro || !cfg || !cfg.calendar_platform_configured) return null;
+  if (cfg.calendar_connected && cfg.google_business_connected) return null;
+  return (
+    <div className="rounded-[1.75rem] border border-[#635BFF]/25 bg-gradient-to-r from-[#635BFF]/8 to-transparent p-5 sm:p-6 mb-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF]" /></span>
+          <div>
+            <p className="text-sm font-black text-slate-900">Connect Google</p>
+            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">One tap turns on Calendar sync (no double-bookings) and pulls your Business Profile — name, address, reviews, directions — onto your card.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={async () => { window.location.href = await googleConnectUrl(); }}
+          className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
+        >
+          <MapPin className="h-4 w-4" />Connect now
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -206,23 +254,22 @@ function flattenGroups(groups) {
 }
 let groupIdSeq = 0;
 
-function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReviewLink, onSaveBusinessUrl, onUpgrade }) {
+function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [reviewLink, setReviewLink] = useState("");
   const [savingReview, setSavingReview] = useState(false);
-  const [businessUrl, setBusinessUrl] = useState("");
-  const [savingBusiness, setSavingBusiness] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
 
-  // Prefill the Pro link inputs with what's already saved — previously the
+  // Prefill the Pro link input with what's already saved — previously the
   // review-link box always opened empty, so "Save" with a blank box could
-  // silently wipe an existing link.
+  // silently wipe an existing link. (Google Business is OAuth-connected now,
+  // not a pasted link — see connectGoogle/disconnectBusiness below — so it
+  // has no equivalent prefill.)
   useEffect(() => { if (initialReviewLink) setReviewLink(initialReviewLink); }, [initialReviewLink]);
-  useEffect(() => { if (initialBusinessUrl) setBusinessUrl(initialBusinessUrl); }, [initialBusinessUrl]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -266,23 +313,25 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
     }
   };
 
-  const saveBusinessUrl = async () => {
-    setSavingBusiness(true);
-    setErr("");
-    try {
-      await onSaveBusinessUrl(businessUrl);
-    } catch {
-      setErr("Couldn't save your Google Business link.");
-    } finally {
-      setSavingBusiness(false);
-    }
+  // Primary flow — one consent screen, both Calendar sync and the Business
+  // tile. Safe to click again once partially/fully connected: it re-grants
+  // both scopes and merge-upserts each connection row, so it also doubles as
+  // a "reconnect"/refresh action.
+  const connectGoogle = async () => {
+    window.location.href = await googleConnectUrl();
   };
-
-  const connectCalendar = async () => {
+  // Secondary flow — Calendar only, under a second Google account, for the
+  // edge case where a lawyer's Business Profile and Calendar aren't on the
+  // same Google account.
+  const connectCalendarAlt = async () => {
     window.location.href = await googleCalendarConnectUrl();
   };
   const disconnectCalendar = async () => {
     await disconnectGoogleCalendar();
+    load();
+  };
+  const disconnectBusiness = async () => {
+    await disconnectGoogleBusiness();
     load();
   };
 
@@ -326,9 +375,9 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 text-base px-2 py-1.5" />
                 <span className="text-slate-400 text-sm">to</span>
-                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5" />
+                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 text-base px-2 py-1.5" />
                 <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5">
                   {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
                 </select>
@@ -349,20 +398,58 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
 
       <div className="mt-6 pt-5 border-t border-slate-200">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google Calendar sync</p>
+          <p className="text-sm font-bold text-slate-800">Google (Calendar &amp; Business)</p>
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
-          <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to stop double-bookings →</button>
+          <>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">One connect turns on Calendar sync (no double-bookings) and a native Google Business tile with your real reviews and photos.</p>
+            <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to connect Google →</button>
+          </>
         ) : !cfg || !cfg.calendar_platform_configured ? (
           <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
-        ) : cfg.calendar_connected ? (
-          <div className="flex items-center gap-3 mt-2">
-            <span className="text-sm text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected</span>
-            <button type="button" onClick={disconnectCalendar} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
-          </div>
         ) : (
-          <button type="button" onClick={connectCalendar} className={btn + " mt-2"}><CalendarClock className="h-4 w-4" />Connect Google Calendar</button>
+          <>
+            <div className="mt-2 space-y-1.5">
+              <div className="flex items-center gap-2 flex-wrap text-sm">
+                <span className="text-xs font-bold text-slate-500 w-20 flex-none">Calendar</span>
+                {cfg.calendar_connected ? (
+                  <span className="text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected</span>
+                ) : (
+                  <span className="text-slate-400">Not connected</span>
+                )}
+                {cfg.calendar_connected && (
+                  <button type="button" onClick={disconnectCalendar} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
+                )}
+              </div>
+              <div className="flex items-center gap-2 flex-wrap text-sm">
+                <span className="text-xs font-bold text-slate-500 w-20 flex-none">Business</span>
+                {cfg.google_business_connected ? (
+                  <span className="text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected{cfg.google_business_name ? `: ${cfg.google_business_name}` : ""}</span>
+                ) : (
+                  <span className="text-slate-400">Not connected</span>
+                )}
+                {cfg.google_business_connected && (
+                  <button type="button" onClick={disconnectBusiness} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
+                )}
+              </div>
+            </div>
+
+            {!(cfg.calendar_connected && cfg.google_business_connected) && (
+              <>
+                <p className="text-xs text-slate-500 mt-2 mb-1 hyphens-none">
+                  {cfg.calendar_connected || cfg.google_business_connected
+                    ? "Reconnect to switch on the other one too — same Google account, one click."
+                    : "One Google sign-in turns on both — no double-bookings, plus your real Business Profile as a tile on your card."}
+                </p>
+                <button type="button" onClick={connectGoogle} className={btn + " mt-1"}><Sparkles className="h-4 w-4" />Connect Google</button>
+              </>
+            )}
+
+            <button type="button" onClick={connectCalendarAlt} className="text-xs font-bold text-slate-500 underline mt-3 block">
+              Calendar on a different Google account? Connect it separately →
+            </button>
+          </>
         )}
       </div>
 
@@ -382,40 +469,12 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
               value={reviewLink}
               onChange={(e) => setReviewLink(e.target.value)}
               placeholder="https://g.page/r/.../review"
-              className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
+              className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-base px-3 py-2"
             />
             <button type="button" onClick={saveReviewLink} disabled={savingReview} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
               {savingReview ? "Saving…" : "Save"}
             </button>
           </div>
-        )}
-      </div>
-
-      <div className="mt-6 pt-5 border-t border-slate-200">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google Business tile</p>
-          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
-        </div>
-        {!pro ? (
-          <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">A native Google tile on your card — visitors tap it to open your Google Business profile with all your reviews and photos.</p>
-            <button type="button" onClick={() => onUpgrade("google_business")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
-          </>
-        ) : (
-          <>
-            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">Paste your Google Business / Maps listing link (from your listing's Share button). Without one, the tile uses your office's Maps link automatically.</p>
-            <div className="flex flex-wrap gap-2">
-              <input
-                value={businessUrl}
-                onChange={(e) => setBusinessUrl(e.target.value)}
-                placeholder="https://maps.app.goo.gl/…  or  https://g.co/kgs/…"
-                className="flex-1 min-w-[220px] rounded-xl border border-slate-200 text-sm px-3 py-2"
-              />
-              <button type="button" onClick={saveBusinessUrl} disabled={savingBusiness} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
-                {savingBusiness ? "Saving…" : "Save"}
-              </button>
-            </div>
-          </>
         )}
       </div>
 
@@ -450,7 +509,16 @@ function BookingPanel({ pro, initialReviewLink, initialBusinessUrl, onSaveReview
                   )}
                   {r.status === "pending" && (
                     <>
-                      <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
+                      {/* booking.js's manage handler 409s (payment_not_confirmed)
+                          if a Pro booking that required payment is confirmed
+                          before payment_status is "confirmed" — mirror that
+                          rule here so the owner sees WHY confirming is blocked
+                          instead of a generic "didn't go through" error. */}
+                      {!r.is_pro_booking || ["not_required", "confirmed"].includes(r.payment_status) ? (
+                        <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400">Confirm after payment</span>
+                      )}
                       <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "declined"))} className="text-xs font-bold text-rose-700 underline">Decline</button>
                     </>
                   )}
@@ -849,6 +917,14 @@ export default function VakilCardPage() {
         <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
       </div>
 
+      {/* Top-of-page slot, directly under the header: Free sees the compact
+          Pro-tools upsell strip; Pro sees the Google Business connect hero
+          if it's not set up yet. Never both, never neither has content when
+          there's something to show. */}
+      {!pro
+        ? <ProToolsStrip tools={PRO_TOOLS} onLocked={setUpgradeFeature} />
+        : <GoogleConnectHero pro={pro} />}
+
       {/* Three columns on xl: content | live card | ecosystem. On lg the
           ecosystem rail folds beneath the main column. */}
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_360px_260px] 2xl:grid-cols-[minmax(0,1fr)_420px_300px] lg:gap-8 2xl:gap-10 lg:items-start">
@@ -987,7 +1063,7 @@ export default function VakilCardPage() {
                           value={phoneInput}
                           onChange={(e) => setPhoneInput(e.target.value)}
                           placeholder="+91 98765 43210"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-base focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
                         {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
@@ -1008,7 +1084,7 @@ export default function VakilCardPage() {
                           value={phoneCode}
                           onChange={(e) => setPhoneCode(e.target.value)}
                           placeholder="123456"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-sm tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-base tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
                         {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
@@ -1131,30 +1207,14 @@ export default function VakilCardPage() {
             </div>
           </div>
 
-          {/* Pro tools — every capability visible Free or Pro; locked rows
-              open the one UpgradeSheet, never hidden, never a dead tap. */}
-          <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Pro tools</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {PRO_TOOLS.map((tool) => (
-                <ProToolRow key={tool.key} tool={tool} pro={pro} onLocked={setUpgradeFeature} />
-              ))}
-            </div>
-          </div>
-
           {/* Booking & Reviews — Free gets real windows-based booking today;
               Pro-only rows (calendar sync, review link) render locked. */}
           <BookingPanel
             pro={pro}
             initialReviewLink={profile.google_review_link || ""}
-            initialBusinessUrl={profile.google_business_url || ""}
             onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
             onSaveReviewLink={async (link) => {
               await saveFull({ google_review_link: link });
-              await load();
-            }}
-            onSaveBusinessUrl={async (link) => {
-              await saveFull({ google_business_url: link });
               await load();
             }}
           />

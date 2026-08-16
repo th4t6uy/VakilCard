@@ -208,11 +208,27 @@ export const setBookingStatus = (request_id, status) =>
 // gcal_disconnect) rather than its own endpoint file, since Vercel's Hobby
 // plan caps a deployment at 12 Serverless Functions and this project was
 // already at that ceiling.
+// Primary flow: one consent screen grants BOTH Calendar free/busy and
+// Business Profile management, and booking.js's shared gcal_callback stores
+// both connections from the single resulting token.
+export const googleConnectUrl = async () => {
+  const bearer = await getBearer();
+  return `/api/vakilcard/booking?action=google_connect_start&token=${encodeURIComponent(bearer || "")}`;
+};
+// Secondary flow: calendar-only, for the edge case where a lawyer's Business
+// Profile and Calendar live under different Google accounts — lets them
+// connect Calendar under a second account without disturbing Business.
 export const googleCalendarConnectUrl = async () => {
   const bearer = await getBearer();
   return `/api/vakilcard/booking?action=gcal_start&token=${encodeURIComponent(bearer || "")}`;
 };
 export const disconnectGoogleCalendar = () => call("booking", { method: "POST", body: { action: "gcal_disconnect" } });
+
+// Business-only start kept server-side for backward compatibility (see
+// booking.js) but no longer linked from the dashboard UI — googleConnectUrl
+// above covers it. No client helper needed.
+export const disconnectGoogleBusiness = () => call("booking", { method: "POST", body: { action: "google_business_disconnect" } });
+
 
 // Subscription (Free vs Pro)
 export const getSubscription = () => call("subscription");
