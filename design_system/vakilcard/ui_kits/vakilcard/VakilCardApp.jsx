@@ -434,36 +434,25 @@ function VakilCardApp({ profile = defaultProfile }) {
             <ThemeToggle theme={theme} onToggle={() => setTheme((t) => (t === 'dark' ? 'light' : 'dark'))} />
             {profile.upi ? (
               <div style={{ flex: 1, minWidth: 0 }}>
-                {/* 2026-08-16 fix batch (item A3): the QR used to sit as its
-                    own block above this row — founder direction now is to
-                    fold it straight into the Pay Now button itself, so the
-                    button doubles as "tap = open pay sheet" and "double-tap
-                    the QR corner = download the QR" in one control. The QR
-                    thumbnail carries its own data-qr-zoom slot (same
-                    tap/double-tap handling as every other QR in the app —
-                    see mount.js's capture-phase listener, which stops the
-                    click from also reaching the button's own "pay now"
-                    handler), so the two gestures never collide. Pro only —
-                    Free's Pay Now opens the locked/upsell sheet instead, so
-                    a working payment QR here would be a path Free hasn't
-                    earned. */}
+                {/* 2026-08-16 fix batch, corrected: an earlier pass embedded
+                    the QR directly in this button, which also added a
+                    caption line under it that pushed this column taller
+                    than Share next to it (misaligned row). The QR now lives
+                    in the pay sheet (mount.js showPaySheet()) instead —
+                    top of that modal, with its own "double-tap to
+                    download" caption there — so this stays a plain,
+                    single-line button matching Share's height/style
+                    exactly, same as every other row in this pill. */}
                 <Button
                   aria-label="Pay Now"
                   variant="primary"
                   size="md"
                   full
-                  icon={
-                    profile.pro
-                      ? <InlineUpiQr upi={profile.upi} name={profile.name} qrUrl={profile.payQrUrl} size={34} pad={3} radius={8} />
-                      : <IconImg src="/ds/assets/actions/pay.png" size={18} invert fallback={Icons.rupee(18)} />
-                  }
+                  icon={<IconImg src="/ds/assets/actions/pay.png" size={18} invert fallback={Icons.rupee(18)} />}
                   style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
                 >
                   Pay Now
                 </Button>
-                {profile.pro && (
-                  <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginTop: 5, lineHeight: 1.3 }}>Double-tap the QR to download it</div>
-                )}
               </div>
             ) : (
               <div style={{ flex: 1 }} />

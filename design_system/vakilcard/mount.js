@@ -399,51 +399,64 @@
       // back out on blur — feels broken on a card meant to feel native.
       'style="display:' + (fee ? "none" : "block") + ';width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">';
 
+    // 2026-08-16 fix batch (correction): the QR belongs in THIS sheet, not
+    // embedded in the Pay Now button on the main card (an earlier pass got
+    // that wrong — reverted in VakilCardApp.jsx). It renders in the top
+    // half of the sheet, above the amount chooser, on every device (not
+    // just desktop) — same data-qr-zoom double-tap-to-download gesture
+    // used everywhere else in the app, with the caption directly under it.
     var s = openSheet(
       isMobile ? "Pay with UPI" : "Scan to pay with any UPI app",
-      chooser +
+      '<div id="vc-pay-qr-wrap" style="margin-bottom:10px"></div>' +
+        chooser +
         '<div id="vc-pay-body"></div>' +
         '<div style="margin-top:10px;font-size:11.5px;color:var(--text-low);text-align:center">Paying <b style="color:var(--text-hi)">' + vpa + "</b> directly — no middleman.</div>"
     );
 
-    var renderBody = function () {
-      var cur = uriFor();
-      var bodyEl = s.panel.querySelector("#vc-pay-body");
-      if (isMobile) {
-        bodyEl.innerHTML = upiLauncherHtml(cur.q, cur.uri);
-        return;
-      }
-      // Desktop: a REAL scannable QR of the exact upi:// URI + copy + download.
-      bodyEl.innerHTML =
-        '<div id="vc-payqr" data-qr-zoom data-qr-name="upi-payment-qr" data-qr-caption="Scan with any UPI app" role="button" tabindex="0" aria-label="Tap to enlarge the payment QR" style="display:flex;justify-content:center;padding:10px 0;cursor:zoom-in"><div style="font-size:12px;color:var(--text-low)">Generating QR…</div></div>' +
-        '<div style="text-align:center;font-size:12.5px;color:var(--text-low);margin-top:2px">UPI ID: <b style="color:var(--text-hi)">' + vpa + "</b></div>" +
-        '<button id="vc-pay-copy" style="' + sheetBtnCss + ';justify-content:center">Copy UPI ID</button>' +
-        '<a id="vc-pay-dl" style="' + sheetBtnCss + ';justify-content:center;display:none">Download QR</a>';
-      var renderQr = function () {
+    var renderQr = function (cur) {
+      var wrap = s.panel.querySelector("#vc-pay-qr-wrap");
+      if (!wrap) return;
+      wrap.innerHTML =
+        '<div id="vc-payqr" data-qr-zoom data-qr-name="upi-payment-qr" data-qr-caption="Scan with any UPI app" role="button" tabindex="0" aria-label="Payment QR — tap to enlarge, double-tap to download" style="display:flex;justify-content:center;padding:6px 0;cursor:zoom-in"><div style="font-size:12px;color:var(--text-low)">Generating QR…</div></div>' +
+        '<div style="text-align:center;font-size:10.5px;color:var(--text-dim)">Double-tap the QR to download it</div>';
+      var draw = function () {
+        var slot = s.panel.querySelector("#vc-payqr");
+        if (!slot) return;
         try {
           var qr = window.qrcode(0, "M");
           qr.addData(cur.uri);
           qr.make();
           var dataUrl = qr.createDataURL(8, 8);
-          s.panel.querySelector("#vc-payqr").innerHTML =
-            '<img src="' + dataUrl + '" alt="UPI payment QR" style="width:210px;height:210px;border-radius:14px;background:#fff;padding:8px">';
-          var dl = s.panel.querySelector("#vc-pay-dl");
-          dl.href = dataUrl;
-          dl.download = (vpa || "upi") + "-qr.gif";
-          dl.style.display = "flex";
+          slot.innerHTML = '<img src="' + dataUrl + '" alt="UPI payment QR" style="width:190px;height:190px;border-radius:14px;background:#fff;padding:8px">';
         } catch (e) {
-          s.panel.querySelector("#vc-payqr").innerHTML =
-            '<div style="font-size:12px;color:var(--text-low)">Couldn\'t draw the QR — use the UPI ID below.</div>';
+          slot.innerHTML = '<div style="font-size:12px;color:var(--text-low)">Couldn\'t draw the QR — use the options below.</div>';
         }
       };
-      if (window.qrcode) renderQr();
+      if (window.qrcode) draw();
       else {
         var sc = document.createElement("script");
         sc.src = "/ds/qrcode.js";
-        sc.onload = renderQr;
-        sc.onerror = renderQr;
+        sc.onload = draw;
+        sc.onerror = draw;
         document.head.appendChild(sc);
       }
+    };
+
+    var renderBody = function () {
+      var cur = uriFor();
+      renderQr(cur);
+      var bodyEl = s.panel.querySelector("#vc-pay-body");
+      if (isMobile) {
+        bodyEl.innerHTML = upiLauncherHtml(cur.q, cur.uri);
+        return;
+      }
+      // Desktop: Copy UPI ID underneath the shared QR above — no separate
+      // "Download QR" link needed now that double-click on the QR itself
+      // downloads it (the qrTapTimer listener handles mouse double-clicks
+      // the same way it handles touch double-taps).
+      bodyEl.innerHTML =
+        '<div style="text-align:center;font-size:12.5px;color:var(--text-low);margin-top:2px">UPI ID: <b style="color:var(--text-hi)">' + vpa + "</b></div>" +
+        '<button id="vc-pay-copy" style="' + sheetBtnCss + ';justify-content:center">Copy UPI ID</button>';
       var copyBtn = s.panel.querySelector("#vc-pay-copy");
       copyBtn.addEventListener("click", function () {
         if (navigator.clipboard) navigator.clipboard.writeText(vpa);
@@ -1072,24 +1085,60 @@
         // fetches images through its own path when inlining them into the
         // capture and can silently drop one that fetch can't read (opaque/
         // CORS-blocked response) — the export comes out with the DP missing
-        // even though nothing else looks wrong. Swap in a same-origin blob
+        // even though nothing else looks wrong. Swap in a same-origin data:
         // URL for the capture only; any failure here just leaves the photo
         // as before, never worse than the pre-fix behaviour.
+        //
+        // 2026-08-16: the previous approach here (fetch(url,{mode:'cors'})
+        // + FileReader) still left the DP missing for at least one real
+        // user despite the Storage bucket sending a correct
+        // access-control-allow-origin:* header (verified directly) — most
+        // likely a Safari-specific quirk where fetch() and an <img
+        // crossorigin> load of the SAME URL don't share a cache/CORS
+        // decision cleanly. Switched to the more standard, more broadly
+        // reliable technique for this exact problem: load a FRESH Image()
+        // with crossOrigin set, draw it to an offscreen <canvas>, and read
+        // it back with canvas.toDataURL() — a different browser code path
+        // than fetch, and the one most cross-origin-export tools rely on.
+        // The old fetch+blob approach is kept as a second fallback in case
+        // toDataURL throws (e.g. a genuinely tainted canvas).
         var photoEl = card.querySelector("[data-card-photo]");
         var savedPhotoSrc = photoEl ? photoEl.src : null;
-        var photoSwap = Promise.resolve();
-        if (photoEl && savedPhotoSrc) {
-          photoSwap = fetch(savedPhotoSrc, { mode: "cors", cache: "force-cache" })
+        var photoToDataUrl = function (url) {
+          return new Promise(function (resolve, reject) {
+            var img = new Image();
+            img.crossOrigin = "anonymous";
+            img.onload = function () {
+              try {
+                var canvas = document.createElement("canvas");
+                canvas.width = img.naturalWidth || 200;
+                canvas.height = img.naturalHeight || 200;
+                canvas.getContext("2d").drawImage(img, 0, 0);
+                resolve(canvas.toDataURL("image/png"));
+              } catch (e) { reject(e); }
+            };
+            img.onerror = function () { reject(new Error("photo image load failed")); };
+            img.src = url;
+          });
+        };
+        var photoFetchFallback = function (url) {
+          return fetch(url, { mode: "cors", cache: "force-cache" })
             .then(function (r) { if (!r.ok) throw new Error("photo fetch " + r.status); return r.blob(); })
             .then(function (blob) {
-              return new Promise(function (resolve) {
+              return new Promise(function (resolve, reject) {
                 var reader = new FileReader();
-                reader.onload = function () { photoEl.src = reader.result; resolve(); };
-                reader.onerror = function () { resolve(); };
+                reader.onload = function () { resolve(reader.result); };
+                reader.onerror = reject;
                 reader.readAsDataURL(blob);
               });
-            })
-            .catch(function () { /* keep the original src — no worse than before */ });
+            });
+        };
+        var photoSwap = Promise.resolve();
+        if (photoEl && savedPhotoSrc) {
+          photoSwap = photoToDataUrl(savedPhotoSrc)
+            .catch(function () { return photoFetchFallback(savedPhotoSrc); })
+            .then(function (dataUrl) { photoEl.src = dataUrl; })
+            .catch(function () { /* both methods failed — keep the original src, no worse than before */ });
         }
         var restore = function () {
           touched.forEach(function (p) { card.style[p] = saved[p]; });

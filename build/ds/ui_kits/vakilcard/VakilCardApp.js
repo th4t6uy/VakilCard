@@ -1174,14 +1174,7 @@ function VakilCardApp({
     variant: "primary",
     size: "md",
     full: true,
-    icon: profile.pro ? /*#__PURE__*/React.createElement(InlineUpiQr, {
-      upi: profile.upi,
-      name: profile.name,
-      qrUrl: profile.payQrUrl,
-      size: 34,
-      pad: 3,
-      radius: 8
-    }) : /*#__PURE__*/React.createElement(IconImg, {
+    icon: /*#__PURE__*/React.createElement(IconImg, {
       src: "/ds/assets/actions/pay.png",
       size: 18,
       invert: true,
@@ -1191,15 +1184,7 @@ function VakilCardApp({
       opacity: 0.45,
       filter: 'grayscale(1)'
     } : undefined
-  }, "Pay Now"), profile.pro && /*#__PURE__*/React.createElement("div", {
-    style: {
-      textAlign: 'center',
-      fontSize: 9.5,
-      color: 'var(--text-dim)',
-      marginTop: 5,
-      lineHeight: 1.3
-    }
-  }, "Double-tap the QR to download it")) : /*#__PURE__*/React.createElement("div", {
+  }, "Pay Now")) : /*#__PURE__*/React.createElement("div", {
     style: {
       flex: 1
     }
