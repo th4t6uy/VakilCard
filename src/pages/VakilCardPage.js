@@ -509,7 +509,16 @@ function BookingPanel({ pro, initialReviewLink, onSaveReviewLink, onUpgrade }) {
                   )}
                   {r.status === "pending" && (
                     <>
-                      <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
+                      {/* booking.js's manage handler 409s (payment_not_confirmed)
+                          if a Pro booking that required payment is confirmed
+                          before payment_status is "confirmed" — mirror that
+                          rule here so the owner sees WHY confirming is blocked
+                          instead of a generic "didn't go through" error. */}
+                      {!r.is_pro_booking || ["not_required", "confirmed"].includes(r.payment_status) ? (
+                        <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
+                      ) : (
+                        <span className="text-xs font-bold text-slate-400">Confirm after payment</span>
+                      )}
                       <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "declined"))} className="text-xs font-bold text-rose-700 underline">Decline</button>
                     </>
                   )}

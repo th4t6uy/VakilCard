@@ -459,6 +459,7 @@ function VakilCardApp({ profile = defaultProfile }) {
                 <Button
                   aria-label="Pay Now"
                   variant="primary"
+                  size="sm"
                   full
                   icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}
                   style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
@@ -472,29 +473,36 @@ function VakilCardApp({ profile = defaultProfile }) {
             <button aria-label="Share card" style={{ display: 'inline-flex', alignItems: 'center', gap: 7, height: 40, padding: '0 18px', borderRadius: 'var(--r-pill)', background: 'linear-gradient(180deg, #17c964, #12a150)', border: '1px solid rgba(255,255,255,0.18)', color: '#fff', fontSize: 13.5, fontWeight: 800, fontFamily: 'var(--font-sans)', cursor: 'pointer', boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)', flexShrink: 0 }}>{Icons.share(15)}Share</button>
           </div>
 
-          {/* UPI ID + copy — centered under the button row, per founder
-              direction. VerifiedShield rides alongside it now instead of
-              anchoring its own row. */}
-          {profile.upi ? (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px 14px' }}>
-              <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-low)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
-              <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(13)}</button>
-              <VerifiedShield size="sm" label="" style={{ gap: 0, flexShrink: 0 }} />
-            </div>
-          ) : (
-            <div style={{ paddingBottom: 14 }} />
-          )}
+          {/* UPI ID + copy + Vakilpedia branding — one centered row under the
+              button row (founder direction, round 2: branding moved here
+              from its old spot as a footer line under the Connect tiles, so
+              it rides next to the UPI ID it's vouching for instead of being
+              orphaned at the bottom of an unrelated section). VerifiedShield
+              and the brand mark both always show — the UPI ID/copy portion
+              only when there's a UPI ID to show. */}
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, padding: '10px 16px 14px', flexWrap: 'wrap' }}>
+            {profile.upi && (
+              <>
+                <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--text-low)', fontFamily: 'var(--font-mono)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{profile.upi}</span>
+                <button onClick={() => { setCopied(true); setTimeout(() => setCopied(false), 1200); }} style={{ flexShrink: 0, background: 'none', border: 'none', color: copied ? 'var(--success)' : 'var(--text-low)', cursor: 'pointer', display: 'flex' }}>{Icons.copy(13)}</button>
+                <VerifiedShield size="sm" label="" style={{ gap: 0, flexShrink: 0 }} />
+                <span style={{ width: 1, height: 12, background: 'var(--hairline-strong)', flexShrink: 0 }} />
+              </>
+            )}
+            <img src="../../assets/logos/vakilpedia.png" alt="" style={{ height: 14, opacity: 0.8, flexShrink: 0 }} />
+            <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-low)', flexShrink: 0 }}>Vakilpedia<sup style={{ fontSize: '0.5em', fontWeight: 500, opacity: 0.6 }}>TM</sup></span>
+          </div>
           {!profile.pro && profile.upi && (
             <div style={{ fontSize: 10.5, color: 'var(--text-dim)', textAlign: 'center', padding: '0 16px 14px' }}>Online UPI payments are a Pro feature — tap to see what unlocks.</div>
           )}
         </div>
 
-        {/* Connect — tiles, plus the Vakilpedia brand mark as a quiet footer
-            line (moved out of its own top-of-card row — founder direction
-            2026-08-16 — this and dropping Social handles down into Google
-            Business below are what free up hero space on mobile). Social
-            handles used to live in this section too (extra heading +
-            wrapped icon row) — moved out for the same reason. */}
+        {/* Connect — tiles. Vakilpedia branding used to live here as a
+            footer line; moved up into the payment pill next to the UPI ID
+            (founder direction, round 2) — see above. Social handles used to
+            live in this section too (extra heading + wrapped icon row) —
+            moved out down into Google Business below to free up hero space
+            on mobile. */}
         <Section eyebrow="Connect">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
             {tiles.map((t) => {
@@ -518,10 +526,6 @@ function VakilCardApp({ profile = defaultProfile }) {
                 />
               );
             })}
-          </div>
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 7, marginTop: 14, paddingTop: 14, borderTop: '1px solid var(--hairline)' }}>
-            <img src="../../assets/logos/vakilpedia.png" alt="" style={{ height: 16, opacity: 0.8 }} />
-            <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: '-0.02em', color: 'var(--text-low)' }}>Vakilpedia<sup style={{ fontSize: '0.5em', fontWeight: 500, opacity: 0.6 }}>TM</sup></span>
           </div>
         </Section>
 

@@ -1280,6 +1280,7 @@ function VakilCardApp({
   }, /*#__PURE__*/React.createElement(Button, {
     "aria-label": "Pay Now",
     variant: "primary",
+    size: "sm",
     full: true,
     icon: /*#__PURE__*/React.createElement(IconImg, {
       src: "/ds/assets/actions/pay.png",
@@ -1314,15 +1315,16 @@ function VakilCardApp({
       boxShadow: '0 6px 18px rgba(18,161,80,0.5), inset 0 1px 0 rgba(255,255,255,0.35)',
       flexShrink: 0
     }
-  }, Icons.share(15), "Share")), profile.upi ? /*#__PURE__*/React.createElement("div", {
+  }, Icons.share(15), "Share")), /*#__PURE__*/React.createElement("div", {
     style: {
       display: 'flex',
       alignItems: 'center',
       justifyContent: 'center',
       gap: 7,
-      padding: '10px 16px 14px'
+      padding: '10px 16px 14px',
+      flexWrap: 'wrap'
     }
-  }, /*#__PURE__*/React.createElement("span", {
+  }, profile.upi && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("span", {
     style: {
       fontSize: 12.5,
       fontWeight: 700,
@@ -1352,11 +1354,36 @@ function VakilCardApp({
       gap: 0,
       flexShrink: 0
     }
-  })) : /*#__PURE__*/React.createElement("div", {
+  }), /*#__PURE__*/React.createElement("span", {
     style: {
-      paddingBottom: 14
+      width: 1,
+      height: 12,
+      background: 'var(--hairline-strong)',
+      flexShrink: 0
     }
-  }), !profile.pro && profile.upi && /*#__PURE__*/React.createElement("div", {
+  })), /*#__PURE__*/React.createElement("img", {
+    src: "../../assets/logos/vakilpedia.png",
+    alt: "",
+    style: {
+      height: 14,
+      opacity: 0.8,
+      flexShrink: 0
+    }
+  }), /*#__PURE__*/React.createElement("span", {
+    style: {
+      fontSize: 11,
+      fontWeight: 800,
+      letterSpacing: '-0.02em',
+      color: 'var(--text-low)',
+      flexShrink: 0
+    }
+  }, "Vakilpedia", /*#__PURE__*/React.createElement("sup", {
+    style: {
+      fontSize: '0.5em',
+      fontWeight: 500,
+      opacity: 0.6
+    }
+  }, "TM"))), !profile.pro && profile.upi && /*#__PURE__*/React.createElement("div", {
     style: {
       fontSize: 10.5,
       color: 'var(--text-dim)',
@@ -1400,37 +1427,7 @@ function VakilCardApp({
         } : {})
       }
     });
-  })), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      gap: 7,
-      marginTop: 14,
-      paddingTop: 14,
-      borderTop: '1px solid var(--hairline)'
-    }
-  }, /*#__PURE__*/React.createElement("img", {
-    src: "../../assets/logos/vakilpedia.png",
-    alt: "",
-    style: {
-      height: 16,
-      opacity: 0.8
-    }
-  }), /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 12,
-      fontWeight: 800,
-      letterSpacing: '-0.02em',
-      color: 'var(--text-low)'
-    }
-  }, "Vakilpedia", /*#__PURE__*/React.createElement("sup", {
-    style: {
-      fontSize: '0.5em',
-      fontWeight: 500,
-      opacity: 0.6
-    }
-  }, "TM")))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
+  }))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
     eyebrow: "Google Business"
   }, /*#__PURE__*/React.createElement("div", {
     role: "button",
