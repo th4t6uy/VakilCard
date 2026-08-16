@@ -1373,6 +1373,7 @@ function VakilCardApp({
   }, "Tap to enlarge \xB7 Double-tap to download"), /*#__PURE__*/React.createElement(Button, {
     "aria-label": "Pay Now",
     variant: "primary",
+    full: true,
     icon: /*#__PURE__*/React.createElement(IconImg, {
       src: "/ds/assets/actions/pay.png",
       size: 16,
@@ -1427,53 +1428,7 @@ function VakilCardApp({
         } : {})
       }
     });
-  })), social.length > 0 && /*#__PURE__*/React.createElement(React.Fragment, null, /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'space-between',
-      margin: '16px 0 10px'
-    }
-  }, /*#__PURE__*/React.createElement("span", {
-    style: {
-      fontSize: 11,
-      fontWeight: 700,
-      letterSpacing: '0.12em',
-      textTransform: 'uppercase',
-      color: 'var(--text-dim)'
-    }
-  }, "Social handles")), /*#__PURE__*/React.createElement("div", {
-    style: {
-      display: 'flex',
-      flexWrap: 'wrap',
-      gap: 10
-    }
-  }, social.map(([key, url]) => {
-    const meta = SOCIAL_META[key];
-    const icon = Icons[meta.icon] || Icons.globe;
-    return /*#__PURE__*/React.createElement("a", {
-      key: key,
-      href: url,
-      target: "_blank",
-      rel: "noopener noreferrer",
-      "aria-label": meta.label,
-      title: meta.label,
-      "data-ev": `social_${key}`,
-      style: {
-        display: 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        width: 44,
-        height: 44,
-        borderRadius: '50%',
-        background: 'var(--glass-thick)',
-        border: '1px solid var(--hairline-strong)',
-        color: meta.color,
-        textDecoration: 'none',
-        cursor: 'pointer'
-      }
-    }, icon(18));
-  })))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
+  }))), profile.googleBusiness ? /*#__PURE__*/React.createElement(Section, {
     eyebrow: "Google Business"
   }, /*#__PURE__*/React.createElement("div", {
     role: "button",
@@ -1587,7 +1542,40 @@ function VakilCardApp({
       textTransform: 'uppercase',
       color: 'var(--text-dim)'
     }
-  }, "Google")))) : null, /*#__PURE__*/React.createElement("div", {
+  }, "Google")))) : null, social.length > 0 && /*#__PURE__*/React.createElement(Section, {
+    eyebrow: "Social handles"
+  }, /*#__PURE__*/React.createElement("div", {
+    style: {
+      display: 'flex',
+      flexWrap: 'wrap',
+      gap: 10
+    }
+  }, social.map(([key, url]) => {
+    const meta = SOCIAL_META[key];
+    const icon = Icons[meta.icon] || Icons.globe;
+    return /*#__PURE__*/React.createElement("a", {
+      key: key,
+      href: url,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      "aria-label": meta.label,
+      title: meta.label,
+      "data-ev": `social_${key}`,
+      style: {
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 44,
+        height: 44,
+        borderRadius: '50%',
+        background: 'var(--glass-thick)',
+        border: '1px solid var(--hairline-strong)',
+        color: meta.color,
+        textDecoration: 'none',
+        cursor: 'pointer'
+      }
+    }, icon(18));
+  }))), /*#__PURE__*/React.createElement("div", {
     style: {
       position: 'relative',
       overflow: 'hidden',

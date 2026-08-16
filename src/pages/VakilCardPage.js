@@ -154,25 +154,69 @@ const PRO_TOOLS = [
   { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Add your Google Business link in Booking & Reviews below — the tile appears on your card." },
 ];
 
-function ProToolRow({ tool, pro, onLocked }) {
-  const Icon = tool.icon;
+// Compact top-of-page strip — replaces the old full-height "Pro tools" panel
+// (moved here from below "Edit your card" per founder direction 2026-08-16).
+// Free-only: Pro owners already have every one of these, so showing it to
+// them would just be dead weight at the top of their dashboard.
+function ProToolsStrip({ tools, onLocked }) {
   return (
-    <button
-      type="button"
-      onClick={() => (pro ? null : onLocked(tool.key))}
-      className={`w-full rounded-2xl border p-4 text-left transition-colors flex items-start gap-3 ${pro ? "border-slate-200 bg-slate-50 cursor-default" : "border-slate-200 bg-white hover:border-[#635BFF]/50"}`}
-    >
-      <span className={`h-9 w-9 rounded-xl flex items-center justify-center flex-none ${pro ? "bg-emerald-100" : "bg-[#635BFF]/10"}`}>
-        <Icon className={`h-4 w-4 ${pro ? "text-emerald-700" : "text-[#635BFF]"}`} />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <p className="text-sm font-black text-slate-900">{tool.title}</p>
-          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none">Pro</span>}
-        </div>
-        <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">{pro ? tool.proDesc : tool.freeDesc}</p>
+    <div className="rounded-[1.75rem] border border-[#635BFF]/20 bg-gradient-to-r from-[#635BFF]/6 to-transparent p-4 mb-6">
+      <div className="flex items-center justify-between mb-3">
+        <p className="text-sm font-black text-slate-900">Unlock with Pro</p>
+        <button type="button" onClick={() => onLocked("pro")} className="text-xs font-bold text-[#635BFF]">See all →</button>
       </div>
-    </button>
+      <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
+        {tools.map((tool) => {
+          const Icon = tool.icon;
+          return (
+            <button
+              key={tool.key}
+              type="button"
+              onClick={() => onLocked(tool.key)}
+              className="flex-none snap-start rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 transition-colors px-3.5 py-2.5 flex items-center gap-2 min-w-[168px]"
+            >
+              <span className="h-8 w-8 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
+              <p className="text-xs font-bold text-slate-800 text-left hyphens-none leading-tight">{tool.title}</p>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Pro-only hero CTA — surfaces the one actionable Pro setup step (connecting
+// Google Business) right under the header, instead of burying it at the
+// bottom of Booking & Reviews. Does its own lightweight config fetch (same
+// getBookingConfig() BookingPanel already uses) so it doesn't need state
+// lifted through the tree. Self-hides once connected, or if this deployment
+// hasn't got Calendar/Business OAuth switched on — no dead-end CTA.
+function GoogleBusinessHero({ pro }) {
+  const [cfg, setCfg] = useState(null);
+  useEffect(() => {
+    if (!pro) return;
+    getBookingConfig().then(setCfg).catch(() => setCfg(null));
+  }, [pro]);
+  if (!pro || !cfg || !cfg.calendar_platform_configured || cfg.google_business_connected) return null;
+  return (
+    <div className="rounded-[1.75rem] border border-[#635BFF]/25 bg-gradient-to-r from-[#635BFF]/8 to-transparent p-5 sm:p-6 mb-6">
+      <div className="flex items-center justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF]" /></span>
+          <div>
+            <p className="text-sm font-black text-slate-900">Connect your Google Business Profile</p>
+            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">Real name, address, reviews and directions — live on your card in one tap.</p>
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={async () => { window.location.href = await googleBusinessConnectUrl(); }}
+          className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
+        >
+          <MapPin className="h-4 w-4" />Connect now
+        </button>
+      </div>
+    </div>
   );
 }
 
@@ -842,6 +886,14 @@ export default function VakilCardPage() {
         <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
       </div>
 
+      {/* Top-of-page slot, directly under the header: Free sees the compact
+          Pro-tools upsell strip; Pro sees the Google Business connect hero
+          if it's not set up yet. Never both, never neither has content when
+          there's something to show. */}
+      {!pro
+        ? <ProToolsStrip tools={PRO_TOOLS} onLocked={setUpgradeFeature} />
+        : <GoogleBusinessHero pro={pro} />}
+
       {/* Three columns on xl: content | live card | ecosystem. On lg the
           ecosystem rail folds beneath the main column. */}
       <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_360px_260px] 2xl:grid-cols-[minmax(0,1fr)_420px_300px] lg:gap-8 2xl:gap-10 lg:items-start">
@@ -1121,17 +1173,6 @@ export default function VakilCardPage() {
                 <span className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>
                 <p className="text-sm font-bold hyphens-none">Guided walkthrough</p>
               </button>
-            </div>
-          </div>
-
-          {/* Pro tools — every capability visible Free or Pro; locked rows
-              open the one UpgradeSheet, never hidden, never a dead tap. */}
-          <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Pro tools</h2>
-            <div className="grid gap-3 sm:grid-cols-2">
-              {PRO_TOOLS.map((tool) => (
-                <ProToolRow key={tool.key} tool={tool} pro={pro} onLocked={setUpgradeFeature} />
-              ))}
             </div>
           </div>
 

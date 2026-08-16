@@ -466,9 +466,15 @@ function VakilCardApp({ profile = defaultProfile }) {
                 <div style={{ textAlign: 'center', fontSize: 9.5, color: 'var(--text-dim)', marginBottom: 10, lineHeight: 1.3 }}>Tap to enlarge · Double-tap to download</div>
               )}
 
+              {/* full: the button previously defaulted to inline/auto width
+                  inside this full-width block, leaving dead space to its
+                  right (bottom-right of the pill) below the UPI row and
+                  shield — stretch it to fill the tile like the rest of the
+                  rows above it. */}
               <Button
                 aria-label="Pay Now"
                 variant="primary"
+                full
                 icon={<IconImg src="/ds/assets/actions/pay.png" size={16} invert fallback={Icons.rupee(16)} />}
                 style={!profile.pro ? { opacity: 0.45, filter: 'grayscale(1)' } : undefined}
               >
@@ -481,6 +487,12 @@ function VakilCardApp({ profile = defaultProfile }) {
           ) : null}
         </div>
 
+        {/* Connect — tiles only now. Social handles used to live in this
+            same section (extra heading + wrapped icon row), which pushed
+            Google Business further down and, on short mobile viewports,
+            past the fold of the hero cluster. Splitting them out (moved
+            below Google Business — founder direction 2026-08-16) shortens
+            Connect so Google Business lands sooner in the scroll. */}
         <Section eyebrow="Connect">
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, minmax(0, 1fr))', gap: 10 }}>
             {tiles.map((t) => {
@@ -505,22 +517,6 @@ function VakilCardApp({ profile = defaultProfile }) {
               );
             })}
           </div>
-          {social.length > 0 && (
-            <>
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0 10px' }}>
-                <span style={{ fontSize: 11, fontWeight: 700, letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--text-dim)' }}>Social handles</span>
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
-                {social.map(([key, url]) => {
-                  const meta = SOCIAL_META[key];
-                  const icon = Icons[meta.icon] || Icons.globe;
-                  return (
-                    <a key={key} href={url} target="_blank" rel="noopener noreferrer" aria-label={meta.label} title={meta.label} data-ev={`social_${key}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: '50%', background: 'var(--glass-thick)', border: '1px solid var(--hairline-strong)', color: meta.color, textDecoration: 'none', cursor: 'pointer' }}>{icon(18)}</a>
-                  );
-                })}
-              </div>
-            </>
-          )}
         </Section>
 
         {/* Google Business tile — native listing-style preview (Pro; the
@@ -575,6 +571,23 @@ function VakilCardApp({ profile = defaultProfile }) {
             </div>
           </Section>
         ) : null}
+
+        {/* Social handles — split out from Connect (founder direction
+            2026-08-16), now directly under Google Business so Connect stays
+            short and Google Business lands earlier in the mobile scroll. */}
+        {social.length > 0 && (
+          <Section eyebrow="Social handles">
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 10 }}>
+              {social.map(([key, url]) => {
+                const meta = SOCIAL_META[key];
+                const icon = Icons[meta.icon] || Icons.globe;
+                return (
+                  <a key={key} href={url} target="_blank" rel="noopener noreferrer" aria-label={meta.label} title={meta.label} data-ev={`social_${key}`} style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 44, height: 44, borderRadius: '50%', background: 'var(--glass-thick)', border: '1px solid var(--hairline-strong)', color: meta.color, textDecoration: 'none', cursor: 'pointer' }}>{icon(18)}</a>
+                );
+              })}
+            </div>
+          </Section>
+        )}
 
         {/* Premium upsell — deliberately the first tile revealed on scroll */}
         <div style={{ position: 'relative', overflow: 'hidden', display: 'flex', alignItems: 'center', gap: 12, padding: 16, marginBottom: 16, borderRadius: 'var(--r-xl)', background: 'linear-gradient(120deg, var(--glass-tint-violet), var(--glass-tint-gold))', border: '1px solid var(--hairline)', backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)' }}>
