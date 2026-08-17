@@ -141,9 +141,29 @@ async function createAccountViaCaseLinx(phoneE164, code, ip) {
       // Verified and consumed on CaseLinx's side; no account was made (flag/allowlist gate).
       return { consumed: true, accountId: null };
     }
-    // invalid_code / expired / locked / misconfigured / anything else — CaseLinx did not
-    // consume a valid session, so it is still safe (and correct) to verify locally.
-    return { consumed: false, accountId: null };
+    // The ONLY statuses CaseLinx can return BEFORE it matches the code against
+    // verification_sessions — i.e. the only ones that PROVE the session is still
+    // untouched (see otpService.ts verifyOtp: the row is marked "consumed" the
+    // instant the hash matches, before resolveFactor ever runs). Everything else —
+    // needs_review / link_available / identity_conflict / misconfigured / unavailable /
+    // any future status this endpoint starts returning — happens AFTER that point,
+    // so the code may already be spent server-side even though it wasn't accepted
+    // here. 2026-08-17: this allowlist replaces a blocklist that only recognized
+    // "completed"/"signed_in"/"account_creation_required" as consumed and silently
+    // showed "Incorrect or expired code" for needs_review/identity_conflict — exactly
+    // the kind of resolver outcome a bar-election crowd of existing accountholders
+    // would trigger. Do not add statuses back to this list without first confirming
+    // (by reading otpService.ts) that they can only occur pre-match.
+    const PROVABLY_NOT_CONSUMED = new Set([
+      "invalid_code", "wrong_code", "no_session", "expired", "locked",
+      "invalid_phone", "invalid_email", "invalid_input",
+    ]);
+    if (PROVABLY_NOT_CONSUMED.has(data.status)) {
+      return { consumed: false, accountId: null };
+    }
+    // Unrecognized / post-match status — ask the database what actually happened,
+    // exactly like the timeout/network-error path already does.
+    return await didCaseLinxAlreadyConsume(phoneE164);
   } catch {
     // TIMEOUT OR NETWORK ERROR — we genuinely do not know whether CaseLinx finished.
     // Never assume it did not: assuming wrongly is what showed a real signup an

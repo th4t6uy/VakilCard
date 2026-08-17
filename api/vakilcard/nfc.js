@@ -232,10 +232,26 @@ function claimPage(code) {
     var code = document.getElementById("otp").value.trim();
     if (!code) { setErr("err-otp", "Enter the code."); return; }
     var btn = this; btn.disabled = true; btn.textContent = "Verifying…";
+    // Also lock the resend button for the duration of this verify call (2026-08-17
+    // kiosk fix). CaseLinx's bridge can take up to 25s (see auth.js), and if the
+    // user gets impatient and taps "Resend" mid-verify, a SECOND pending session is
+    // created for the same phone — both VakilCard's local verify and CaseLinx's
+    // otpService then match against the NEWEST pending session only, so the
+    // original (correct) code the user typed gets rejected against the new one.
+    // Freezing resend here doesn't remove that race at the data layer, but it
+    // closes the one window a real kiosk user could hit it through the UI.
+    var resendBtn = document.getElementById("btn-resend");
+    var resendWasDisabled = resendBtn.disabled;
+    resendBtn.disabled = true;
     fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", phone: phone, code: code, eula_accepted: true }) })
       .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
       .then(function(res){
-        if (!res.ok) { btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", "Incorrect or expired code."); return; }
+        if (!res.ok) {
+          btn.disabled = false; btn.textContent = "Verify & activate";
+          if (!resendWasDisabled) resendBtn.disabled = false;
+          setErr("err-otp", "Incorrect or expired code.");
+          return;
+        }
         return fetch("/api/vakilcard/nfc", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + res.d.access_token }, body: JSON.stringify({ action: "bind", code: CODE }) })
           .then(function(r2){ return r2.json().then(function(d2){ return { ok: r2.ok, d: d2, auth: res.d }; }); })
           .then(function(bindRes){
@@ -283,7 +299,7 @@ function claimPage(code) {
             });
           });
       })
-      .catch(function(){ btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", "Network error, try again."); });
+      .catch(function(){ btn.disabled = false; btn.textContent = "Verify & activate"; if (!resendWasDisabled) resendBtn.disabled = false; setErr("err-otp", "Network error, try again."); });
   });
 })();
 </script>

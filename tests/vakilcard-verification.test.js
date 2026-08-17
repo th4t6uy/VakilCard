@@ -279,6 +279,45 @@ test("second verification for same phone reuses the account (no duplicate cards)
   assert.equal(store.vakilcard_profiles.length, 1);
 });
 
+test("CaseLinx bridge: post-match statuses (needs_review etc.) must not reject a correct code (2026-08-17 kiosk bug)", async () => {
+  // Regression for the "OTP correct but rejected" kiosk bug: CaseLinx marks the
+  // shared verification_sessions row 'consumed' the instant the code matches,
+  // BEFORE its resolver can return needs_review/link_available/identity_conflict/
+  // misconfigured/unavailable. The old code treated all of those as "CaseLinx did
+  // not consume it" and re-verified locally, which always failed on the
+  // already-spent session. The fix must instead recognize these as
+  // "unknown/post-match" and fall back to the DB consumed-check (same path the
+  // timeout/network-error case already used).
+  const origFetch = global.fetch;
+  try {
+    for (const status of ["needs_review", "identity_conflict", "unavailable", "misconfigured", "link_available"]) {
+      reset();
+      const { logs } = await captureConsole(() => verification.sendVerification({ phone: PHONE }));
+      const code = extractCode(logs);
+      // Simulate CaseLinx having already matched the code and consumed the shared
+      // session server-side, then returned a post-match status VakilCard doesn't
+      // specifically recognize.
+      latestSession().status = "consumed";
+      global.fetch = async () => ({ ok: true, json: async () => ({ status }) });
+      let out;
+      await captureConsole(async () => { out = await callAuth({ action: "verify", phone: PHONE, code }); });
+      assert.equal(out.status, 200, `status=${status} must not reject a code CaseLinx already consumed`);
+      assert.ok(out.data.access_token, `status=${status} must still issue a session`);
+    }
+
+    // Sanity check the other direction: a genuinely PRE-match status (wrong_code)
+    // must still fall through to local verification and correctly reject.
+    reset();
+    await captureConsole(() => verification.sendVerification({ phone: PHONE }));
+    global.fetch = async () => ({ ok: true, json: async () => ({ status: "wrong_code" }) });
+    const out = await callAuth({ action: "verify", phone: PHONE, code: "000000" });
+    assert.equal(out.status, 400);
+    assert.equal(out.data.error, "wrong_code");
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
 test("draft cards are not public (profile SSR + vcf)", async () => {
   const profilePath = path.resolve(__dirname, "../api/vakilcard/profile.js");
   const vcfPath = path.resolve(__dirname, "../api/vakilcard/vcf.js");
