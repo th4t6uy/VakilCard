@@ -122,6 +122,26 @@ test("DELETE: removes every extension and clears the stored URL", async () => {
   assert.equal(store.vakilcard_profiles[0].photo_url, null);
 });
 
+test("storage failure: Supabase's real status is captured and forwarded (2026-08-17)", async () => {
+  resetCalls();
+  const origFetch = global.fetch;
+  global.fetch = async (url, opts = {}) => {
+    storageCalls.push({ url: String(url), method: opts.method || "GET" });
+    if ((opts.method || "GET") === "POST") {
+      return { ok: false, status: 403, json: async () => ({}), text: async () => "mock: forbidden" };
+    }
+    return { ok: true, status: 200, json: async () => ({}), text: async () => "" };
+  };
+  try {
+    const { status, data } = await call("POST", { kind: "photo", data: WEBP.toString("base64") });
+    assert.equal(status, 502);
+    assert.equal(data.error, "storage_failed");
+    assert.equal(data.status, 403, "the real Supabase status must reach the response for triage");
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
 test("unauthenticated and bad methods rejected", async () => {
   currentAccount = null;
   assert.equal((await call("POST", { kind: "photo", data: WEBP.toString("base64") })).status, 401);

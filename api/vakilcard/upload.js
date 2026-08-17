@@ -115,7 +115,21 @@ module.exports = async function handler(req, res) {
       },
       body: buf,
     });
-    if (!r.ok) return json(res, 502, { error: "storage_failed" });
+    if (!r.ok) {
+      // 2026-08-17: was a bare 502 with no diagnostic trail — Supabase Storage's
+      // own error status/body were discarded, so a real failure (bad bucket
+      // config, quota, auth, transient outage — take your pick) was
+      // indistinguishable from any other in the logs. Capture both, server-side
+      // only: never echo Storage's raw body back to the client (it can include
+      // internal detail we don't want to expose to an unauthenticated-looking
+      // upload error).
+      const errBody = await r.text().catch(() => "<unreadable>");
+      console.error(
+        `[vakilcard/upload] storage POST failed status=${r.status} bucket=vakilcard ` +
+          `path=${objectPath} bytes=${buf.length} mime=${fmt.mime} body=${errBody.slice(0, 1000)}`
+      );
+      return json(res, 502, { error: "storage_failed", status: r.status });
+    }
 
     // Exactly one object per kind: clear the other extensions after a
     // format change (e.g. WebP re-upload replacing a Safari JPEG).
