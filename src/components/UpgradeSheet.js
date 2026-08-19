@@ -8,8 +8,8 @@
 // preview of the exact thing they tapped, with the benefit spelled out, so
 // they know what they're missing before the price is even mentioned.
 import React, { useEffect, useState } from "react";
-import { BadgeCheck, Banknote, BarChart3, CalendarClock, Check, Globe2, Loader2, MapPin, Palette, Sparkles, Star, X } from "lucide-react";
-import { checkoutPro, getSubscription } from "../lib/vakilcardApi";
+import { BadgeCheck, Banknote, BarChart3, CalendarClock, Check, Globe2, Loader2, MapPin, Palette, Sparkles, Star, Ticket, X } from "lucide-react";
+import { checkoutPro, getSubscription, loadRazorpay, previewCoupon, verifyProPayment } from "../lib/vakilcardApi";
 
 const FEATURES = [
   [BadgeCheck, "Custom Username", "vakilpedia.com/yourname"],
@@ -169,10 +169,19 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
   const [founderAvailable, setFounderAvailable] = useState(true);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState(null); // null | "activated" | "pending"
+  // Coupon state — a valid discount code (e.g. FOUNDER33) reprices the first
+  // year before any payment starts. Validation is entirely server-side.
+  const [couponInput, setCouponInput] = useState("");
+  const [coupon, setCoupon] = useState(null); // applied server preview
+  const [couponError, setCouponError] = useState("");
+  const [couponBusy, setCouponBusy] = useState(false);
 
   useEffect(() => {
     if (!open) return;
     setDone(null);
+    setCouponInput("");
+    setCoupon(null);
+    setCouponError("");
     getSubscription()
       .then((s) => {
         if (s && s.pricing) setPricing(s.pricing);
@@ -183,21 +192,86 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
 
   if (!open) return null;
 
+  const COUPON_ERRORS = {
+    invalid_code: "That code isn't valid.",
+    expired: "This code has expired.",
+    exhausted: "This code has been fully used.",
+    coupon_paused: "This code is paused right now.",
+    wrong_product: "That code is for a different Vakilpedia app.",
+    not_applicable_at_checkout: "That code can't be applied at checkout.",
+    coupon_unavailable: "Couldn't check the code — try again.",
+  };
+
+  const applyCoupon = async () => {
+    const code = couponInput.trim();
+    if (!code) return;
+    setCouponBusy(true);
+    setCouponError("");
+    try {
+      const r = await previewCoupon(code);
+      if (r && r.ok) {
+        setCoupon(r);
+      } else {
+        setCoupon(null);
+        setCouponError(COUPON_ERRORS[r && r.error] || "That code isn't valid.");
+      }
+    } catch {
+      setCouponError("Couldn't check the code — try again.");
+    } finally {
+      setCouponBusy(false);
+    }
+  };
+
   const upgrade = async () => {
     setBusy(true);
     try {
-      const r = await checkoutPro();
-      if (r.qa_activated || (!r.pending && r.ok)) {
+      const r = await checkoutPro(coupon ? coupon.code : undefined);
+      if (r.qa_activated || (!r.pending && r.ok && !r.subscription_id)) {
         setDone("activated");
         if (onUpgraded) onUpgraded();
+      } else if (r.subscription_id) {
+        // In-app Razorpay Checkout — UPI Autopay yearly subscription.
+        const Razorpay = await loadRazorpay();
+        const modal = new Razorpay({
+          key: r.key_id,
+          subscription_id: r.subscription_id,
+          name: "VakilCard Pro",
+          description: r.coupon_applied
+            ? `First year ₹${r.first_charge_inr}, renews ₹${r.renewal_inr}/yr`
+            : `₹${r.first_charge_inr}/yr`,
+          theme: { color: "#635BFF" },
+          handler: async (resp) => {
+            try {
+              const v = await verifyProPayment(resp);
+              if (v && v.ok) {
+                setDone("activated");
+                if (onUpgraded) onUpgraded();
+              } else {
+                setDone("pending");
+              }
+            } catch {
+              setDone("pending");
+            } finally {
+              setBusy(false);
+            }
+          },
+          modal: { ondismiss: () => setBusy(false) },
+        });
+        modal.on("payment.failed", () => setBusy(false));
+        modal.open();
+        return; // busy stays true until the modal resolves/dismisses
       } else if (r.checkout_url) {
         window.location.href = r.checkout_url; // hosted checkout (provider)
       } else {
         setDone("pending");
       }
-    } catch {
-      setDone("pending");
-    } finally {
+      setBusy(false);
+    } catch (e) {
+      if (e && e.code === "coupon_offer_not_configured") {
+        setCouponError("This code isn't ready yet — please try again shortly.");
+      } else {
+        setDone("pending");
+      }
       setBusy(false);
     }
   };
@@ -256,25 +330,76 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div className={`rounded-2xl border-2 p-4 text-center ${founderAvailable ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 opacity-50"}`}>
-                <p className="text-[10px] font-black uppercase tracking-widest text-[#635BFF]">Founder</p>
-                <p className="text-2xl font-black text-slate-900 mt-1">₹{pricing.founder_inr}<span className="text-xs font-bold text-slate-500">/yr</span></p>
-                <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">Price locked while you stay subscribed</p>
+            {coupon ? (
+              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 text-center mb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 flex items-center justify-center gap-1">
+                  <Ticket className="h-3.5 w-3.5" /> {coupon.code} applied
+                </p>
+                <p className="text-2xl font-black text-slate-900 mt-1">
+                  <span className="text-base font-bold text-slate-400 line-through mr-2">₹{coupon.base_inr}</span>
+                  ₹{coupon.final_inr}<span className="text-xs font-bold text-slate-500"> first year</span>
+                </p>
+                <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">
+                  Renews at ₹{coupon.base_inr}/yr · UPI Autopay, cancel anytime
+                </p>
+                <button
+                  type="button"
+                  className="mt-2 text-[11px] font-bold text-slate-500 underline"
+                  onClick={() => { setCoupon(null); setCouponInput(""); }}
+                >
+                  Remove code
+                </button>
               </div>
-              <div className="rounded-2xl border border-slate-200 p-4 text-center">
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regular</p>
-                <p className="text-2xl font-black text-slate-900 mt-1">₹{pricing.regular_inr}<span className="text-xs font-bold text-slate-500">/yr</span></p>
-                <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">After the founder window</p>
+            ) : (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                <div className={`rounded-2xl border-2 p-4 text-center ${founderAvailable ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 opacity-50"}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#635BFF]">Founder</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">₹{pricing.founder_inr}<span className="text-xs font-bold text-slate-500">/yr</span></p>
+                  <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">Price locked while you stay subscribed</p>
+                </div>
+                <div className="rounded-2xl border border-slate-200 p-4 text-center">
+                  <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regular</p>
+                  <p className="text-2xl font-black text-slate-900 mt-1">₹{pricing.regular_inr}<span className="text-xs font-bold text-slate-500">/yr</span></p>
+                  <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">After the founder window</p>
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Coupon entry — applied BEFORE any payment starts. */}
+            {!coupon && (
+              <div className="mb-4">
+                <div className="flex gap-2">
+                  <input
+                    className="flex-1 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-800 placeholder:font-normal focus:outline-none focus:border-[#635BFF]"
+                    placeholder="Have a coupon code?"
+                    value={couponInput}
+                    onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(""); }}
+                    onKeyDown={(e) => { if (e.key === "Enter") applyCoupon(); }}
+                    maxLength={24}
+                    aria-label="Coupon code"
+                  />
+                  <button
+                    type="button"
+                    className="rounded-full bg-slate-100 hover:bg-slate-200 px-5 py-2.5 text-sm font-black text-slate-700 disabled:opacity-50"
+                    disabled={couponBusy || !couponInput.trim()}
+                    onClick={applyCoupon}
+                  >
+                    {couponBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
+                  </button>
+                </div>
+                {couponError && <p className="text-xs font-bold text-rose-600 mt-1.5 ml-2">{couponError}</p>}
+              </div>
+            )}
+
             <button
               className="w-full rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
               disabled={busy}
               onClick={upgrade}
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
-              Upgrade — ₹{founderAvailable ? pricing.founder_inr : pricing.regular_inr}/year
+              {coupon
+                ? `Upgrade — ₹${coupon.final_inr} first year`
+                : `Upgrade — ₹${founderAvailable ? pricing.founder_inr : pricing.regular_inr}/year`}
             </button>
             <button className="mt-3 w-full text-sm font-bold text-slate-500" onClick={onClose}>Maybe later</button>
           </>

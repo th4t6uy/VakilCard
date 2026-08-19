@@ -232,10 +232,33 @@ export const disconnectGoogleBusiness = () => call("booking", { method: "POST", 
 
 // Subscription (Free vs Pro)
 export const getSubscription = () => call("subscription");
-export const checkoutPro = () =>
-  call("subscription", { method: "POST", body: { action: "checkout", plan: "PRO" } });
+export const previewCoupon = (code) =>
+  call("subscription", { method: "POST", body: { action: "coupon_preview", code } });
+export const checkoutPro = (couponCode) =>
+  call("subscription", {
+    method: "POST",
+    body: { action: "checkout", plan: "PRO", ...(couponCode ? { coupon_code: couponCode } : {}) },
+  });
+export const verifyProPayment = (payload) =>
+  call("subscription", { method: "POST", body: { action: "verify_payment", ...payload } });
 export const cancelPro = () =>
   call("subscription", { method: "POST", body: { action: "cancel" } });
+
+/** Load Razorpay's checkout.js once; resolves with window.Razorpay. */
+let _razorpayScript = null;
+export function loadRazorpay() {
+  if (window.Razorpay) return Promise.resolve(window.Razorpay);
+  if (!_razorpayScript) {
+    _razorpayScript = new Promise((resolve, reject) => {
+      const s = document.createElement("script");
+      s.src = "https://checkout.razorpay.com/v1/checkout.js";
+      s.onload = () => (window.Razorpay ? resolve(window.Razorpay) : reject(new Error("razorpay_load_failed")));
+      s.onerror = () => reject(new Error("razorpay_load_failed"));
+      document.head.appendChild(s);
+    });
+  }
+  return _razorpayScript;
+}
 
 /** True when an ApiError means "upgrade to Pro" — the standard trigger for
  *  the UpgradeSheet, never a dead end. */

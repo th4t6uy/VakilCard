@@ -330,6 +330,48 @@ module.exports = async function handler(req, res) {
 
     const body = await readJsonBody(req);
     const action = String(body.action || "");
+
+    // ── WhatsApp campaign send (founder-only, template-driven) ──────────
+    // POST { action: "send_template", template, phones: ["+91…"],
+    //        body_params_by_phone?: { "+91…": ["Name","FOUNDER33","26 Aug"] },
+    //        body_params?: ["…"] }   ← fallback params for every phone
+    // Uses MessagingService (_messaging.js): template must exist AND be
+    // active in message_templates (i.e. Meta-approved), every send is
+    // logged/priced in message_log. Capped per call to keep a typo from
+    // blasting the whole registry.
+    if (action === "send_template") {
+      const templateName = String(body.template || "").trim();
+      const phones = Array.isArray(body.phones) ? body.phones.map(String) : [];
+      if (!templateName) return json(res, 400, { error: "template_required" });
+      if (!phones.length) return json(res, 400, { error: "phones_required" });
+      if (phones.length > 100) return json(res, 400, { error: "too_many_phones_max_100" });
+
+      const messaging = require("./_messaging");
+      const perPhone = body.body_params_by_phone || {};
+      const fallback = Array.isArray(body.body_params) ? body.body_params : [];
+      const results = [];
+      for (const raw of phones) {
+        const phoneE164 = raw.startsWith("+") ? raw : `+${raw}`;
+        const bodyParams = Array.isArray(perPhone[phoneE164]) ? perPhone[phoneE164] : fallback;
+        // Sequential on purpose — Meta rate-limits bursts, and 14–100 sends
+        // finish comfortably inside a serverless invocation.
+        const r = await messaging.sendTemplate({
+          product: "vakilcard",
+          templateName,
+          phoneE164,
+          bodyParams,
+          module: "marketing",
+        });
+        results.push({ phone: phoneE164, ok: !!r.ok, error: r.ok ? null : r.error || null });
+      }
+      const sent = results.filter((r) => r.ok).length;
+      await audit("admin_campaign_sent", {
+        accountId: who.accountId,
+        meta: { template: templateName, requested: phones.length, sent },
+      });
+      return json(res, 200, { ok: true, requested: phones.length, sent, results });
+    }
+
     const id = String(body.id || "");
     if (!id) return json(res, 400, { error: "id_required" });
 
