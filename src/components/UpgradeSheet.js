@@ -240,6 +240,24 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
             ? `First year ₹${r.first_charge_inr}, renews ₹${r.renewal_inr}/yr`
             : `₹${r.first_charge_inr}/yr`,
           theme: { color: "#635BFF" },
+          // Founder decision (2026-08-19): this must be UPI Autopay only.
+          // Razorpay subscription checkout otherwise also offers Card and
+          // eMandate/netbanking mandates by default — restrict the popup to
+          // the UPI instrument so no other recurring rail can be selected.
+          // Config shape per Razorpay's documented "show only one payment
+          // method" pattern (config.display.blocks / show_default_blocks).
+          config: {
+            display: {
+              blocks: {
+                upiBlock: {
+                  name: "Pay via UPI Autopay",
+                  instruments: [{ method: "upi" }],
+                },
+              },
+              sequence: ["block.upiBlock"],
+              preferences: { show_default_blocks: false },
+            },
+          },
           handler: async (resp) => {
             try {
               const v = await verifyProPayment(resp);
