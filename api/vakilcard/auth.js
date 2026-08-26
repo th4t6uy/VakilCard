@@ -69,6 +69,9 @@ const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard
 // Point this at beta while the bridge is being verified; move it to the
 // production CaseLinx origin only after an end-to-end kiosk test passes.
 const CASELINX_ORIGIN = process.env.CASELINX_ORIGIN || "https://beta.caselinx.vakilpedia.com";
+// The Vakilpedia Account -- the ecosystem's one front door. VakilCard sends people
+// here to sign up rather than creating identities of its own (2026-08-26).
+const ACCOUNT_ORIGIN = process.env.ACCOUNT_ORIGIN || "https://account.vakilpedia.com";
 
 // CourtQue MPHC-kiosk beta coupon (2026-08-15) — see supracore.coupons row
 // 'MPHCBETA' (product_id: courtque, grant_plan: TRIAL, max_redemptions: 33).
@@ -315,11 +318,23 @@ async function ensureAccountForPhone(phoneE164, ip, sharedAccountId) {
       });
     }
   } else {
-    [account] = await db("vakilpedia_accounts", {
-      method: "POST",
-      body: { registration_source: "vakilcard" },
-      prefer: "return=representation",
-    });
+    // 2026-08-26 -- NO LOCAL-ONLY ACCOUNTS. A signup that cannot obtain a shared
+    // Vakilpedia account now FAILS instead of minting a VakilCard-only id.
+    //
+    // This fallback is what produced every split identity on the platform: 14 rows
+    // in vakilpedia_accounts (registration_source 'vakilcard' / 'vakilcard_google')
+    // with no supracore.accounts row and no auth.users row, 3 of them a SECOND
+    // identity for a phone that already had a real Vakilpedia account. By contrast
+    // all 15 'vakilcard_nfc_bridged' rows share their uuid correctly -- the bridge
+    // works whenever it is used, so this branch was the only leak.
+    //
+    // Both reasons it used to fire are closed: the account-creation gate admits any
+    // OTP-verified phone since 2026-08-15 (NEXT_PUBLIC_ENABLE_PUBLIC_PHONE_ONBOARDING,
+    // verified true in Render 2026-08-26) and the bridge timeout went 6s -> 25s on
+    // 2026-08-16. So reaching here now means the shared endpoint is genuinely down or
+    // refusing -- and the honest answer is "try again in a minute", not a second
+    // identity somebody has to merge by hand later.
+    return { error: "shared_account_unavailable" };
   }
   await db("account_phone_identities", {
     method: "POST",
@@ -392,58 +407,16 @@ async function ensureAccountForGoogle({ sub, email, name }, ip) {
     return { accountId, profile: profiles[0] || null, created: false };
   }
 
-  const [account] = await db("vakilpedia_accounts", {
-    method: "POST",
-    body: { registration_source: "vakilcard_google" },
-    prefer: "return=representation",
-  });
-  await db("account_oauth_identities", {
-    method: "POST",
-    body: {
-      account_id: account.id,
-      provider: "google",
-      provider_uid: sub,
-      email: email || null,
-      display_name: name || null,
-    },
-    prefer: "return=minimal",
-  });
-
-  const fullName = String(name || "").slice(0, 120) || "Advocate";
-  const uname = await generateAutoUsername(fullName, null, async (candidate) => {
-    const clash = await db(`vakilcard_profiles?username=eq.${encodeURIComponent(candidate)}&select=id`);
-    if (clash.length) return true;
-    const aliasClash = await db(`vakilcard_aliases?alias=eq.${encodeURIComponent(candidate)}&select=profile_id`);
-    return aliasClash.length > 0;
-  });
-
-  // DRAFT card: URL + username reserved now; public only after publish.
-  const [profile] = await db("vakilcard_profiles", {
-    method: "POST",
-    body: {
-      account_id: account.id,
-      username: uname,
-      created_username: uname,
-      full_name: fullName,
-      email: email || null,
-      is_published: false,
-    },
-    prefer: "return=representation",
-  });
-  await db("vakilcard_aliases", {
-    method: "POST",
-    body: { alias: uname, profile_id: profile.id, kind: "custom", is_primary: true },
-    prefer: "return=minimal",
-  });
-  await verification.audit("account_created", {
-    accountId: account.id,
-    ip,
-    meta: { profile_id: profile.id, username: uname, draft: true, source: "google" },
-  });
-  // No WhatsApp welcome here — no phone attached yet. The dashboard nudges
-  // the owner to add one later (unlocks WhatsApp booking alerts).
-
-  return { accountId: account.id, profile, created: true };
+  // 2026-08-26 -- VakilCard no longer creates identities of its own; see the note in
+  // ensureAccountForPhone. Unlike the phone path there is no bridge from here to the
+  // shared account-creation endpoint, and Google sign-in already exists on the
+  // Vakilpedia Account -- so a NEW Google user is sent there instead of being given a
+  // VakilCard-only identity (that branch is where registration_source
+  // 'vakilcard_google' came from).
+  //
+  // EXISTING Google users are untouched: the provider_uid lookup above returns before
+  // this point is ever reached.
+  return { error: "signup_moved_to_account" };
 }
 
 /**
@@ -577,7 +550,18 @@ module.exports = async function handler(req, res) {
         if (!r.ok) return json(res, r.error === "locked" ? 429 : 400, r);
       }
 
-      const { accountId, profile, created } = await ensureAccountForPhone(r.phoneE164, ip, bridged.accountId);
+      const ensured = await ensureAccountForPhone(r.phoneE164, ip, bridged.accountId);
+      if (ensured.error) {
+        // The code is spent by this point (either here or on the shared endpoint), so the
+        // caller genuinely needs a fresh one. Say that plainly rather than 500ing.
+        return json(res, 503, {
+          ok: false,
+          error: ensured.error,
+          message:
+            "We could not finish setting up your Vakilpedia account just now. Please request a new code and try again in a minute.",
+        });
+      }
+      const { accountId, profile, created } = ensured;
       const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
       await touchLogin(accountId);
       if (body.eula_accepted === true) {
@@ -603,7 +587,16 @@ module.exports = async function handler(req, res) {
       if (!v.ok) return json(res, v.error === "google_signin_not_configured" ? 503 : 401, { error: v.error });
       const { sub, email, name } = v.claims;
 
-      const { accountId, profile, created } = await ensureAccountForGoogle({ sub, email, name }, ip);
+      const ensuredG = await ensureAccountForGoogle({ sub, email, name }, ip);
+      if (ensuredG.error) {
+        return json(res, 409, {
+          ok: false,
+          error: ensuredG.error,
+          message: "Create your Vakilpedia account first \u2014 one account opens every app.",
+          sign_up_url: `${ACCOUNT_ORIGIN}/sign-up`,
+        });
+      }
+      const { accountId, profile, created } = ensuredG;
       const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
       await touchLogin(accountId);
       await verification.audit(created ? "account_created" : "google_login_success", { accountId, ip, meta: { source: "google" } });
