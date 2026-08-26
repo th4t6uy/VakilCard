@@ -1,7 +1,8 @@
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, lazy, useEffect, useState } from "react";
 import "./App.css";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
+import SuiteInvite from "./components/SuiteInvite";
 
 // Bridge tokens minted just-in-time by the NFC claim flow (api/vakilcard/nfc.js's
 // claimPage) into this SPA's own session store. The claim page is a standalone
@@ -36,6 +37,12 @@ function useFragmentTokenBridge() {
 // silent: on any failure or "no match found" this is a pure no-op, the app
 // just renders its normal signed-out state as before.
 function useSuiteSessionBridge() {
+  // When the bridge finds a live Vakilpedia session with NO VakilCard
+  // account behind it, it now says so and hands back who that person is.
+  // Rendering their own name and a single button beats VakilCard's signup
+  // screen asking for a WhatsApp OTP the platform has already paid for.
+  const [invite, setInvite] = useState(null);
+
   useEffect(() => {
     if (hasPhoneSession()) return;
     if ((window.location.hash || "").indexOf("at=") !== -1) return;
@@ -53,10 +60,14 @@ function useSuiteSessionBridge() {
           // whole app picks up the new session exactly like a normal
           // already-signed-in page load would.
           window.location.reload();
+          return;
         }
+        if (data && data.invite && data.invite.email) setInvite(data.invite);
       })
       .catch(() => {});
   }, []);
+
+  return invite;
 }
 
 // Cut over 2026-08-04: this app is now its own deployment on
@@ -74,9 +85,10 @@ function Loading() {
 
 function App() {
   useFragmentTokenBridge();
-  useSuiteSessionBridge();
+  const suiteInvite = useSuiteSessionBridge();
   return (
     <div className="App">
+      {suiteInvite && <SuiteInvite invite={suiteInvite} />}
       <BrowserRouter>
         <Routes>
           {/* single public entry point on this subdomain */}

@@ -446,6 +446,94 @@ async function ensureAccountForGoogle({ sub, email, name }, ip) {
   return { accountId: account.id, profile, created: true };
 }
 
+/**
+ * Create a VakilCard account for someone who is ALREADY a proven Vakilpedia
+ * identity -- they are signed in on account.vakilpedia.com right now and the
+ * shared session cookie is on this request.
+ *
+ * Deliberately no OTP. The phone path exists to PROVE who someone is; here
+ * that is already settled by a Supabase-confirmed session, and sending
+ * another WhatsApp code would charge the company for proof it already holds.
+ *
+ * The new row takes the SUPABASE USER'S OWN UUID as its primary key, the
+ * same idiom ensureAccountForPhone uses for its sharedAccountId. That is the
+ * whole point: from the next page load onward this account is found by path
+ * 1 of the bridge (direct id match), so the email fallback is never needed
+ * again for this person and the two sides can never drift apart.
+ *
+ * Adopt-if-present throughout, so a double-tap converges on one row instead
+ * of erroring on the primary key.
+ */
+async function ensureAccountForSupabaseIdentity(supaUser, ip) {
+  const accountId = supaUser.id;
+
+  const already = await db(`vakilpedia_accounts?id=eq.${accountId}&select=id`);
+  if (!already.length) {
+    await db("vakilpedia_accounts", {
+      method: "POST",
+      body: { id: accountId, registration_source: "vakilpedia_account_bridge" },
+      prefer: "return=minimal",
+    });
+  }
+
+  const existingProfiles = await db(
+    `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,full_name,is_published`
+  );
+  if (existingProfiles.length) {
+    return { accountId, profile: existingProfiles[0], created: false };
+  }
+
+  const meta = supaUser.user_metadata || {};
+  const emailLocal = String(supaUser.email || "").split("@")[0] || "";
+  const fullName =
+    String(meta.full_name || meta.name || emailLocal || "").slice(0, 120) || "Advocate";
+
+  const uname = await generateAutoUsername(fullName, null, async (candidate) => {
+    const clash = await db(
+      `vakilcard_profiles?username=eq.${encodeURIComponent(candidate)}&select=id`
+    );
+    if (clash.length) return true;
+    const aliasClash = await db(
+      `vakilcard_aliases?alias=eq.${encodeURIComponent(candidate)}&select=profile_id`
+    );
+    return aliasClash.length > 0;
+  });
+
+  // DRAFT card: the URL and username are reserved now, nothing is public or
+  // indexable until the owner completes and publishes it.
+  const [profile] = await db("vakilcard_profiles", {
+    method: "POST",
+    body: {
+      account_id: accountId,
+      username: uname,
+      created_username: uname,
+      full_name: fullName,
+      email: supaUser.email || null,
+      is_published: false,
+    },
+    prefer: "return=representation",
+  });
+  await db("vakilcard_aliases", {
+    method: "POST",
+    body: { alias: uname, profile_id: profile.id, kind: "custom", is_primary: true },
+    prefer: "return=minimal",
+  });
+  await verification.audit("account_created", {
+    accountId,
+    ip,
+    meta: {
+      profile_id: profile.id,
+      username: uname,
+      draft: true,
+      source: "vakilpedia_account_bridge",
+    },
+  });
+  // No WhatsApp welcome -- no phone is attached yet. The dashboard's existing
+  // add-phone nudge covers that, and it unlocks booking alerts when they do.
+
+  return { accountId, profile, created: true };
+}
+
 module.exports = async function handler(req, res) {
   if (req.method !== "POST") return json(res, 405, { error: "method_not_allowed" });
   const body = await readJsonBody(req);
@@ -573,7 +661,48 @@ module.exports = async function handler(req, res) {
         if (viaPhone.length) accountId = viaPhone[0].account_id;
       }
 
-      if (!accountId) return json(res, 200, { ok: true, found: false });
+      // 3. Email. Proven necessary 2026-08-26: the Account signs people in
+      //    by EMAIL and most of those identities carry no phone at all
+      //    (auth.users.phone is null for 20 of 36 accounts), so paths 1 and
+      //    2 both miss and a lawyer who already owns a VakilCard was shown
+      //    the signup screen instead of their own dashboard.
+      //
+      //    Only a Supabase-CONFIRMED email is accepted, and only when it
+      //    resolves to exactly ONE account. A confirmed email is the same
+      //    grade of proof as the phone match above; an unconfirmed one is
+      //    not proof of anything, and an ambiguous one is not proof of
+      //    WHICH person -- both fall through to found:false rather than
+      //    guessing, because guessing here signs someone into a stranger's
+      //    card.
+      if (!accountId && supaUser.email && supaUser.email_confirmed_at) {
+        const viaEmail = await db(
+          `account_oauth_identities?email=eq.${encodeURIComponent(supaUser.email)}&select=account_id`
+        );
+        const ids = Array.from(new Set(viaEmail.map((r) => r.account_id)));
+        if (ids.length === 1) accountId = ids[0];
+      }
+
+      if (!accountId) {
+        // No VakilCard account -- but we know exactly who this is, and they
+        // are already signed in to Vakilpedia. Hand the SPA enough to offer
+        // one tap ("Create your VakilCard") instead of a signup screen that
+        // asks for an OTP the platform has already paid for once. Nothing
+        // is written until that tap: see action "create_from_suite".
+        const canCreate = Boolean(supaUser.email && supaUser.email_confirmed_at);
+        return json(res, 200, {
+          ok: true,
+          found: false,
+          invite: canCreate
+            ? {
+                email: supaUser.email,
+                name:
+                  (supaUser.user_metadata &&
+                    (supaUser.user_metadata.full_name || supaUser.user_metadata.name)) ||
+                  null,
+              }
+            : null,
+        });
+      }
 
       const profiles = await db(`vakilcard_profiles?account_id=eq.${accountId}&select=id,username,is_published`);
       const profile = profiles[0] || null;
@@ -582,6 +711,75 @@ module.exports = async function handler(req, res) {
       verification
         .audit("bridge_login_from_suite", { accountId, ip, meta: { supabaseUserId: supaUser.id } })
         .catch(() => {}); // best-effort — never fail a silent login over an audit-log write
+
+      return json(res, 200, {
+        ok: true,
+        found: true,
+        token: access,
+        access_token: access,
+        refresh_token: refresh,
+        expires_in: ACCESS_TTL_SEC,
+        account_id: accountId,
+        username: profile ? profile.username : null,
+        published: profile ? profile.is_published === true : false,
+      });
+    }
+
+    // ── One-tap VakilCard for a proven Vakilpedia identity ─────────────
+    // The other half of bridge_from_suite's `invite`. Called only from the
+    // button that invite renders, and it re-derives EVERYTHING from the
+    // cookie on this request -- the client sends no identity of its own, so
+    // there is nothing here to forge. Idempotent: if an account appeared
+    // between the invite and the tap (another tab, a double-click), this
+    // signs into that one instead of creating a second.
+    if (action === "create_from_suite") {
+      const accessToken = readSupabaseAccessTokenFromCookies(req);
+      if (!accessToken) return json(res, 401, { ok: false, error: "no_vakilpedia_session" });
+
+      const supaUser = await resolveSupabaseUser(accessToken);
+      if (!supaUser || !supaUser.id) {
+        return json(res, 401, { ok: false, error: "no_vakilpedia_session" });
+      }
+      if (!supaUser.email || !supaUser.email_confirmed_at) {
+        return json(res, 403, { ok: false, error: "email_not_confirmed" });
+      }
+
+      // An older, unlinked account for this same person must win over a new
+      // one -- creating a second would strand their existing card.
+      let existingId = null;
+      const direct = await db(`vakilpedia_accounts?id=eq.${supaUser.id}&select=id`);
+      if (direct.length) existingId = direct[0].id;
+      if (!existingId) {
+        const viaEmail = await db(
+          `account_oauth_identities?email=eq.${encodeURIComponent(supaUser.email)}&select=account_id`
+        );
+        const ids = Array.from(new Set(viaEmail.map((r) => r.account_id)));
+        if (ids.length === 1) existingId = ids[0];
+      }
+
+      let accountId;
+      let profile;
+      if (existingId) {
+        accountId = existingId;
+        const profiles = await db(
+          `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,is_published`
+        );
+        profile = profiles[0] || null;
+      } else {
+        const made = await ensureAccountForSupabaseIdentity(supaUser, ip);
+        accountId = made.accountId;
+        profile = made.profile || null;
+      }
+
+      const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
+      await touchLogin(accountId);
+      verification
+        .audit("created_from_vakilpedia_account", {
+          accountId,
+          ip,
+          meta: { supabaseUserId: supaUser.id, adopted: Boolean(existingId) },
+        })
+        .catch(() => {});
 
       return json(res, 200, {
         ok: true,
