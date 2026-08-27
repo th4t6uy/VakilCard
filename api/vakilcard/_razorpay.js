@@ -29,6 +29,26 @@ function configured() {
   return !!(keyId() && keySecret());
 }
 
+/**
+ * PAYMENT GATE — separate from configured() on purpose.
+ *
+ * The Vakilpedia legal documents state that no payment is accepted and no paid
+ * entitlement activated until DatarOne Private Limited is incorporated. This is
+ * the switch that makes that true of the software.
+ *
+ * DEFAULT OFF: enabled only by an explicit PAYMENTS_ENABLED=true, so a missing
+ * or misspelt variable fails CLOSED. Same variable name as the Account and
+ * CaseLinx, so incorporation day is one setting per project.
+ *
+ * DO NOT fold this into configured(). configured() also guards
+ * verifySubscriptionCheckout() -- gating it there would stop an ALREADY PAID
+ * subscription from being verified, i.e. take someone's money and give them
+ * nothing. Only charge-CREATING paths consult paymentsAllowed().
+ */
+function paymentsAllowed() {
+  return String(process.env.PAYMENTS_ENABLED || "").trim().toLowerCase() === "true";
+}
+
 function authHeader() {
   if (!configured()) throw new Error("razorpay_not_configured");
   return "Basic " + Buffer.from(`${keyId()}:${keySecret()}`).toString("base64");
@@ -162,6 +182,7 @@ function offerIdForCoupon(code) {
 
 module.exports = {
   configured,
+  paymentsAllowed,
   keyId,
   ensureYearlyPlan,
   createSubscription,

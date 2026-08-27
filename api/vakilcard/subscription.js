@@ -316,7 +316,7 @@ module.exports = async function handler(req, res) {
       return json(res, 200, {
         ...entitlementsFor(profile),
         founder_available: FOUNDER_OPEN,
-        payments_live: rzp.configured(),
+        payments_live: rzp.configured() && rzp.paymentsAllowed(),
       });
     }
 
@@ -342,7 +342,10 @@ module.exports = async function handler(req, res) {
       const couponCode = String(body.coupon_code || "").trim();
 
       /* Razorpay not configured → legacy "payments launching" intent. */
-      if (!rzp.configured()) {
+      // Payments are also treated as unavailable while the incorporation gate
+      // is closed (PAYMENTS_ENABLED). Reuses the existing, already-tested
+      // "payments launching" path rather than inventing a second dead end.
+      if (!rzp.configured() || !rzp.paymentsAllowed()) {
         const founder = FOUNDER_OPEN;
         await logEvent({
           account_id: who.accountId,
