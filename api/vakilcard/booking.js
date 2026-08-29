@@ -995,12 +995,28 @@ module.exports = async function handler(req, res) {
       // calendar, because the booking is final the moment it is made -- there
       // is no payment step left to wait on.
       //
-      // BOTH ARE FIRE-AND-FORGET AND NEITHER CAN BLOCK. The appointment row is
-      // already written; Meta, Google or Resend having a bad minute must never
-      // turn a real booking into an error the visitor sees. Every failure path
-      // inside these two logs its own reason.
-      notifyOwnerOfBooking(profile, saved).catch(() => {});
-      gcalCreateEvent(profile, saved).catch(() => {});
+      // AWAITED, NOT FIRE-AND-FORGET, and that is not a style preference.
+      //
+      // These were floating promises until 2026-08-29 and the platform ate
+      // them. Proven from Vercel's own runtime log for a real booking: the
+      // appointment INSERT logged its 201, then three further requests logged
+      // their "->" and never a "<-" -- analytics, the owner's phone lookup and
+      // the calendar connection all began and were killed. Once res.end() runs,
+      // Vercel may freeze or recycle the instance immediately; work not yet
+      // awaited simply never happens. It is worse than a clean failure because
+      // a warm instance sometimes DOES finish, so it appears to work
+      // intermittently.
+      //
+      // allSettled, so one channel's rejection cannot affect another and the
+      // combined promise never rejects. Each channel still contains its own
+      // errors internally, so nothing here can turn a written booking into an
+      // error the visitor sees -- the row already exists at this point either
+      // way. The cost is a slower POST; the alternative is notifications that
+      // silently do not fire, which is the bug being fixed.
+      await Promise.allSettled([
+        notifyOwnerOfBooking(profile, saved),
+        gcalCreateEvent(profile, saved),
+      ]);
 
       // No pay_link and no pay_url: nothing is payable through VakilCard.
       // amount_due is information for the visitor, not a checkout.

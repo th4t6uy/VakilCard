@@ -229,7 +229,12 @@ test("an unapproved WhatsApp template falls back to session text, and email stil
   emailState.sent = 0;
   const r = await book("feeadvocate");
   assert.equal(r.status, 200);
-  await new Promise((res) => setImmediate(res)); // notifications are fire-and-forget
+  // NO tick is yielded here ON PURPOSE. The assertions run immediately after
+  // the handler resolves, so they only pass if the notifications were AWAITED
+  // before the response. Floating them would let Vercel freeze the instance
+  // mid-flight and drop them -- which is exactly what happened in production
+  // on 2026-08-29: the appointment INSERT logged its 201 and the three calls
+  // after it logged a request with no response.
   assert.equal(notifyState.sessionTextSent, 1, "a refused template must fall back to session text");
   assert.equal(emailState.sent, 1, "email is an independent channel and must still fire");
 });
@@ -251,7 +256,6 @@ test("a booking survives every notification channel throwing", async () => {
     const r = await book("feeadvocate");
     assert.equal(r.status, 200, "notification failure must never break a booking");
     assert.equal(r.data.payment_status, "due");
-    await new Promise((res) => setImmediate(res));
   } finally {
     notifyState.explode = false;
     emailState.explode = false;
