@@ -180,7 +180,26 @@ const DEMO_URL = "/api/vakilcard/profile?demo=1";
 // render the iframe at native size and visually scale it to fit, exactly
 // like a real phone viewport.
 const DS_W = 412;
-const DS_H = 780;
+// 412x892 is a real phone viewport and gives the frame an iPhone silhouette
+// (~2.11 including the bezel; an iPhone display is 2.17). It was 780, which is
+// 1.89 -- visibly stubby, and the reason the mockup read as a rounded slab
+// rather than a phone even once the corners were right.
+//
+// Verified against the live card at this exact size before changing it: the
+// document fills 892px with no gap, and the card's own .vp-scroll container
+// holds 1479px of content, so a taller viewport simply reveals more of a page
+// that already scrolls. Nothing is stretched and nothing is letterboxed.
+const DS_H = 892;
+
+// Horizontal breathing room either side of the phone on small screens.
+const PAGE_GUTTER = 16;
+// Bezel thickness at full size; it scales down with the phone so the frame
+// keeps its proportions rather than growing a chunky border as it shrinks.
+const BEZEL_AT_FULL = 10;
+// An iPhone's device corner radius is about 55pt across a 393pt body: 0.14 of
+// the width. Holding that RATIO -- rather than a fixed px radius -- is what
+// keeps the silhouette reading as a phone at every size.
+const IPHONE_RADIUS_RATIO = 0.14;
 
 function DemoPhone({ onCreate }) {
   const frameRef = useRef(null);
@@ -190,17 +209,40 @@ function DemoPhone({ onCreate }) {
   const [scale, setScale] = useState(1);
   const [viewport, setViewport] = useState({ w: 0, h: 0 });
 
+  // MEASURE THE VIEWPORT, NOT THE SHELL.
+  //
+  // This used to read shellRef.current.clientWidth -- the very element whose
+  // size this scale controls. That is circular, and it settled on the wrong
+  // fixed point: at mount the unscaled 412px iframe forced the shell to 412,
+  // so scale computed 412/412 = 1, which kept the iframe unscaled, which kept
+  // the measurement at 412. Stable, self-consistent, and wrong.
+  //
+  // Measured on a 375px viewport before the fix: transform was
+  // matrix(1,0,0,1,0,0) with the shell clipped to 227px, so 185px of the card
+  // was cropped away and the frame stood 800px tall on a 247px body -- aspect
+  // 3.24 where an iPhone is 2.16. The "too squircle" corners were the same
+  // bug seen from the other side: a fixed 51.2px radius is 14% of a 412px
+  // frame and 21% of a 247px one.
+  //
+  // The viewport cannot be affected by what we render into it, so deriving
+  // from it is stable by construction. ResizeObserver is not needed and would
+  // reintroduce the loop.
   useEffect(() => {
     const measure = () => {
-      setViewport({ w: window.innerWidth, h: window.innerHeight });
-      if (shellRef.current) {
-        const w = shellRef.current.clientWidth;
-        if (w > 0) setScale(w / DS_W);
-      }
+      const vw = window.innerWidth;
+      setViewport({ w: vw, h: window.innerHeight });
+      // Page gutter either side, plus the phone's own bezel, then never
+      // upscale past the native design width.
+      const avail = Math.min(DS_W, vw - PAGE_GUTTER * 2 - BEZEL_AT_FULL * 2);
+      if (avail > 0) setScale(avail / DS_W);
     };
     measure();
     window.addEventListener("resize", measure);
-    return () => window.removeEventListener("resize", measure);
+    window.addEventListener("orientationchange", measure);
+    return () => {
+      window.removeEventListener("resize", measure);
+      window.removeEventListener("orientationchange", measure);
+    };
   }, []);
   // Mobile: first touch expands the demo into a fullscreen, app-like
   // experience (same iframe DOM node — no reload, no re-render, background
@@ -254,6 +296,20 @@ function DemoPhone({ onCreate }) {
   const s = expanded ? (viewport.w || DS_W) / DS_W : scale || 1;
   const frameH = expanded ? Math.round((viewport.h || DS_H) / s) : DS_H;
 
+  // Every part of the phone shell scales together. Fixed pixel values here are
+  // what made a shrunken phone look like a squircle: a 10px bezel and a 51.2px
+  // radius are correct on a 412px body and grotesque on a 247px one.
+  const bezel = Math.max(5, Math.round(BEZEL_AT_FULL * s));
+  const screenW = Math.round(DS_W * s);
+  const frameW = screenW + bezel * 2;
+  const outerR = Math.round(frameW * IPHONE_RADIUS_RATIO);
+  const innerR = Math.max(8, outerR - bezel);
+  const island = {
+    w: Math.max(48, Math.round(86 * s)),
+    h: Math.max(14, Math.round(22 * s)),
+    top: Math.max(8, Math.round(18 * s)),
+  };
+
   return (
     <div className="mx-auto w-[88vw] max-w-[436px]">
       <style>{`
@@ -286,13 +342,20 @@ function DemoPhone({ onCreate }) {
             )}
           </>
         )}
-        <div className={`relative bg-slate-950 shadow-[0_30px_60px_-15px_rgba(15,23,42,.4)] ${expanded ? "vc-expanded h-full w-full p-0 rounded-none" : "rounded-[3.2rem] p-[10px]"}`}>
+        <div
+          className={`relative bg-slate-950 shadow-[0_30px_60px_-15px_rgba(15,23,42,.4)] ${expanded ? "vc-expanded h-full w-full p-0 rounded-none" : ""}`}
+          style={expanded ? undefined : { borderRadius: outerR, padding: bezel, width: frameW }}
+        >
           {!expanded && (
             <>
               {/* dynamic island */}
-              <div className="absolute top-[18px] left-1/2 -translate-x-1/2 h-[22px] w-[86px] rounded-full bg-slate-950 z-10" aria-hidden="true" />
+              <div
+                className="absolute left-1/2 -translate-x-1/2 rounded-full bg-slate-950 z-10"
+                style={{ top: island.top, height: island.h, width: island.w }}
+                aria-hidden="true"
+              />
               {/* glass reflection */}
-              <div className="pointer-events-none absolute inset-0 rounded-[3.2rem] z-20" style={{ background: "linear-gradient(115deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 28%, transparent 46%)" }} aria-hidden="true" />
+              <div className="pointer-events-none absolute inset-0 z-20" style={{ borderRadius: outerR }} style={{ background: "linear-gradient(115deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 28%, transparent 46%)" }} aria-hidden="true" />
               {/* mobile: first touch opens the immersive demo */}
               {status === "live" && (
                 <button
@@ -308,8 +371,11 @@ function DemoPhone({ onCreate }) {
           )}
           <div
             ref={shellRef}
-            className={`relative overflow-hidden ${expanded ? "h-full rounded-none" : "rounded-[2.6rem]"}`}
-            style={{ background: "#050508", ...(expanded ? {} : { height: Math.round(DS_H * s) }) }}
+            className={`relative overflow-hidden ${expanded ? "h-full rounded-none" : ""}`}
+            style={{
+              background: "#050508",
+              ...(expanded ? {} : { height: Math.round(DS_H * s), width: screenW, borderRadius: innerR }),
+            }}
           >
             {status === "live" && demoHtml && (
               <iframe
