@@ -224,9 +224,21 @@ export const googleCalendarConnectUrl = async () => {
 };
 export const disconnectGoogleCalendar = () => call("booking", { method: "POST", body: { action: "gcal_disconnect" } });
 
-// disconnectGoogleBusiness removed 2026-08-29 with the endpoint it called.
-// The Google Business Profile OAuth flow is gone (business.manage was a
-// sensitive scope with zero connections), so there is nothing to disconnect.
+// Google Business linking, via the Places API — one tap, no OAuth.
+//
+// `session` is a client-minted session token. Google bills autocomplete PER
+// SESSION rather than per keystroke when the same token is used across the
+// typing and the final selection, so the caller mints one when the field is
+// focused and passes the SAME value to placesLink. Getting this wrong is not
+// a bug, it is a bill.
+export const placesSearch = (q, session) =>
+  call(`booking?action=places_search&q=${encodeURIComponent(q)}&session=${encodeURIComponent(session || "")}`);
+export const placesLink = (placeId, session) =>
+  call("booking", { method: "POST", body: { action: "places_link", placeId, session } });
+export const placesUnlink = () =>
+  call("booking", { method: "POST", body: { action: "places_unlink" } });
+export const newPlacesSession = () =>
+  (crypto.randomUUID ? crypto.randomUUID() : String(Math.random()).slice(2) + Date.now());
 
 
 // Subscription (Free vs Pro)

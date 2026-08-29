@@ -86,6 +86,85 @@ function calendarConfigured() {
   return !!(GCAL_CLIENT_ID && GCAL_CLIENT_SECRET && GCAL_REDIRECT_URI);
 }
 
+// ---------------------------------------------------------------------------
+// Google Business linking, via the PLACES API — one tap, no OAuth.
+//
+// The advocate types their chamber name, taps their listing, and it is linked.
+// No URL to find, copy or paste. Founder, 29 Aug 2026: "we sell convenience to
+// users" — a non-technical advocate will not go and fetch a Maps URL, and a
+// feature they cannot reach is a feature that does not exist.
+//
+// WHY NOT THE BUSINESS PROFILE API. business.manage is a sensitive scope
+// behind a manual Google approval gate (Organization account, a profile
+// verified 60+ days, an access-request form, and a 0-QPM quota until they say
+// yes). It is also the wrong tool: it exists to MANAGE a listing you own. We
+// only need to SHOW a public listing and deep-link to its review form, which
+// Places does with an API key alone.
+//
+// Places also returns what OAuth never gave us: `rating` and `userRatingCount`
+// — which the card component has always been able to render and nothing could
+// ever supply — and `googleMapsLinks.writeAReviewUri`, the REAL review deep
+// link. The old code built a fake one by string-matching a Maps CID.
+//
+// INERT BY DEFAULT, like the calendar block above: with no key set, the
+// branches 503 with a clear message. Nothing is faked.
+const PLACES_KEY = process.env.GOOGLE_PLACES_API_KEY || "";
+const PLACES_BASE = "https://places.googleapis.com/v1";
+
+function placesConfigured() {
+  return !!PLACES_KEY;
+}
+
+/**
+ * The field mask is a BILLING DECISION, not a formality — Places charges by
+ * the most expensive SKU any requested field belongs to:
+ *   formattedAddress ................................ Essentials
+ *   id, displayName, googleMapsLinks ................ Pro
+ *   rating, userRatingCount ......................... Enterprise
+ * We take the Enterprise hit exactly ONCE, when the owner links or relinks,
+ * and cache every value on their profile row. A public card is opened by
+ * visitors and must never trigger a Places call; see api/vakilcard/profile.js,
+ * which reads only the cached columns.
+ */
+const PLACE_FIELDS = [
+  "id",
+  "displayName",
+  "formattedAddress",
+  "rating",
+  "userRatingCount",
+  "googleMapsLinks",
+].join(",");
+
+async function placesFetch(path, { method = "GET", body, fieldMask } = {}) {
+  const r = await fetchWithTimeout(
+    `${PLACES_BASE}${path}`,
+    {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": PLACES_KEY,
+        ...(fieldMask ? { "X-Goog-FieldMask": fieldMask } : {}),
+      },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    },
+    8000
+  );
+  const text = await r.text();
+  let data = null;
+  try {
+    data = text ? JSON.parse(text) : null;
+  } catch {
+    data = null;
+  }
+  if (!r.ok) {
+    // Never log the key, and never hand Google's raw error to the client — it
+    // can name the project and the enabled APIs.
+    console.error(`[vakilcard/places] ${method} ${path} -> ${r.status} ${text.slice(0, 300)}`);
+    return { ok: false, status: r.status, data };
+  }
+  return { ok: true, status: r.status, data };
+}
+
 function notConfigured(res) {
   return json(res, 503, {
     error: "calendar_not_configured",
@@ -396,6 +475,141 @@ module.exports = async function handler(req, res) {
     // the table had zero rows when the scope was dropped. Leaving the endpoint
     // live would have been a route whose only possible outcome is a no-op,
     // still holding a DELETE against a table nothing writes.
+
+    // ---- GET ?action=places_search — owner auth. Autocomplete as they type.
+    //
+    // Deliberately NOT Pro-gated. The Google Business TILE is shown to
+    // everyone (founder, 29 Aug: "google business profile visible in the
+    // vakilcard for both free and pro users"); it is only the Leave-a-Review
+    // deep link that Pro unlocks, and that gate lives at read time in
+    // profile.js. Gating the search here would stop a Free advocate linking
+    // the listing they are entitled to display.
+    if (req.method === "GET" && action === "places_search") {
+      if (!placesConfigured()) {
+        return json(res, 503, { error: "places_not_configured" });
+      }
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+
+      const q = String(req.query.q || "").trim();
+      // Two characters is not a search, it is a bill. Google charges per
+      // session, but an empty/near-empty input returns noise anyway.
+      if (q.length < 3) return json(res, 200, { results: [] });
+
+      const r = await placesFetch("/places:autocomplete", {
+        method: "POST",
+        body: {
+          input: q.slice(0, 200),
+          // Session token groups the typing and the final selection into ONE
+          // billable session instead of one charge per keystroke. The client
+          // mints it and sends the same value to places_link.
+          ...(req.query.session ? { sessionToken: String(req.query.session).slice(0, 64) } : {}),
+          // Indian advocates, Indian chambers. Keeps the list relevant and
+          // short rather than offering a namesake in another country.
+          includedRegionCodes: ["in"],
+          languageCode: "en",
+        },
+      });
+      if (!r.ok) return json(res, 502, { error: "places_unavailable" });
+
+      const results = (r.data?.suggestions || [])
+        .map((sug) => sug.placePrediction)
+        .filter(Boolean)
+        .slice(0, 6)
+        .map((p) => ({
+          placeId: p.placeId,
+          name: p.structuredFormat?.mainText?.text || p.text?.text || "",
+          address: p.structuredFormat?.secondaryText?.text || "",
+        }))
+        .filter((p) => p.placeId && p.name);
+      return json(res, 200, { results });
+    }
+
+    // ---- POST {action:"places_link", placeId, session} — owner auth.
+    // The one write. Fetches the listing once and CACHES it on the profile:
+    // a public card must never cause a Places call (see the field-mask note
+    // above — rating/userRatingCount bill on the Enterprise SKU).
+    if (req.method === "POST" && action === "places_link") {
+      if (!placesConfigured()) {
+        return json(res, 503, { error: "places_not_configured" });
+      }
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(`vakilcard_profiles?account_id=eq.${who.accountId}&select=id`);
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+
+      const b = await readJsonBody(req);
+      const placeId = String(b.placeId || "").trim();
+      // Place IDs are opaque, but they are always URL-safe and never long
+      // enough to be someone smuggling a path in. Reject anything else rather
+      // than interpolating it into a Google URL.
+      if (!placeId || placeId.length > 300 || !/^[A-Za-z0-9_-]+$/.test(placeId)) {
+        return json(res, 400, { error: "bad_place_id" });
+      }
+
+      const qs = b.session
+        ? `?sessionToken=${encodeURIComponent(String(b.session).slice(0, 64))}`
+        : "";
+      const r = await placesFetch(`/places/${placeId}${qs}`, { fieldMask: PLACE_FIELDS });
+      if (!r.ok) return json(res, 502, { error: "places_unavailable" });
+
+      const d = r.data || {};
+      const links = d.googleMapsLinks || {};
+      const patch = {
+        google_place_id: d.id || placeId,
+        google_business_name: d.displayName?.text || null,
+        // placeUri is the listing itself — what the Google Business tile
+        // opens. Falls back to the reviews view so the tile is never dead.
+        google_business_url: links.placeUri || links.reviewsUri || null,
+        // The REAL review deep link, straight from Google. Pro-gated at read
+        // time in profile.js; stored for everyone so an upgrade is instant.
+        google_review_link: links.writeAReviewUri || null,
+        google_rating: typeof d.rating === "number" ? d.rating : null,
+        google_review_count: Number.isFinite(d.userRatingCount) ? d.userRatingCount : null,
+        google_place_synced_at: new Date().toISOString(),
+      };
+      await db(`vakilcard_profiles?id=eq.${gprofile.id}`, {
+        method: "PATCH",
+        body: patch,
+        prefer: "return=minimal",
+      });
+
+      return json(res, 200, {
+        ok: true,
+        place: {
+          placeId: patch.google_place_id,
+          name: patch.google_business_name,
+          address: d.formattedAddress || null,
+          rating: patch.google_rating,
+          reviewCount: patch.google_review_count,
+          url: patch.google_business_url,
+        },
+      });
+    }
+
+    // ---- POST {action:"places_unlink"} — owner auth ----------------------
+    if (req.method === "POST" && action === "places_unlink") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(`vakilcard_profiles?account_id=eq.${who.accountId}&select=id`);
+      const gprofile = rows[0];
+      if (!gprofile) return json(res, 404, { error: "no_profile" });
+      await db(`vakilcard_profiles?id=eq.${gprofile.id}`, {
+        method: "PATCH",
+        body: {
+          google_place_id: null,
+          google_business_name: null,
+          google_business_url: null,
+          google_review_link: null,
+          google_rating: null,
+          google_review_count: null,
+          google_place_synced_at: null,
+        },
+        prefer: "return=minimal",
+      });
+      return json(res, 200, { ok: true });
+    }
 
     // ---- GET ?action=public_slots — no auth, visitor-facing -------------
     if (req.method === "GET" && action === "public_slots") {

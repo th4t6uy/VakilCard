@@ -104,12 +104,23 @@ const EMPTY = {
   // save from any step that doesn't know about them would silently wipe a
   // Pro owner's theme / branding choice / booking windows.
   //
-  // google_review_link is GONE (2026-08-29). It was an OAuth-only field, and
-  // the Google Business OAuth flow that wrote it was removed with the
-  // business.manage scope, so nothing could ever populate it again. me.js
-  // never read it off this body anyway. The card's Reviews tile now has one
-  // destination for everybody, the office Maps listing.
-  google_business_url: "", card_theme: "default", hide_branding: null, booking_windows: [],
+  // The google_* fields below are READ-ONLY PASSTHROUGHS. Since 2026-08-29
+  // they are owned end to end by booking.js's places_link action, which writes
+  // them straight from the Places API when the owner taps their listing; NO
+  // UI here or in the dashboard ever sets them, and api/vakilcard/me.js does
+  // not read them off this body at all.
+  //
+  // They stay in form state for exactly one reason: the live card preview
+  // (formToDsProfile in vakilcardNormalize.js) renders the Google Business
+  // tile, its rating and its "Leave a Review" vs "View Reviews" label from
+  // them. Drop them and the owner's own preview goes blank while they edit.
+  //
+  // This is only safe BECAUSE me.js ignores them. saveFull() resends the whole
+  // form on every autosave, so if that write path ever came back, an unrelated
+  // bio edit would overwrite a freshly linked listing with a stale value.
+  google_business_url: "", google_review_link: "", google_business_name: "",
+  google_rating: null, google_review_count: null,
+  card_theme: "default", hide_branding: null, booking_windows: [],
 };
 
 export function profileToForm(p) {
@@ -137,6 +148,10 @@ export function profileToForm(p) {
     },
     social_links: p.social_links || {},
     google_business_url: p.google_business_url || "",
+    google_review_link: p.google_review_link || "",
+    google_business_name: p.google_business_name || "",
+    google_rating: typeof p.google_rating === "number" ? p.google_rating : null,
+    google_review_count: Number.isFinite(p.google_review_count) ? p.google_review_count : null,
     card_theme: p.card_theme || "default",
     hide_branding: typeof p.hide_branding === "boolean" ? p.hide_branding : null,
     booking_windows: Array.isArray(p.booking_windows) ? p.booking_windows : [],

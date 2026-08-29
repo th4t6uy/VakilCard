@@ -260,26 +260,34 @@ function toDsProfile(p) {
     // layer to consume; the DS's visual theme variants themselves are a
     // separate design-system task — see the phase report's open items.
     cardTheme: p.card_theme || "default",
-    // Google Business tile (Pro): native listing-style preview on the card.
-    // Only the DISPLAY data ships here — the destination URL stays in
-    // links.googleBusiness (mount.js opens it externally), matching how
-    // every other tile works. Rendered only when a real destination exists:
-    // the owner's saved Google Business link, else their office Maps listing.
-    // Name prefers google_business_name, which is now only ever a legacy
-    // value: it was written by the Google OAuth flow, and that flow was
-    // removed on 2026-08-29 along with the business.manage scope. Everyone
-    // else falls back to the office/chamber name, which is the path the
-    // product now runs on -- the owner pastes their listing URL and that is
-    // the whole integration. No `rating`/`reviewCount` here either: that needs
-    // the Business Profile Reviews API, gated behind its own Google quota
-    // approval on top of an OAuth scope we no longer request. The component
-    // renders a real rating the moment one is present; until then it shows
-    // honest unrated copy instead of fabricating stars.
+    // Google Business tile — shown to FREE AND PRO alike. Founder, 29 Aug
+    // 2026: "I wanted the user's Google Business profile visible in the
+    // VakilCard for both free and pro users." Pro does not buy the tile; it
+    // buys the one-tap Leave-a-Review action on it (links.review below).
+    // Until 2026-08-29 this was Pro-gated and a Free advocate's listing was
+    // invisible on their own card.
+    //
+    // Only DISPLAY data ships here — the destination stays in
+    // links.googleBusiness, which mount.js opens externally, matching every
+    // other tile.
+    //
+    // rating/reviewCount are REAL now. The component has always been able to
+    // render them ("server-supplied only" in VakilCardApp.jsx) and nothing
+    // could ever supply them: the OAuth path did not return them, and the
+    // Business Profile Reviews API needs its own Google quota approval. The
+    // Places API returns both, and booking.js's places_link caches them on the
+    // row at link time — so a public card never triggers a billable Places
+    // call. Absent when the owner has not linked a listing, and the component
+    // shows honest unrated copy rather than fabricating stars.
     googleBusiness:
-      isProActive(p) && (p.google_business_url || p.google_business_embed || office.maps_url)
+      p.google_business_url || p.google_business_embed || office.maps_url
         ? {
             name: p.google_business_name || chamber || p.full_name,
             address: addrParts.slice(-2).join(", ") || null,
+            ...(typeof p.google_rating === "number" ? { rating: p.google_rating } : {}),
+            ...(Number.isFinite(p.google_review_count)
+              ? { reviewCount: p.google_review_count }
+              : {}),
           }
         : null,
   };
@@ -329,24 +337,28 @@ function buildLinks(p, pro = false) {
         : null),
     website: pro ? safeWebsite(p.website) : null, // website is Pro-only
     vcf: `/api/vakilcard/vcf?username=${encodeURIComponent(p.username)}`,
-    // Reviews: one destination for everybody — the office's Google Maps
-    // listing, where a visitor can read the reviews and leave one from
-    // Google's own UI.
+    // Reviews, and THE Pro line in this whole feature.
     //
-    // The Pro-only "Leave a Review" deep link is GONE (2026-08-29). It was
-    // never something the owner could type in, by explicit product direction
-    // on 2026-08-16; it was lifted from the Business Profile listing when the
-    // owner completed Google OAuth. Dropping the business.manage scope removed
-    // the only writer, so the field could never again be populated for anyone
-    // who did not already have one -- and nobody did, the connections table
-    // was empty. A Pro feature that cannot be turned on is worse than no
-    // feature, so it went out rather than sitting there as a promise.
-    reviewView: office.maps_url || null,
-    // Google Business tile destination (Pro): the owner's saved Google
-    // Business Profile link (google_business_url, Pro-gated at write time in
-    // me.js), falling back to the office's Maps listing — for most chambers
-    // that listing IS the Google Business profile. Free: null (tile absent).
-    googleBusiness: pro ? p.google_business_url || office.maps_url || null : null,
+    // links.review is Google's own writeAReviewUri, returned by the Places API
+    // and cached at link time (booking.js places_link). It opens the review
+    // form with the listing already chosen — the client just types and taps.
+    // That one-tap path is what Pro buys. It is real again as of 2026-08-29:
+    // between the OAuth removal and the Places work, nothing could populate
+    // this column at all, and before that the code built a fake link by
+    // string-matching a Maps CID.
+    //
+    // A FREE advocate's card is never left with a dead button. It falls to
+    // reviewView, the listing itself, where a visitor can still read reviews
+    // and leave one through Google's UI — a couple of taps more, which is
+    // exactly the convenience Pro is selling. The upgrade prompt belongs in
+    // the OWNER'S dashboard, not on a card their client is holding: the client
+    // cannot upgrade anyone's plan, and "Upgrade to Pro" on an advocate's card
+    // reads as the advocate asking them for money.
+    review: pro && p.google_review_link ? p.google_review_link : null,
+    reviewView: office.maps_url || p.google_business_url || null,
+    // Google Business tile destination — FREE AND PRO. See the tile itself in
+    // toDsProfile(); Pro buys the review action, not the listing.
+    googleBusiness: p.google_business_url || office.maps_url || null,
   };
 }
 
@@ -385,9 +397,9 @@ function renderPage(p, themeOverride, mode = "live") {
       directions: !!links.maps,
       email: !!links.mailto,
       website: !!links.website,
-      reviews: !!links.reviewView,
+      reviews: !!(links.review || links.reviewView),
     };
-    dsProfile.reviewLabel = links.reviewView ? "View Reviews" : "Reviews";
+    dsProfile.reviewLabel = links.review ? "Leave a Review" : links.reviewView ? "View Reviews" : "Reviews";
   }
   // Branding: hide_branding is null (auto — hides iff Pro, the original
   // behaviour) unless the owner explicitly overrode it (Pro-only write,

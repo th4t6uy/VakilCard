@@ -5,7 +5,7 @@
 //                (deep links into /vakilcard/setup?s=…&from=dashboard — a
 //                returning owner never replays onboarding), QR, theme,
 //                share, publish, analytics, account.
-import React, { useCallback, useEffect, useState } from "react";
+import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
   // ArrowRight left with the ecosystem rail (now components/EcosystemRail.js).
@@ -17,15 +17,14 @@ import {
   Banknote, Briefcase, CalendarClock, Check, Copy, Download,
   ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
   Lock, LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
-  // Star left with the google_review Pro row (removed 2026-08-29) -- dead
-  // code, removed on that ground alone; this repo's build disables ESLint.
-  Smartphone, Sparkles, Trash2, UserRound, X,
+  Smartphone, Sparkles, Star, Trash2, UserRound, X,
 } from "lucide-react";
 import {
   getMe, getMyAnalytics, getAccount, saveProfile, deleteProfile,
   logout as apiLogout, changePassword as apiChangePassword,
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
+  placesSearch, placesLink, placesUnlink, newPlacesSession,
   googleConnectUrl, googleCalendarConnectUrl, disconnectGoogleCalendar,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
@@ -110,13 +109,16 @@ const PRO_TOOLS = [
   { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay your consultation fee — or any amount — in one tap via their own UPI app.", proDesc: "Active — clients tapping Pay choose your consultation fee or a custom amount, then their UPI app." },
   { key: "booking", icon: CalendarClock, title: "Smart appointment booking", freeDesc: "Basic booking is already on — upgrade for Google Calendar sync so you're never double-booked, plus payment-before-confirmation.", proDesc: "Set up below — connect Google Calendar and require payment before a slot is confirmed." },
   { key: "remove_branding", icon: Sparkles, title: "Remove Vakilpedia branding", freeDesc: "Your card, only your name — no \"Powered by Vakilpedia\".", proDesc: "Toggle it off in Theme below." },
-  // google_review was removed on 2026-08-29. It promised a direct "Leave a
-  // Review" deep link, which only ever existed because Google OAuth fetched it
-  // from the owner's Business Profile; dropping the business.manage scope
-  // removed the only writer, so the row was selling something nobody could
-  // switch on. The Reviews tile still works for everyone via the office's
-  // Maps listing.
-  { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Paste your Google Business link in Booking & Reviews below — the tile appears on your card." },
+  // Restored 2026-08-29, and real this time. It was briefly removed because
+  // the Google OAuth flow that fetched the review link had gone, leaving
+  // nothing able to populate it. The Places API returns Google's own
+  // writeAReviewUri, so the one-tap review form works again -- and now the
+  // rating and review count are real too, which OAuth never gave us.
+  { key: "google_review", icon: Star, title: "One-tap reviews", freeDesc: "Clients go to Google and find the review box themselves.", proDesc: "One tap on your card opens their review form, ready to type." },
+  // NOT Pro-gated any more: the tile itself is free for everyone (founder,
+  // 29 Aug). Kept in this list because the list is what the dashboard shows
+  // as "what your card can do", and the row explains the free/Pro line.
+  { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your listing, rating and reviews on your card — free.", proDesc: "Plus the one-tap review button for your clients." },
 ];
 
 // Compact top-of-page strip — replaces the old full-height "Pro tools" panel
@@ -273,19 +275,72 @@ const GOOGLE_CONNECT_REASONS = {
   no_code: "Google sign-in was cancelled before it finished — please try connecting again.",
 };
 
-function BookingPanel({ pro, googleBusinessUrl, onSaveBusinessUrl, googleNotice, onUpgrade }) {
+function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
-  // Seeded from the saved profile, then owned by the input. Re-seeded when the
-  // dashboard reloads the profile after a save, so the Save button's
-  // dirty-check compares against what is actually stored.
-  const [businessUrl, setBusinessUrl] = useState(googleBusinessUrl || "");
-  const [savingBusinessUrl, setSavingBusinessUrl] = useState(false);
-  useEffect(() => { setBusinessUrl(googleBusinessUrl || ""); }, [googleBusinessUrl]);
+  // Google Business, one tap. `query` is what they typed, `hits` is what
+  // Google suggested, `placeSession` is the billing session token (minted once
+  // per search-and-select, reused across every keystroke AND the final link
+  // call -- Google bills per session, not per request).
+  const [query, setQuery] = useState("");
+  const [hits, setHits] = useState([]);
+  const [searching, setSearching] = useState(false);
+  const [linking, setLinking] = useState(false);
+  const [placeErr, setPlaceErr] = useState("");
+  const placeSession = useRef(null);
+
+  // Debounced so a fast typist does not fire a request per character. 300ms is
+  // the usual floor for feeling instant; below that we are paying Google to
+  // autocomplete "Sha" on the way to "Sharma".
+  useEffect(() => {
+    const q = query.trim();
+    if (q.length < 3) { setHits([]); return; }
+    let dead = false;
+    const t = setTimeout(async () => {
+      if (!placeSession.current) placeSession.current = newPlacesSession();
+      setSearching(true); setPlaceErr("");
+      try {
+        const r = await placesSearch(q, placeSession.current);
+        if (!dead) setHits(r.results || []);
+      } catch (e) {
+        if (!dead) {
+          setHits([]);
+          setPlaceErr(e && e.status === 503
+            ? "Google search is not switched on for this deployment yet."
+            : "Could not reach Google just now.");
+        }
+      } finally {
+        if (!dead) setSearching(false);
+      }
+    }, 300);
+    return () => { dead = true; clearTimeout(t); };
+  }, [query]);
+
+  const pickPlace = async (hit) => {
+    setLinking(true); setPlaceErr("");
+    try {
+      // Same session token as the search above: this is the "selection" half
+      // of the billable session.
+      const r = await placesLink(hit.placeId, placeSession.current);
+      placeSession.current = null;   // session is spent
+      setQuery(""); setHits([]);
+      onPlaceChange(r.place);
+    } catch {
+      setPlaceErr("Could not link that listing. Please try again.");
+    } finally {
+      setLinking(false);
+    }
+  };
+
+  const unlinkPlace = async () => {
+    setLinking(true);
+    try { await placesUnlink(); onPlaceChange(null); }
+    finally { setLinking(false); }
+  };
 
   const load = useCallback(() => {
     setLoading(true);
@@ -449,56 +504,109 @@ function BookingPanel({ pro, googleBusinessUrl, onSaveBusinessUrl, googleNotice,
         )}
       </div>
 
-      {/* Google Business link.
-          This field is why the OAuth removal was safe to finish. The paste-a-
-          link path already had a backend (me.js accepts google_business_url,
-          Pro-gated), a renderer (profile.js builds the tile from it) and an
-          upgrade-sheet promise -- but no input anywhere in the app, so the
-          only way the tile ever appeared was the office Maps URL fallback.
-          The owner could not do the thing three other files said they did.
+      {/* Google Business — one tap.
+          The advocate types their chamber name and taps their listing. No URL
+          to find, copy or paste. Founder, 29 Aug 2026: "we sell convenience to
+          users" -- and a non-technical advocate will not go and fetch a Maps
+          URL, which is what the field that stood here until today asked them
+          to do.
 
-          It replaces the read-only "Google review link" block that stood here
-          until 2026-08-29, which told the owner to connect a button that had
-          just been removed. */}
+          The TILE is free. Pro buys the one-tap Leave-a-Review action on it,
+          gated server-side in api/vakilcard/profile.js. The upgrade prompt for
+          that lives below, on the owner's own screen, where the person who can
+          actually upgrade is standing -- never on the public card, where the
+          only person holding it is their client. */}
       <div className="mt-6 pt-5 border-t border-slate-200">
-        <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google Business link</p>
-          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
-        </div>
-        {!pro ? (
-          <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">Free cards link to your office's Google listing. Pro shows your Business Profile as its own tile on your card.</p>
-            <button type="button" onClick={() => onUpgrade("google_business")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
-          </>
+        <p className="text-sm font-bold text-slate-800">Google Business listing</p>
+
+        {place ? (
+          <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
+            <div className="flex items-start gap-3">
+              <span className="grid place-items-center h-9 w-9 rounded-xl bg-white border border-slate-200 flex-none">
+                <MapPin className="h-4 w-4 text-[#635BFF]" />
+              </span>
+              <div className="min-w-0 flex-1">
+                <p className="text-sm font-bold text-slate-900 truncate">{place.name}</p>
+                {place.address && <p className="text-xs text-slate-500 truncate">{place.address}</p>}
+                {typeof place.rating === "number" && (
+                  <p className="text-xs text-slate-600 mt-1 inline-flex items-center gap-1">
+                    <Star className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="font-bold">{place.rating}</span>
+                    {place.reviewCount ? <span className="text-slate-400">({place.reviewCount})</span> : null}
+                  </p>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={unlinkPlace}
+                disabled={linking}
+                className="text-xs font-bold text-slate-500 underline flex-none disabled:opacity-40"
+              >
+                {linking ? "…" : "Change"}
+              </button>
+            </div>
+          </div>
         ) : (
           <>
             <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">
-              Paste your Google Business Profile link — open your listing on Google Maps and use Share → Copy link. Leave it empty and the tile falls back to your office's Maps listing.
+              Type your chamber name and pick it from the list. Your listing, rating and reviews appear on your card.
             </p>
-            <div className="flex flex-col sm:flex-row gap-2">
-              <input
-                type="url"
-                inputMode="url"
-                value={businessUrl}
-                onChange={(e) => setBusinessUrl(e.target.value)}
-                placeholder="https://maps.app.goo.gl/..."
-                aria-label="Google Business Profile link"
-                className="flex-1 min-w-0 rounded-xl border border-slate-200 text-base px-3 py-2"
-              />
-              <button
-                type="button"
-                disabled={savingBusinessUrl || businessUrl === (googleBusinessUrl || "")}
-                onClick={async () => {
-                  setSavingBusinessUrl(true);
-                  try { await onSaveBusinessUrl(businessUrl.trim()); } finally { setSavingBusinessUrl(false); }
-                }}
-                className="rounded-xl bg-slate-900 text-white hover:bg-[#635BFF] disabled:opacity-40 disabled:hover:bg-slate-900 transition-colors px-4 py-2 text-sm font-bold flex-none"
-              >
-                {savingBusinessUrl ? "Saving…" : "Save"}
-              </button>
-            </div>
+            <input
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="e.g. Sharma Law Chambers, Jabalpur"
+              aria-label="Search your Google Business listing"
+              className="w-full rounded-xl border border-slate-200 text-base px-3 py-2"
+            />
+            {searching && <p className="text-xs text-slate-400 mt-1.5">Searching Google…</p>}
+            {!!hits.length && (
+              <ul className="mt-2 space-y-1.5 list-none p-0 m-0">
+                {hits.map((h) => (
+                  <li key={h.placeId}>
+                    <button
+                      type="button"
+                      onClick={() => pickPlace(h)}
+                      disabled={linking}
+                      className="w-full text-left rounded-xl border border-slate-200 bg-white hover:border-[#635BFF]/50 disabled:opacity-40 transition-colors px-3.5 py-2.5"
+                    >
+                      <span className="block text-sm font-bold text-slate-900 truncate">{h.name}</span>
+                      {h.address && <span className="block text-xs text-slate-500 truncate">{h.address}</span>}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
           </>
         )}
+        {placeErr && <p className="text-xs text-rose-600 mt-1.5 hyphens-none">{placeErr}</p>}
+
+        {/* The Pro line, stated on the owner's screen where it can be acted on. */}
+        <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#635BFF]/6 border border-[#635BFF]/20 px-3 py-2.5">
+          <Star className="h-4 w-4 text-[#635BFF] mt-0.5 flex-none" />
+          <div className="min-w-0">
+            {pro ? (
+              <p className="text-xs text-slate-600 m-0 hyphens-none">
+                <span className="font-bold text-slate-900">Leave a Review is live.</span>{" "}
+                Clients tap once on your card and land straight in your Google review form.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-slate-600 m-0 hyphens-none">
+                  <span className="font-bold text-slate-900">Leave a Review is a Pro feature.</span>{" "}
+                  Your listing still shows on your card — Free sends clients to Google to find the review box themselves.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => onUpgrade("google_review")}
+                  className="text-xs font-bold text-[#635BFF] mt-1"
+                >
+                  See what you get →
+                </button>
+              </>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className="mt-6 pt-5 border-t border-slate-200">
@@ -864,12 +972,20 @@ export default function VakilCardPage() {
     }
   };
 
-  // Same shape as setCardTheme/setHideBranding: saveFull sends the WHOLE
-  // profile because me.js rebuilds the row from the body, and is_published is
-  // restated so a save from here can never unpublish a live card.
-  const saveBusinessUrl = async (google_business_url) => {
-    await saveFull({ google_business_url, is_published: profile.is_published === true });
-    setProfile((p) => ({ ...p, google_business_url }));
+  // NOT saveFull(). booking.js's places_link/places_unlink have already
+  // written the row straight from the Places API; this only mirrors the result
+  // into local state so the card preview updates without a refetch. Routing it
+  // through saveFull would resend the whole form and risk clobbering the
+  // columns places_link just set -- which is also why google_business_url no
+  // longer travels in the form at all (see SetupWizard and me.js).
+  const onPlaceChange = (place) => {
+    setProfile((p) => ({
+      ...p,
+      google_business_name: place ? place.name : null,
+      google_business_url: place ? place.url : null,
+      google_rating: place ? place.rating : null,
+      google_review_count: place ? place.reviewCount : null,
+    }));
   };
 
   const setHideBranding = async (hide_branding) => {
@@ -1280,8 +1396,17 @@ export default function VakilCardPage() {
               Pro-only rows (calendar sync, Google Business link) render locked. */}
           <BookingPanel
             pro={pro}
-            googleBusinessUrl={profile.google_business_url || ""}
-            onSaveBusinessUrl={saveBusinessUrl}
+            place={
+              profile.google_business_url
+                ? {
+                    name: profile.google_business_name || profile.chamber_name || profile.full_name,
+                    address: null,
+                    rating: profile.google_rating,
+                    reviewCount: profile.google_review_count,
+                  }
+                : null
+            }
+            onPlaceChange={onPlaceChange}
             googleNotice={googleNotice}
             onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
           />

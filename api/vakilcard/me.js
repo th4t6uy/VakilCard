@@ -174,10 +174,18 @@ module.exports = async function handler(req, res) {
       // dashboard finally has an input for it (BookingPanel, "Google Business
       // link"). Until then this write path accepted a value the UI gave the
       // owner no way to enter.
-      const newBusinessUrl = str(b.google_business_url, 500);
-      if (!pro && newBusinessUrl && newBusinessUrl !== (profile && profile.google_business_url)) {
-        return json(res, 402, { error: "pro_required", feature: "google_business" });
-      }
+      // google_business_url is NOT written here any more (2026-08-29). It, and
+      // google_review_link / google_place_id / google_rating /
+      // google_review_count, are owned end to end by booking.js's places_link
+      // action, which fills them from the Places API when the owner taps their
+      // listing. This save path resends the WHOLE form on every autosave, so
+      // accepting the column here would let an unrelated edit overwrite a
+      // freshly linked listing with a stale value. Leaving it out of
+      // profileRow entirely means it cannot.
+      //
+      // No Pro gate is needed for linking either: the Google Business TILE is
+      // free (founder, 29 Aug). Pro buys the one-tap Leave-a-Review action,
+      // and that gate lives at read time in api/vakilcard/profile.js.
       const newTheme = ["default", "midnight", "ivory"].includes(b.card_theme) ? b.card_theme : "default";
       if (!pro && newTheme !== "default" && newTheme !== (profile && profile.card_theme)) {
         return json(res, 402, { error: "pro_required", feature: "premium_themes" });
@@ -224,12 +232,6 @@ module.exports = async function handler(req, res) {
         theme_preference: ["light", "dark", "system"].includes(b.theme_preference)
           ? b.theme_preference
           : "system",
-        // Deploy-safe: only touch the column when there's something to write
-        // or clear — so a deploy that races the additive migration can never
-        // break every profile save on an un-migrated database.
-        ...(newBusinessUrl || (profile && profile.google_business_url)
-          ? { google_business_url: newBusinessUrl || null }
-          : {}),
         card_theme: newTheme,
         hide_branding: newHideBranding,
         booking_windows: bookingWindows,

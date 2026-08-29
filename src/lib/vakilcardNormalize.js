@@ -331,19 +331,27 @@ export function formToDsProfile(f) {
     // falsy (see VakilCardApp.jsx), so an honest empty string is correct.
     firm: chamber || "",
     address: [addrParts.slice(0, mid).join(", "), addrParts.slice(mid).join(", ")],
-    // Mirrors profile.js, which since 2026-08-29 has one review destination
-    // for everybody: the office's Maps listing. The Pro "Leave a Review" deep
-    // link went out with the Google OAuth flow that was its only source.
-    reviewLabel: office.maps_url ? "View Reviews" : "Reviews",
+    // Mirrors profile.js. Pro shows "Leave a Review" (Google's own
+    // writeAReviewUri, from the Places link); Free falls back to "View
+    // Reviews" on the listing. The preview cannot know the plan, so it shows
+    // the Pro label whenever a review link exists on the row -- which is what
+    // the owner is deciding about when they look at this.
+    reviewLabel: f.google_review_link ? "Leave a Review" : office.maps_url ? "View Reviews" : "Reviews",
     // Mirrors profile.js's Google Business tile: preview it whenever a
     // destination would exist (owner's Google Business link, else the office
     // Maps listing). Entitlement gating stays server-side on the live card —
     // the owner's own preview simply shows what their data unlocks.
+    // Free AND Pro, with the real rating when a listing has been linked --
+    // same rule as profile.js.
     googleBusiness:
       f.google_business_url || office.maps_url
         ? {
-            name: chamber || f.full_name || "Your chamber",
+            name: f.google_business_name || chamber || f.full_name || "Your chamber",
             address: addrParts.slice(-2).join(", ") || null,
+            ...(typeof f.google_rating === "number" ? { rating: f.google_rating } : {}),
+            ...(Number.isFinite(f.google_review_count)
+              ? { reviewCount: f.google_review_count }
+              : {}),
           }
         : null,
   };

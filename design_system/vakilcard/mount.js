@@ -139,11 +139,18 @@
       // EXTERNALLY (Google app / new tab) — Pro-only, decided server-side
       // (links.googleBusiness is only ever set when entitled).
       else if (label.indexOf("google business") === 0) { go = links.googleBusiness; ev = "google_business"; newTab = true; }
-      // Reviews tile: Pro deep-links straight to the owner's Google review
-      // form (links.review, Pro-only per entitlements). Free reuses the
-      // office's Google Maps listing to let visitors read existing reviews
-      // (links.reviewView) — never a dead tap either way, and never showing
-      // a "leave a review" action Free hasn't unlocked.
+      // Reviews tile: Pro deep-links straight to Google's own review form for
+      // the linked listing (links.review = writeAReviewUri from the Places
+      // API, Pro-only per entitlements) — the client types and taps, nothing
+      // to search for. Free falls back to the listing itself
+      // (links.reviewView), where a visitor can still read reviews and leave
+      // one through Google's UI. Never a dead tap either way, and never a
+      // one-tap action Free has not unlocked.
+      //
+      // 2026-08-29: THIS FILE IS THE SOURCE. public/ds/mount.js is build
+      // output — scripts/build-vakilcard-ds.cjs copies this file over it on
+      // every prebuild, so an edit made there is erased at deploy time. (Ask
+      // me how I know.)
       // 2026-08-16 fix batch: was `label.indexOf("review") === 0`, which
       // only matches a caption that STARTS with "review" — but the real
       // server-rendered captions are "Leave a Review" / "View Reviews"

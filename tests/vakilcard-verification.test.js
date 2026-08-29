@@ -477,16 +477,47 @@ test("Google Business tile + Pro pay fields (profile.js SSR boot)", async () => 
   assert.ok(body.includes('"googleBusiness":"https://maps.google.com/?cid=1"'), "falls back to office maps_url");
   assert.ok(body.includes('"fee":null'), "no fee configured → null");
 
-  // Free: tile absent and link null even when a URL sits in the DB.
+  // Pro with a linked listing gets the REVIEW DEEP LINK and real stars.
+  body = await serve({
+    ...base,
+    subscription_plan: "PRO", subscription_status: "ACTIVE",
+    google_place_id: "ChIJtest",
+    google_business_name: "GB Law Chambers",
+    google_business_url: "https://maps.google.com/?cid=1",
+    google_review_link: "https://search.google.com/local/writereview?placeid=ChIJtest",
+    google_rating: 4.7,
+    google_review_count: 128,
+    offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
+    payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: null },
+  });
+  assert.ok(body.includes('"rating":4.7'), "Places rating ships for Pro");
+  assert.ok(body.includes('"reviewCount":128'), "Places review count ships");
+  assert.ok(body.includes('"review":"https://search.google.com/local/writereview?placeid=ChIJtest"'), "Pro gets the one-tap review deep link");
+  assert.ok(body.includes('"reviewLabel":"Leave a Review"'), "Pro caption is Leave a Review");
+
+  // FREE: the TILE IS VISIBLE -- rating and all. Founder, 2026-08-29: the
+  // Google Business profile is visible on free and pro cards alike; Pro buys
+  // the one-tap review action, not the listing. This assertion is the reverse
+  // of what it said until that date, and the boundary it now guards is the
+  // REVIEW LINK, which is the thing actually being paid for.
   body = await serve({
     ...base,
     subscription_plan: "FREE", subscription_status: "ACTIVE",
+    google_place_id: "ChIJtest",
+    google_business_name: "GB Law Chambers",
     google_business_url: "https://maps.app.goo.gl/xyz",
+    google_review_link: "https://search.google.com/local/writereview?placeid=ChIJtest",
+    google_rating: 4.7,
+    google_review_count: 128,
     offices: [{ chamber_name: "GB Law Chambers", address: "12 Court Road, Bhopal", maps_url: "https://maps.google.com/?cid=1" }],
     payment: { upi_id: "gb@upi", show_upi: true, consultation_fee: 500 },
   });
-  assert.ok(body.includes('"googleBusiness":null'), "Free never gets the tile or the link");
-  assert.ok(!body.includes('"googleBusiness":{'), "no tile data for Free");
+  assert.ok(body.includes('"googleBusiness":{"name":"GB Law Chambers"'), "Free DOES get the tile");
+  assert.ok(body.includes('"rating":4.7'), "Free sees the real rating");
+  assert.ok(body.includes('"googleBusiness":"https://maps.app.goo.gl/xyz"'), "Free tile opens the listing");
+  // The paid boundary, asserted from both sides so it cannot rot.
+  assert.ok(body.includes('"review":null'), "Free NEVER gets the one-tap review deep link");
+  assert.ok(body.includes('"reviewLabel":"View Reviews"'), "Free caption falls back to View Reviews");
 });
 
 /* ---------- runner ---------- */
