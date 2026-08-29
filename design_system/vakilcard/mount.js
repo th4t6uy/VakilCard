@@ -97,6 +97,24 @@
         return;
       }
 
+      // Same class of collision as the social exit above, found on a real
+      // device 2026-08-29: the booking sheet's WhatsApp anchor read "Share on
+      // WhatsApp", the label test below matches ANY text starting with
+      // "share", so tapping it fired navigator.share() -- the iOS share sheet
+      // across all apps -- AND then navigated, giving two prompts where the
+      // visitor should see exactly one.
+      //
+      // Marking the element is the fix rather than renaming it, because
+      // renaming only moves the landmine: the next anchor whose wording starts
+      // with "share", "call" or "whatsapp" collides all over again. An element
+      // carrying its own href does not want this delegate at all.
+      var nativeEl = el.closest && el.closest("[data-vc-native-link]");
+      if (nativeEl) {
+        var nev = nativeEl.getAttribute("data-ev");
+        if (nev) track(nev);
+        return;
+      }
+
       var label = (el.getAttribute("aria-label") || el.textContent || "")
         .trim()
         .toLowerCase();
@@ -869,9 +887,9 @@
       '<div style="font-size:13.5px;color:var(--text-hi);line-height:1.5">' + message + "</div></div>";
     if (shareHref) {
       body +=
-        '<a href="' + shareHref + '" target="_blank" rel="noopener noreferrer" style="' + sheetBtnCss + ';justify-content:center;margin-top:12px">' +
-        nounIcon("whatsapp") + "Share on WhatsApp</a>" +
-        '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">Sends your booking details straight to the advocate.</div>';
+        '<a href="' + shareHref + '" target="_blank" rel="noopener noreferrer" data-vc-native-link data-ev="whatsapp" style="' + sheetBtnCss + ';justify-content:center;margin-top:12px">' +
+        nounIcon("whatsapp") + "Send on WhatsApp</a>" +
+        '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">Opens WhatsApp with your booking details ready to send to the advocate.</div>';
     }
     openSheet("All set", body);
   }
