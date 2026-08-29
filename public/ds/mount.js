@@ -928,6 +928,56 @@
     if (img && img.src) showQrZoom(img.src, (slot.getAttribute("data-qr-name") || "qr") + ".png", slot.getAttribute("data-qr-caption") || "");
   });
 
+  /* ---------- iOS focus-zoom guard ----------
+     Tapping a field in any sheet made iOS Safari zoom the page in and never
+     zoom back out, which breaks the illusion the card is an app.
+
+     WHY THE 16px INPUTS DID NOT PREVENT IT. They are correct and they are
+     outranked. The card is served with <meta name="viewport" content="width=412">
+     (api/vakilcard/profile.js) so the design renders at its authored width, so
+     on any phone NARROWER than 412 the browser scales the whole layout down to
+     fit: 390/412 = 0.95, and a 16px input paints at about 15.2px. On a 375px
+     screen it is 14.6px. Safari zooms below 16px PAINTED, so the threshold is
+     missed on every common iPhone even though every field says font-size:16px.
+
+     WHY NOT JUST RAISE THE FONT SIZE. 17px clears a 390px screen and fails a
+     375px one; 18px clears 375 and fails 320. Any fixed number is a guess
+     against the next screen width, and it changes the typography of a verbatim
+     design export to work around a viewport setting.
+
+     Clamp maximum-scale to 1 only WHILE a field is focused, then put the meta
+     back. Focus zoom cannot fire, pinch zoom stays available every other
+     moment, and nothing about the design changes. Same transient-clamp
+     technique as the Reset Zoom pill below. */
+  (function () {
+    var vpMeta = document.querySelector('meta[name="viewport"]');
+    if (!vpMeta) return;
+    var released = null; // the content string to put back, null when not clamped
+    var isField = function (el) {
+      if (!el || !el.tagName) return false;
+      var t = el.tagName;
+      return t === "INPUT" || t === "TEXTAREA" || t === "SELECT";
+    };
+    document.addEventListener("focusin", function (e) {
+      if (!isField(e.target) || released !== null) return;
+      released = vpMeta.getAttribute("content") || "";
+      vpMeta.setAttribute(
+        "content",
+        released.replace(/,?\s*maximum-scale=[^,]*/g, "") + ",maximum-scale=1"
+      );
+    });
+    document.addEventListener("focusout", function (e) {
+      if (!isField(e.target) || released === null) return;
+      var restore = released;
+      released = null;
+      // Restoring in the same tick as blur lets Safari apply the zoom it was
+      // about to skip; a short delay lands after the keyboard has gone.
+      setTimeout(function () {
+        vpMeta.setAttribute("content", restore);
+      }, 300);
+    });
+  })();
+
   /* ---------- Mobile browser zoom assist ----------
      When the visitor pinch-zooms far in, float an unobtrusive "Reset Zoom"
      pill bottom-right; it disappears once scale returns near 1. Browsers
