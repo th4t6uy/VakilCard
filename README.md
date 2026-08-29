@@ -4,11 +4,16 @@ Standalone digital chamber card product — extracted from `Apps/Vakilpedia-webs
 
 ## Status
 
-This is a **source-code extraction, not yet a deployment cutover**. The live, production VakilCard
-(public card, wizard, admin) is still served by `Apps/Vakilpedia-website`'s Vercel deployment —
-nothing about that deployment changed. This app is a standalone, independently buildable copy of
-VakilCard's own code, ready for a future, separately-gated deployment cutover (own Vercel project,
-own domain/DNS, own env vars) once you decide to make one.
+**This repo is production.** `vakilcard.vakilpedia.com` is served by the Vercel project
+`vakilcard` (`prj_GliqMJ1rA1dJeJk5OybgtyUxGilJ`, framework create-react-app), which builds this
+tree — see `.vercel/repo.json`. Production deploys from `main`; `beta` is the development branch.
+
+> Corrected 2026-08-29. This section previously read "a source-code extraction, not yet a
+> deployment cutover... still served by `Apps/Vakilpedia-website`". That was true at extraction
+> time and is not true now: the cutover happened, and `Apps/Vakilpedia-website` no longer exists.
+> The stale copy at `Apps/Vakilpedia-code/frontend/api/vakilcard/` is a pre-Phase-3 ancestor
+> (its `booking.js` is a 41-line stub) — dead code, not production. Left uncorrected, this
+> paragraph sends anyone reading it to edit the wrong tree.
 
 Verified locally in this extraction pass:
 - `npm install && npm run build` — clean production build (CRA/craco), no errors.
