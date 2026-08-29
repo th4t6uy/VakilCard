@@ -104,16 +104,12 @@ const EMPTY = {
   // save from any step that doesn't know about them would silently wipe a
   // Pro owner's theme / branding choice / booking windows.
   //
-  // google_review_link is a READ-ONLY passthrough here (2026-08-16): it's
-  // OAuth-only now (see api/vakilcard/me.js and booking.js's
-  // storeBusinessConnection/google_business_disconnect) — no UI in this
-  // wizard ever sets it, and api/vakilcard/me.js's save path no longer
-  // reads b.google_review_link at all, so it's safe to keep round-tripping
-  // it here (it's simply ignored server-side either way). It stays in form
-  // state purely so the live card preview's reviewLabel logic (see
-  // formToDsProfile in vakilcardNormalize.js) can tell "Leave a Review"
-  // apart from "View Reviews" while editing.
-  google_review_link: "", google_business_url: "", card_theme: "default", hide_branding: null, booking_windows: [],
+  // google_review_link is GONE (2026-08-29). It was an OAuth-only field, and
+  // the Google Business OAuth flow that wrote it was removed with the
+  // business.manage scope, so nothing could ever populate it again. me.js
+  // never read it off this body anyway. The card's Reviews tile now has one
+  // destination for everybody, the office Maps listing.
+  google_business_url: "", card_theme: "default", hide_branding: null, booking_windows: [],
 };
 
 export function profileToForm(p) {
@@ -140,7 +136,6 @@ export function profileToForm(p) {
       consultation_fee: pay.consultation_fee ?? "", show_upi: pay.show_upi !== false,
     },
     social_links: p.social_links || {},
-    google_review_link: p.google_review_link || "",
     google_business_url: p.google_business_url || "",
     card_theme: p.card_theme || "default",
     hide_branding: typeof p.hide_branding === "boolean" ? p.hide_branding : null,

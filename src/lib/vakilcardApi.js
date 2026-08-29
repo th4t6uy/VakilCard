@@ -224,10 +224,9 @@ export const googleCalendarConnectUrl = async () => {
 };
 export const disconnectGoogleCalendar = () => call("booking", { method: "POST", body: { action: "gcal_disconnect" } });
 
-// Business-only start kept server-side for backward compatibility (see
-// booking.js) but no longer linked from the dashboard UI — googleConnectUrl
-// above covers it. No client helper needed.
-export const disconnectGoogleBusiness = () => call("booking", { method: "POST", body: { action: "google_business_disconnect" } });
+// disconnectGoogleBusiness removed 2026-08-29 with the endpoint it called.
+// The Google Business Profile OAuth flow is gone (business.manage was a
+// sensitive scope with zero connections), so there is nothing to disconnect.
 
 
 // Subscription (Free vs Pro)

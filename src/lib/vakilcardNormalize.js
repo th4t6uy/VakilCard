@@ -331,10 +331,10 @@ export function formToDsProfile(f) {
     // falsy (see VakilCardApp.jsx), so an honest empty string is correct.
     firm: chamber || "",
     address: [addrParts.slice(0, mid).join(", "), addrParts.slice(mid).join(", ")],
-    // Mirrors profile.js: Pro shows "Leave a Review" once a link is set,
-    // Free/no-link falls back to "View Reviews" (reuses the office's Maps
-    // listing) — preview interactions are visual-only either way.
-    reviewLabel: f.google_review_link ? "Leave a Review" : "View Reviews",
+    // Mirrors profile.js, which since 2026-08-29 has one review destination
+    // for everybody: the office's Maps listing. The Pro "Leave a Review" deep
+    // link went out with the Google OAuth flow that was its only source.
+    reviewLabel: office.maps_url ? "View Reviews" : "Reviews",
     // Mirrors profile.js's Google Business tile: preview it whenever a
     // destination would exist (owner's Google Business link, else the office
     // Maps listing). Entitlement gating stays server-side on the live card —

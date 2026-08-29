@@ -139,20 +139,18 @@
       // EXTERNALLY (Google app / new tab) — Pro-only, decided server-side
       // (links.googleBusiness is only ever set when entitled).
       else if (label.indexOf("google business") === 0) { go = links.googleBusiness; ev = "google_business"; newTab = true; }
-      // Reviews tile: Pro deep-links straight to the owner's Google review
-      // form (links.review, Pro-only per entitlements). Free reuses the
-      // office's Google Maps listing to let visitors read existing reviews
-      // (links.reviewView) — never a dead tap either way, and never showing
-      // a "leave a review" action Free hasn't unlocked.
-      // 2026-08-16 fix batch: was `label.indexOf("review") === 0`, which
-      // only matches a caption that STARTS with "review" — but the real
-      // server-rendered captions are "Leave a Review" / "View Reviews"
-      // (profile.js buildLinks()), so neither actual case ever matched and
-      // the tile was a dead tap for every entitled user. indexOf(...) !== -1
+      // Reviews tile: one destination for everybody — the office's Google
+      // Maps listing, where a visitor reads the reviews and can leave one
+      // through Google's own UI. The Pro-only "Leave a Review" deep link
+      // (links.review) was removed on 2026-08-29 with the Google OAuth flow
+      // that was its only source; profile.js no longer sends the field.
+      // 2026-08-16 fix batch: was `label.indexOf("review") === 0`, which only
+      // matches a caption that STARTS with "review" — but the real
+      // server-rendered caption is "View Reviews" (profile.js buildLinks()),
+      // so it never matched and the tile was a dead tap. indexOf(...) !== -1
       // matches the word anywhere in the caption instead.
       else if (label.indexOf("review") !== -1) {
-        if (links.review) { go = links.review; ev = "google_review"; newTab = true; }
-        else if (links.reviewView) { go = links.reviewView; newTab = true; }
+        if (links.reviewView) { go = links.reviewView; newTab = true; }
       }
       // Vakilpedia CONNECT tile — replaces the old duplicate Pay tile,
       // always sends to the VakilCard marketing/upgrade page (no dedicated

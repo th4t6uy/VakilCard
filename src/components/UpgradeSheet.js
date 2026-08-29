@@ -8,7 +8,8 @@
 // preview of the exact thing they tapped, with the benefit spelled out, so
 // they know what they're missing before the price is even mentioned.
 import React, { useEffect, useState } from "react";
-import { BadgeCheck, Banknote, BarChart3, CalendarClock, Check, Globe2, Loader2, MapPin, Palette, Sparkles, Star, Ticket, X } from "lucide-react";
+// Star left with the "Get More Reviews" row (removed 2026-08-29) -- dead code.
+import { BadgeCheck, Banknote, BarChart3, CalendarClock, Check, Globe2, Loader2, MapPin, Palette, Sparkles, Ticket, X } from "lucide-react";
 import { checkoutPro, getSubscription, loadRazorpay, previewCoupon, verifyProPayment } from "../lib/vakilcardApi";
 
 const FEATURES = [
@@ -19,7 +20,6 @@ const FEATURES = [
   [BarChart3, "Analytics", "Views, calls, WhatsApp, payments"],
   [Palette, "Premium Themes", "Stand out with exclusive looks"],
   [Sparkles, "Remove Vakilpedia Branding", "Your card, only your name"],
-  [Star, "Get More Reviews", "One-tap link straight to your Google review form"],
   [MapPin, "Google Business Tile", "Your Google listing, right on your card"],
 ];
 
@@ -114,14 +114,6 @@ function BrandingPreview() {
   );
 }
 
-function ReviewPreview() {
-  return (
-    <div className={previewShell} aria-hidden="true">
-      <p className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-[12px] font-black text-slate-800 flex items-center justify-center gap-2"><Star className="h-4 w-4 text-amber-500" />Leave a Review — straight to your Google form</p>
-    </div>
-  );
-}
-
 function GoogleBusinessPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
@@ -155,7 +147,9 @@ const FEATURE_PREVIEWS = {
   website: [WebsitePreview, "Your own website, one tap away for every client who opens your card."],
   premium_themes: [ThemesPreview, "Exclusive card looks that make your card unmistakably yours."],
   remove_branding: [BrandingPreview, "Remove the Vakilpedia footer — clients see your name and nothing else."],
-  google_review: [ReviewPreview, "Happy clients become 5-star Google reviews — one tap, no searching."],
+  // google_review removed 2026-08-29: the "Leave a Review" deep link it sold
+  // came from the Google Business OAuth flow, and that flow is gone. Selling a
+  // feature nobody can switch on is worse than not selling it.
   google_business: [GoogleBusinessPreview, "Your Google Business listing as a native tile on your card — reviews, photos and directions, one tap away."],
   custom_username: [UsernamePreview, "Swap the number in your link for your own name — memorable on letterheads and court corridors."],
 };

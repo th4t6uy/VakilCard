@@ -265,15 +265,15 @@ function toDsProfile(p) {
     // links.googleBusiness (mount.js opens it externally), matching how
     // every other tile works. Rendered only when a real destination exists:
     // the owner's saved Google Business link, else their office Maps listing.
-    // Name prefers google_business_name — the exact listing title Google
-    // returned when the owner connected via OAuth (booking.js's
-    // google_business_start/gcal_callback flow) — falling back to the
-    // office/chamber name for owners who haven't connected yet (still on
-    // the older manual-URL path). No `rating`/`reviewCount` field yet: that
-    // needs the separate Business Profile Reviews API, which Google gates
-    // behind its own per-project quota approval on top of OAuth — not
-    // wired up yet, see the phase report. The component already renders a
-    // real rating the moment one is ever present here; until then it shows
+    // Name prefers google_business_name, which is now only ever a legacy
+    // value: it was written by the Google OAuth flow, and that flow was
+    // removed on 2026-08-29 along with the business.manage scope. Everyone
+    // else falls back to the office/chamber name, which is the path the
+    // product now runs on -- the owner pastes their listing URL and that is
+    // the whole integration. No `rating`/`reviewCount` here either: that needs
+    // the Business Profile Reviews API, gated behind its own Google quota
+    // approval on top of an OAuth scope we no longer request. The component
+    // renders a real rating the moment one is present; until then it shows
     // honest unrated copy instead of fabricating stars.
     googleBusiness:
       isProActive(p) && (p.google_business_url || p.google_business_embed || office.maps_url)
@@ -329,11 +329,18 @@ function buildLinks(p, pro = false) {
         : null),
     website: pro ? safeWebsite(p.website) : null, // website is Pro-only
     vcf: `/api/vakilcard/vcf?username=${encodeURIComponent(p.username)}`,
-    // Reviews: Pro gets a direct "Leave a Review" deep link to their own
-    // Google review form (google_review_link, Pro-gated at write time in
-    // me.js). Free reuses the office's Maps listing so visitors can still
-    // read existing reviews — never a dead tile either way.
-    review: pro && p.google_review_link ? p.google_review_link : null,
+    // Reviews: one destination for everybody — the office's Google Maps
+    // listing, where a visitor can read the reviews and leave one from
+    // Google's own UI.
+    //
+    // The Pro-only "Leave a Review" deep link is GONE (2026-08-29). It was
+    // never something the owner could type in, by explicit product direction
+    // on 2026-08-16; it was lifted from the Business Profile listing when the
+    // owner completed Google OAuth. Dropping the business.manage scope removed
+    // the only writer, so the field could never again be populated for anyone
+    // who did not already have one -- and nobody did, the connections table
+    // was empty. A Pro feature that cannot be turned on is worse than no
+    // feature, so it went out rather than sitting there as a promise.
     reviewView: office.maps_url || null,
     // Google Business tile destination (Pro): the owner's saved Google
     // Business Profile link (google_business_url, Pro-gated at write time in
@@ -378,9 +385,9 @@ function renderPage(p, themeOverride, mode = "live") {
       directions: !!links.maps,
       email: !!links.mailto,
       website: !!links.website,
-      reviews: !!(links.review || links.reviewView),
+      reviews: !!links.reviewView,
     };
-    dsProfile.reviewLabel = links.review ? "Leave a Review" : links.reviewView ? "View Reviews" : "Reviews";
+    dsProfile.reviewLabel = links.reviewView ? "View Reviews" : "Reviews";
   }
   // Branding: hide_branding is null (auto — hides iff Pro, the original
   // behaviour) unless the owner explicitly overrode it (Pro-only write,
@@ -508,6 +515,16 @@ ${hideBranding ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="posit
 
 module.exports = async function handler(req, res) {
   if (req.method === "POST") {
+    // This is an ALLOWLIST for events arriving from the wild, so entries are
+    // retired on a different clock from the code that fires them.
+    //
+    // "google_review" STAYS even though public/ds/mount.js stopped emitting it
+    // on 2026-08-29. Visitors hold mount.js in their browser cache, and an old
+    // copy will keep posting that event for as long as its cache entry lives.
+    // Dropping the entry today would turn those into rejected requests and put
+    // a hole in the analytics of cards that are working perfectly well. It
+    // costs one string to keep; remove it in a later pass once the cached
+    // bundles have aged out.
     const PROFILE_EVENTS = new Set([
       "view", "share", "call", "whatsapp", "email", "pay", "directions",
       "save_contact", "appointment", "website", "qr_download", "social_click",

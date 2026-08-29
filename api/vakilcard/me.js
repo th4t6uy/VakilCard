@@ -160,19 +160,20 @@ module.exports = async function handler(req, res) {
       // autosave always resends the full profile, so a hard "no writes at
       // all while Free" would 402 every save for a Free user.
       //
-      // google_review_link is deliberately NOT handled on this general
-      // write path (2026-08-16, per explicit product direction: the review
-      // link must never be something the owner types in — it's lifted
-      // straight from the connected Google Business Profile). It is written
-      // ONLY by storeBusinessConnection() and nulled ONLY by the
-      // google_business_disconnect handler, both in api/vakilcard/booking.js.
-      // Before this fix, this handler unconditionally wrote
-      // `google_review_link: newReviewLink || null` from whatever the
-      // client's form sent — since autosave resends the whole form on every
-      // save, and the dashboard no longer has a field for this, that would
-      // have silently NULLed out the auto-fetched link on the very next
-      // unrelated save (e.g. editing bio). Leaving the column out of
-      // profileRow entirely means this save path can never touch it.
+      // google_review_link is not handled here and no longer exists as a
+      // feature (2026-08-29). The 2026-08-16 direction was that the review
+      // link must never be typed in by the owner — it was lifted from the
+      // connected Google Business Profile. Dropping the business.manage scope
+      // removed that writer, leaving a Pro feature nobody could switch on, so
+      // it went out end to end rather than staying as an unkeepable promise.
+      // The column is deliberately still absent from profileRow: any legacy
+      // value a real owner has stays untouched by this save path rather than
+      // being NULLed by an autosave that resends the whole form.
+      //
+      // google_business_url is the surviving half, and since 2026-08-29 the
+      // dashboard finally has an input for it (BookingPanel, "Google Business
+      // link"). Until then this write path accepted a value the UI gave the
+      // owner no way to enter.
       const newBusinessUrl = str(b.google_business_url, 500);
       if (!pro && newBusinessUrl && newBusinessUrl !== (profile && profile.google_business_url)) {
         return json(res, 402, { error: "pro_required", feature: "google_business" });

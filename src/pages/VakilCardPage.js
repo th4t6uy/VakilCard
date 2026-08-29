@@ -17,7 +17,9 @@ import {
   Banknote, Briefcase, CalendarClock, Check, Copy, Download,
   ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
   Lock, LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
-  Smartphone, Sparkles, Star, Trash2, UserRound, X,
+  // Star left with the google_review Pro row (removed 2026-08-29) -- dead
+  // code, removed on that ground alone; this repo's build disables ESLint.
+  Smartphone, Sparkles, Trash2, UserRound, X,
 } from "lucide-react";
 import {
   getMe, getMyAnalytics, getAccount, saveProfile, deleteProfile,
@@ -25,7 +27,6 @@ import {
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
   googleConnectUrl, googleCalendarConnectUrl, disconnectGoogleCalendar,
-  disconnectGoogleBusiness,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
@@ -33,8 +34,8 @@ import LiveCardPreview from "../components/LiveCardPreview";
 import UpgradeSheet from "../components/UpgradeSheet";
 import SignupPage, { PasswordInput, StrengthBar } from "./vakilcard/SignupPage";
 import BrandWordmark from "../components/BrandWordmark";
-import SEOHead from "../components/SEOHead";
 import EcosystemRail from "../components/EcosystemRail";
+import SEOHead from "../components/SEOHead";
 
 // Password errors — kept local since VakilCardPage never shows the full
 // onboarding ERRORS map, just the handful relevant to Change Password.
@@ -109,8 +110,13 @@ const PRO_TOOLS = [
   { key: "native_pay", icon: Banknote, title: "Native UPI payments", freeDesc: "Clients pay your consultation fee — or any amount — in one tap via their own UPI app.", proDesc: "Active — clients tapping Pay choose your consultation fee or a custom amount, then their UPI app." },
   { key: "booking", icon: CalendarClock, title: "Smart appointment booking", freeDesc: "Basic booking is already on — upgrade for Google Calendar sync so you're never double-booked, plus payment-before-confirmation.", proDesc: "Set up below — connect Google Calendar and require payment before a slot is confirmed." },
   { key: "remove_branding", icon: Sparkles, title: "Remove Vakilpedia branding", freeDesc: "Your card, only your name — no \"Powered by Vakilpedia\".", proDesc: "Toggle it off in Theme below." },
-  { key: "google_review", icon: Star, title: "Get more reviews", freeDesc: "A direct \"Leave a review\" button straight to Google.", proDesc: "Add your review link in Booking & Reviews below." },
-  { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Add your Google Business link in Booking & Reviews below — the tile appears on your card." },
+  // google_review was removed on 2026-08-29. It promised a direct "Leave a
+  // Review" deep link, which only ever existed because Google OAuth fetched it
+  // from the owner's Business Profile; dropping the business.manage scope
+  // removed the only writer, so the row was selling something nobody could
+  // switch on. The Reviews tile still works for everyone via the office's
+  // Maps listing.
+  { key: "google_business", icon: MapPin, title: "Google Business tile", freeDesc: "Your Google listing as a native tile on your card — reviews, photos, directions in one tap.", proDesc: "Paste your Google Business link in Booking & Reviews below — the tile appears on your card." },
 ];
 
 // Compact top-of-page strip — replaces the old full-height "Pro tools" panel
@@ -159,15 +165,17 @@ function GoogleConnectHero({ pro }) {
     getBookingConfig().then(setCfg).catch(() => setCfg(null));
   }, [pro]);
   if (!pro || !cfg || !cfg.calendar_platform_configured) return null;
-  if (cfg.calendar_connected && cfg.google_business_connected) return null;
+  // 2026-08-26: Business Profile is no longer an OAuth connection (the
+  // business.manage scope was dropped), so Calendar alone IS 'connected'.
+  if (cfg.calendar_connected) return null;
   return (
     <div className="rounded-[1.75rem] border border-[#635BFF]/25 bg-gradient-to-r from-[#635BFF]/8 to-transparent p-5 sm:p-6 mb-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
           <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF]" /></span>
           <div>
-            <p className="text-sm font-black text-slate-900">Connect Google</p>
-            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">One tap turns on Calendar sync (no double-bookings) and pulls your Business Profile — name, address, reviews, directions — onto your card.</p>
+            <p className="text-sm font-black text-slate-900">Connect Google Calendar</p>
+            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">Clients can only book times you are actually free. Vakilpedia sees when you are busy — never what the appointments are.</p>
           </div>
         </div>
         <button
@@ -204,10 +212,11 @@ function GoogleStatusChip({ pro }) {
     return () => window.removeEventListener("focus", refresh);
   }, [pro, refresh]);
   if (!pro || !cfg || !cfg.calendar_platform_configured) return null;
-  const connected = !!(cfg.calendar_connected && cfg.google_business_connected);
-  const partial = !connected && !!(cfg.calendar_connected || cfg.google_business_connected);
-  const label = connected ? "Google connected" : partial ? "Google partially connected" : "Google not connected";
-  const dotColor = connected ? "bg-emerald-500" : partial ? "bg-amber-500" : "bg-rose-500";
+  // One thing to connect (Calendar free/busy), so there is no longer a
+  // "partially connected" state to be stuck in.
+  const connected = !!cfg.calendar_connected;
+  const label = connected ? "Google Calendar connected" : "Google Calendar not connected";
+  const dotColor = connected ? "bg-emerald-500" : "bg-rose-500";
   return (
     <span
       className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold px-2.5 py-1"
@@ -257,10 +266,6 @@ let groupIdSeq = 0;
 // `?google=|gmb=|gcal=connected|error&msg=<reason>` redirect params (see
 // the googleNotice effect below).
 const GOOGLE_CONNECT_REASONS = {
-  gmb_no_accounts:
-    "Calendar connected, but Business Profile didn't — the Google account you signed in with isn't listed as a Manager or Owner on any Google Business Profile. Being the account your listing is \"registered under\" on Search/Maps doesn't grant this automatically; open business.google.com with that account, or add it as a Manager on the listing from whichever account does have access, then reconnect here.",
-  gmb_no_locations:
-    "Calendar connected, but that Google account's Business Profile has no locations set up yet — finish setting up the listing in Google Business Profile, then reconnect.",
   no_refresh_token_reconnect_required:
     "Google didn't grant a long-lived connection — this usually happens on a repeat sign-in. Click Connect Google again and make sure to complete the consent screen fully.",
   exchange_failed: "Something went wrong talking to Google. Please try connecting again — if it keeps failing, contact support.",
@@ -268,13 +273,19 @@ const GOOGLE_CONNECT_REASONS = {
   no_code: "Google sign-in was cancelled before it finished — please try connecting again.",
 };
 
-function BookingPanel({ pro, googleReviewLink, googleNotice, onUpgrade }) {
+function BookingPanel({ pro, googleBusinessUrl, onSaveBusinessUrl, googleNotice, onUpgrade }) {
   const [cfg, setCfg] = useState(null);
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
+  // Seeded from the saved profile, then owned by the input. Re-seeded when the
+  // dashboard reloads the profile after a save, so the Save button's
+  // dirty-check compares against what is actually stored.
+  const [businessUrl, setBusinessUrl] = useState(googleBusinessUrl || "");
+  const [savingBusinessUrl, setSavingBusinessUrl] = useState(false);
+  useEffect(() => { setBusinessUrl(googleBusinessUrl || ""); }, [googleBusinessUrl]);
 
   const load = useCallback(() => {
     setLoading(true);
@@ -321,10 +332,6 @@ function BookingPanel({ pro, googleReviewLink, googleNotice, onUpgrade }) {
   };
   const disconnectCalendar = async () => {
     await disconnectGoogleCalendar();
-    load();
-  };
-  const disconnectBusiness = async () => {
-    await disconnectGoogleBusiness();
     load();
   };
 
@@ -391,13 +398,13 @@ function BookingPanel({ pro, googleReviewLink, googleNotice, onUpgrade }) {
 
       <div className="mt-6 pt-5 border-t border-slate-200">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google (Calendar &amp; Business)</p>
+          <p className="text-sm font-bold text-slate-800">Google Calendar</p>
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
           <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">One connect turns on Calendar sync (no double-bookings) and a native Google Business tile with your real reviews and photos.</p>
-            <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to connect Google →</button>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">Sync your calendar so clients can only book times you are actually free — no double-bookings.</p>
+            <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to connect Google Calendar →</button>
           </>
         ) : !cfg || !cfg.calendar_platform_configured ? (
           <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
@@ -420,27 +427,18 @@ function BookingPanel({ pro, googleReviewLink, googleNotice, onUpgrade }) {
                   <button type="button" onClick={disconnectCalendar} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
                 )}
               </div>
-              <div className="flex items-center gap-2 flex-wrap text-sm">
-                <span className="text-xs font-bold text-slate-500 w-20 flex-none">Business</span>
-                {cfg.google_business_connected ? (
-                  <span className="text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected{cfg.google_business_name ? `: ${cfg.google_business_name}` : ""}</span>
-                ) : (
-                  <span className="text-slate-400">Not connected</span>
-                )}
-                {cfg.google_business_connected && (
-                  <button type="button" onClick={disconnectBusiness} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
-                )}
-              </div>
+              {/* The Business row is gone: connecting a Business Profile by OAuth
+                  was removed on 2026-08-26 along with the business.manage scope.
+                  The Business tile on the card still works — it runs on the
+                  listing link the owner pastes into Booking & Reviews below. */}
             </div>
 
-            {!(cfg.calendar_connected && cfg.google_business_connected) && (
+            {!cfg.calendar_connected && (
               <>
                 <p className="text-xs text-slate-500 mt-2 mb-1 hyphens-none">
-                  {cfg.calendar_connected || cfg.google_business_connected
-                    ? "Reconnect to switch on the other one too — same Google account, one click."
-                    : "One Google sign-in turns on both — no double-bookings, plus your real Business Profile as a tile on your card."}
+                  Connect your Google Calendar so clients can only book times you are actually free. Vakilpedia sees when you are busy — never what the appointments are.
                 </p>
-                <button type="button" onClick={connectGoogle} className={btn + " mt-1"}><Sparkles className="h-4 w-4" />Connect Google</button>
+                <button type="button" onClick={connectGoogle} className={btn + " mt-1"}><Sparkles className="h-4 w-4" />Connect Google Calendar</button>
               </>
             )}
 
@@ -451,30 +449,55 @@ function BookingPanel({ pro, googleReviewLink, googleNotice, onUpgrade }) {
         )}
       </div>
 
+      {/* Google Business link.
+          This field is why the OAuth removal was safe to finish. The paste-a-
+          link path already had a backend (me.js accepts google_business_url,
+          Pro-gated), a renderer (profile.js builds the tile from it) and an
+          upgrade-sheet promise -- but no input anywhere in the app, so the
+          only way the tile ever appeared was the office Maps URL fallback.
+          The owner could not do the thing three other files said they did.
+
+          It replaces the read-only "Google review link" block that stood here
+          until 2026-08-29, which told the owner to connect a button that had
+          just been removed. */}
       <div className="mt-6 pt-5 border-t border-slate-200">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google review link</p>
+          <p className="text-sm font-bold text-slate-800">Google Business link</p>
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
           <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">Free shows a "View Reviews" link to your office's Google listing. Upgrade for a direct "Leave a Review" button.</p>
-            <button type="button" onClick={() => onUpgrade("google_review")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
+            <p className="text-xs text-slate-500 mt-1 hyphens-none">Free cards link to your office's Google listing. Pro shows your Business Profile as its own tile on your card.</p>
+            <button type="button" onClick={() => onUpgrade("google_business")} className="text-sm font-bold text-[#635BFF] mt-1">See what you get →</button>
           </>
         ) : (
-          // 2026-08-16, per explicit product direction: this is never a
-          // field the owner fills in — it's lifted straight from the
-          // connected Google Business Profile listing (see
-          // storeBusinessConnection in api/vakilcard/booking.js) and shown
-          // here read-only. Connect Google Business above to populate it;
-          // disconnecting clears it automatically.
-          <p className="text-xs text-slate-500 mt-1.5 hyphens-none">
-            {googleReviewLink ? (
-              <>Synced from your connected Google Business listing: <a href={googleReviewLink} target="_blank" rel="noreferrer" className="font-bold text-[#635BFF] underline break-all">{googleReviewLink}</a></>
-            ) : (
-              <>Connect Google Business above and your real review link will appear here automatically — nothing to type in.</>
-            )}
-          </p>
+          <>
+            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">
+              Paste your Google Business Profile link — open your listing on Google Maps and use Share → Copy link. Leave it empty and the tile falls back to your office's Maps listing.
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="url"
+                inputMode="url"
+                value={businessUrl}
+                onChange={(e) => setBusinessUrl(e.target.value)}
+                placeholder="https://maps.app.goo.gl/..."
+                aria-label="Google Business Profile link"
+                className="flex-1 min-w-0 rounded-xl border border-slate-200 text-base px-3 py-2"
+              />
+              <button
+                type="button"
+                disabled={savingBusinessUrl || businessUrl === (googleBusinessUrl || "")}
+                onClick={async () => {
+                  setSavingBusinessUrl(true);
+                  try { await onSaveBusinessUrl(businessUrl.trim()); } finally { setSavingBusinessUrl(false); }
+                }}
+                className="rounded-xl bg-slate-900 text-white hover:bg-[#635BFF] disabled:opacity-40 disabled:hover:bg-slate-900 transition-colors px-4 py-2 text-sm font-bold flex-none"
+              >
+                {savingBusinessUrl ? "Saving…" : "Save"}
+              </button>
+            </div>
+          </>
         )}
       </div>
 
@@ -839,6 +862,14 @@ export default function VakilCardPage() {
     } finally {
       setSavingCardTheme(false);
     }
+  };
+
+  // Same shape as setCardTheme/setHideBranding: saveFull sends the WHOLE
+  // profile because me.js rebuilds the row from the body, and is_published is
+  // restated so a save from here can never unpublish a live card.
+  const saveBusinessUrl = async (google_business_url) => {
+    await saveFull({ google_business_url, is_published: profile.is_published === true });
+    setProfile((p) => ({ ...p, google_business_url }));
   };
 
   const setHideBranding = async (hide_branding) => {
@@ -1246,10 +1277,11 @@ export default function VakilCardPage() {
           </div>
 
           {/* Booking & Reviews — Free gets real windows-based booking today;
-              Pro-only rows (calendar sync, review link) render locked. */}
+              Pro-only rows (calendar sync, Google Business link) render locked. */}
           <BookingPanel
             pro={pro}
-            googleReviewLink={profile.google_review_link || ""}
+            googleBusinessUrl={profile.google_business_url || ""}
+            onSaveBusinessUrl={saveBusinessUrl}
             googleNotice={googleNotice}
             onUpgrade={(featureKey) => setUpgradeFeature(featureKey || "booking")}
           />

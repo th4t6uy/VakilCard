@@ -21,6 +21,17 @@ const PRO_FEATURES = [
   "analytics",
   "premium_themes",
   "remove_branding",
+  // "google_review" STAYS, even though the feature behind it was removed on
+  // 2026-08-29 with the Google Business OAuth flow. This list is a
+  // COMPATIBILITY SURFACE, not a menu: entitlementsFor() turns it into
+  // features{} that clients read, and a browser holding an older cached
+  // bundle will still look up features.google_review. Dropping the key turns
+  // that lookup into `undefined` and a paying Pro owner's row renders locked.
+  // tests/vakilcard-entitlements.test.js guards this on purpose -- "existing
+  // keys must never silently disappear (preserves current users' plans)".
+  // The feature is unreachable either way: nothing can populate
+  // google_review_link any more. Retire the key on its own clock, once the
+  // cached bundles have aged out.
   "google_review",
   "google_business",
 ];
