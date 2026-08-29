@@ -333,7 +333,7 @@ async function loadPublicProfile(username) {
   if (!uname) return null;
   const rows = await db(
     `vakilcard_profiles?username=eq.${encodeURIComponent(uname)}&is_published=eq.true` +
-      `&select=id,username,full_name,account_id,phone,whatsapp,subscription_plan,subscription_status,subscription_expires_at,booking_windows,vakilcard_payment_prefs(*)`
+      `&select=id,username,full_name,email,account_id,phone,whatsapp,subscription_plan,subscription_status,subscription_expires_at,booking_windows,vakilcard_payment_prefs(*)`
   );
   const p = rows[0];
   if (!p) return null;
@@ -594,7 +594,14 @@ async function notifyOwnerOfBooking(profile, appointment) {
   // a Meta approval we do not control, and an advocate who misses the booking
   // misses the client.
   try {
-    if (profile.email) {
+    // profile.email must be in loadPublicProfile's select or this is silently
+    // false forever. It was, until 2026-08-29: the column was simply not
+    // requested, so `profile.email` was undefined, the branch never ran, and
+    // sendEmail -- which logs even when unconfigured -- never got the chance
+    // to log anything. The absence of a row is what exposed it.
+    if (!profile.email) {
+      console.error(`[vakilcard/booking] no email on profile ${profile.id} — booking email not sent`);
+    } else {
       await email.sendEmail({
         to: profile.email,
         accountId: profile.account_id || null,

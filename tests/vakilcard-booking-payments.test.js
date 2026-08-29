@@ -262,6 +262,31 @@ test("a booking survives every notification channel throwing", async () => {
   }
 });
 
+test("the advocate's email address is actually loaded, or no email can ever be sent", async () => {
+  // THE 2026-08-29 BUG. loadPublicProfile's select did not request `email`, so
+  // profile.email was undefined, the send branch never ran, and sendEmail --
+  // which logs even when unconfigured -- never got the chance to log a reason.
+  // The failure was invisible: no error, no row, nothing to grep for. Assert on
+  // the select itself, because that is where the omission lives.
+  const src = require("fs").readFileSync(
+    path.resolve(__dirname, "../api/vakilcard/booking.js"),
+    "utf8"
+  );
+  // Anchor on vakilcard_payment_prefs: booking.js has TWO profile selects, and
+  // loadOwnerProfile's (the authed owner path) legitimately does not need
+  // email. Only loadPublicProfile embeds the payment prefs, so that is the one
+  // the visitor-facing notifier actually reads.
+  const sel = /&select=([^`]*vakilcard_payment_prefs[^`]*)/.exec(src);
+  assert.ok(sel, "loadPublicProfile's select must be findable");
+  const cols = sel[1].split(",").map((c) => c.trim());
+  for (const needed of ["email", "whatsapp", "phone", "account_id", "username"]) {
+    assert.ok(
+      cols.includes(needed),
+      `loadPublicProfile must select '${needed}' — the notifier reads it and fails silently without it`
+    );
+  }
+});
+
 /* ---------- runner ---------- */
 (async () => {
   let failed = 0;
