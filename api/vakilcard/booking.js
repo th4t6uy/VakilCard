@@ -18,29 +18,31 @@
 //   POST {action:"request", ...}             no auth     — visitor requests a slot
 //   POST {action:"confirm_payment", id}      no auth     — visitor self-reports "I've paid"
 //   POST {action:"manage", id, op, ...}      owner auth  — confirm/decline/complete a request
-//   POST + x-razorpay-signature header       provider    — Razorpay booking webhook
 //
-// TWO PAYMENT PATHS, and the difference is who vouches for the money:
+// PAY AT THE APPOINTMENT — the only honest model available (2026-08-29).
 //
-//   upi:// deep link (payment_provider 'upi_manual') — the honour system. A
-//     upi:// link has no gateway behind it and therefore no webhook: the
-//     visitor self-reports ("claimed_paid") and the OWNER confirms receipt
-//     ("confirmed"). This is never faked as automatic verification. It remains
-//     the behaviour whenever Razorpay is unconfigured or payments are gated off.
+// The advocate's fee is paid DIRECTLY to the advocate, in person or on their
+// own UPI. Vakilpedia never receives, holds, routes or verifies that money, so
+// booking never collects and never claims to have confirmed a payment.
 //
-//   Razorpay Payment Link (payment_provider 'razorpay') — verified money. The
-//     visitor pays on a Razorpay-hosted page; a webhook confirms the booking
-//     with no human in the loop. Enabled only when Razorpay is configured AND
-//     PAYMENTS_ENABLED is true (the DatarOne incorporation gate in
-//     _razorpay.js). Fails CLOSED: anything missing degrades to the upi:// path
-//     above, never to a dead end and never to an unverified confirmation.
+// This is a rails fact, not a missing feature. A upi:// link hands control to
+// the payer's UPI app and the app returns NOTHING to the web page; a merchant
+// learns the outcome only from a provider's server-to-server callback or
+// status API, both of which need a provider relationship. The rails that could
+// confirm a payment either put DatarOne in custody of client money (Payment
+// Aggregator activity under RBI's framework, and prohibited here) or require
+// every advocate to complete their own payment-provider KYC. So the booking is
+// real, the fee is DUE, and nobody pretends it was verified.
+// Assessment: Docs/VAKILCARD_PAYMENT_RAIL_FEASIBILITY_2026-08-29.md
 //
-// A booking created on the Razorpay path can NEVER be confirmed by the visitor's
-// word — see the guard in confirm_payment.
+// REMOVED on 2026-08-29, deliberately: the Razorpay Payment Link creation, its
+// signed webhook, and the visitor's "I've paid" self-report. The first two put
+// DatarOne in the money path. The third wrote `claimed_paid` on a stranger's
+// word — a state that LOOKED like verification and was not, which is worse
+// than having no state at all.
 const { db, readJsonBody, resolveAccount, trackEvent, sanitizeBookingWindows, expandBookingSlots } = require("./_lib");
 const { isProActive, requirePro } = require("./_entitlements");
 const { sign, verify } = require("./_jwt");
-const rzp = require("./_razorpay");
 const messaging = require("./_messaging");
 
 function json(res, status, data) {
@@ -334,7 +336,25 @@ async function loadPublicProfile(username) {
   );
   const p = rows[0];
   if (!p) return null;
-  p.payment = Array.isArray(p.vakilcard_payment_prefs) ? p.vakilcard_payment_prefs[0] || null : null;
+  // The embed can arrive as an OBJECT, not an array, and dropping that case
+  // silently disabled every paid booking on the platform.
+  //
+  // vakilcard_payment_prefs has PRIMARY KEY (profile_id) -- the foreign key
+  // column IS the primary key -- so PostgREST resolves the relationship as
+  // to-ONE and returns a single object rather than a one-element array. The
+  // old ternary handled only the array branch and mapped the object branch to
+  // null, so `profile.payment` was ALWAYS null here: consultation_fee read as
+  // unset, upi_configured as false, and every Pro booking degraded to
+  // payment_status 'not_required'. A visitor was never asked to pay, on any
+  // card, however the owner had configured their fee.
+  //
+  // It hid because the SSR card renders the same data through _lib.js's
+  // loadProfileBundle, which handles both shapes -- so the pay tile showed the
+  // UPI id correctly on the very card whose booking sheet said there was none.
+  // This mirrors that unwrap exactly; _lib.js:361 is the canonical form.
+  p.payment = Array.isArray(p.vakilcard_payment_prefs)
+    ? p.vakilcard_payment_prefs[0] || null
+    : p.vakilcard_payment_prefs || null;
   delete p.vakilcard_payment_prefs;
   return p;
 }
@@ -420,20 +440,19 @@ function formatSlotIST(startsAt) {
 }
 
 /**
- * Tell the advocate a client booked. `paid` distinguishes the two things they
- * actually need to know apart: money has landed, versus someone has asked for
- * a slot and nothing has been paid.
+ * Tell the advocate a client booked, and what to collect.
+ *
+ * There is no "paid" variant any more and there must not be one: VakilCard is
+ * not in the money path, so it is never in a position to tell an advocate that
+ * a client has paid. The message says what is DUE; the advocate is the only one
+ * who can see it arrive.
  */
-async function notifyOwnerOfBooking(profile, appointment, { paid = false } = {}) {
+async function notifyOwnerOfBooking(profile, appointment) {
   try {
     const phone = await ownerPhone(profile);
     if (!phone) return;
     const amount = Number(appointment.amount_inr);
-    const paymentLine = paid
-      ? `Payment received: Rs ${amount}`
-      : amount
-        ? `Payment pending: Rs ${amount}`
-        : "No payment required";
+    const paymentLine = amount ? `Rs ${amount} due at the appointment` : "No fee set";
     const dashboard = `${GCAL_DASHBOARD_SITE}/${profile.username || ""}/dashboard`;
     await messaging.sendTemplate({
       product: "vakilcard",
@@ -452,151 +471,6 @@ async function notifyOwnerOfBooking(profile, appointment, { paid = false } = {})
     // Never rethrow into a booking or a webhook response.
     console.error("[vakilcard/booking] owner notification failed:", e && (e.message || e));
   }
-}
-
-// ---------------------------------------------------------------------------
-// Razorpay booking webhook.
-//
-// Modelled on subscription.js's handleWebhook, deliberately, including the two
-// disciplines that matter most:
-//
-//   1. THE PAYLOAD IS NEVER THE AUTHORITY. We take ids out of it and re-fetch
-//      the payment link from Razorpay's API. Vercel pre-parses JSON bodies,
-//      which destroys the raw bytes the HMAC is computed over, so signature
-//      verification is best-effort by construction — but a forger cannot make
-//      Razorpay's own API report a link as paid, which is what we act on.
-//      Whether the signature could be checked is recorded, never assumed.
-//   2. IDEMPOTENCY BEFORE MUTATION. Razorpay retries on any non-2xx and two
-//      invocations can run at once; the unique index on razorpay_payment_id is
-//      the backstop, this check is the polite path.
-//
-// Status codes are part of the contract: 2xx means "stop retrying" (including
-// for events we deliberately ignore), non-2xx means "retry, this was transient".
-async function handleBookingWebhook(req, res, body, rawBody) {
-  const signature = req.headers["x-razorpay-signature"];
-  const signatureOk = rawBody ? rzp.verifyBookingWebhookSignature(rawBody, signature) : false;
-
-  const event = body && body.event;
-  const payload = (body && body.payload) || {};
-  const linkEntity = payload.payment_link && payload.payment_link.entity;
-  const payEntity = payload.payment && payload.payment.entity;
-  const linkId = linkEntity && linkEntity.id;
-
-  // Only the paid event moves money-state. cancelled/expired/partially_paid are
-  // acknowledged so Razorpay stops retrying; the appointment simply stays
-  // unpaid and the slot stays unconfirmed, which is already the correct state.
-  if (event !== "payment_link.paid" || !linkId) {
-    return json(res, 200, { ok: true, ignored: true, event: event || null });
-  }
-  if (!rzp.configured()) {
-    // Cannot re-fetch, therefore cannot verify, therefore will not act.
-    console.error("[vakilcard/booking] webhook received but Razorpay is not configured");
-    return json(res, 503, { error: "razorpay_not_configured" });
-  }
-
-  let link;
-  try {
-    link = await rzp.fetchPaymentLink(linkId);
-  } catch (e) {
-    console.error("[vakilcard/booking] webhook payment_link fetch failed:", e && e.message);
-    return json(res, 502, { error: "provider_unreachable" });
-  }
-  if (!link || link.status !== "paid") {
-    return json(res, 200, { ok: true, ignored: true, reason: "link_not_paid" });
-  }
-
-  const notes = link.notes || {};
-  if (notes.product !== "vakilcard" || !notes.appointment_id) {
-    return json(res, 200, { ok: true, ignored: true, reason: "not_a_vakilcard_booking" });
-  }
-
-  const rows = await db(
-    `vakilcard_appointment_requests?id=eq.${encodeURIComponent(notes.appointment_id)}&select=*`
-  );
-  const appt = rows[0];
-  if (!appt) return json(res, 200, { ok: true, ignored: true, reason: "appointment_not_found" });
-
-  // The link must be the one THIS row was issued. A leaked or replayed link id
-  // from another booking must not confirm this one.
-  if (appt.razorpay_payment_link_id !== linkId) {
-    console.error(
-      `[vakilcard/booking] webhook link mismatch appt=${appt.id} expected=${appt.razorpay_payment_link_id} got=${linkId}`
-    );
-    return json(res, 200, { ok: true, ignored: true, reason: "link_mismatch" });
-  }
-
-  if (appt.razorpay_payment_id) {
-    return json(res, 200, { ok: true, idempotent: true });
-  }
-
-  // Underpayment cannot confirm. accept_partial is false at creation, so this
-  // is a belt-and-braces check against a link edited in the dashboard.
-  const expectedPaise = Math.round(Number(appt.amount_inr || 0) * 100);
-  const paidPaise = Number(link.amount_paid || 0);
-  if (expectedPaise > 0 && paidPaise < expectedPaise) {
-    console.error(`[vakilcard/booking] underpayment appt=${appt.id} paid=${paidPaise} expected=${expectedPaise}`);
-    return json(res, 200, { ok: true, ignored: true, reason: "amount_mismatch" });
-  }
-
-  const paymentId =
-    (payEntity && payEntity.id) ||
-    (Array.isArray(link.payments) && link.payments.find((p) => p.status === "captured")?.payment_id) ||
-    null;
-
-  try {
-    await db(`vakilcard_appointment_requests?id=eq.${encodeURIComponent(appt.id)}`, {
-      method: "PATCH",
-      body: {
-        payment_status: "confirmed",
-        payment_provider: "razorpay",
-        razorpay_payment_id: paymentId,
-        razorpay_order_id: (link.order_id) || null,
-        paid_at: new Date().toISOString(),
-      },
-      prefer: "return=minimal",
-    });
-  } catch (e) {
-    // The unique index on razorpay_payment_id rejecting a concurrent duplicate
-    // is SUCCESS, not failure: the other invocation already confirmed this row.
-    const msg = String((e && e.message) || "");
-    if (/duplicate key|uq_vakilcard_appt_rzp_payment|23505/i.test(msg)) {
-      return json(res, 200, { ok: true, idempotent: true });
-    }
-    console.error("[vakilcard/booking] webhook confirm write failed:", msg);
-    return json(res, 500, { error: "confirm_failed" });
-  }
-
-  trackEvent(appt.profile_id, "pay", null).catch(() => {});
-
-  // Notification needs the owner's contact fields, which the appointment row
-  // does not carry.
-  try {
-    const owner = (
-      await db(
-        `vakilcard_profiles?id=eq.${appt.profile_id}&select=id,username,full_name,account_id,phone,whatsapp`
-      )
-    )[0];
-    if (owner) await notifyOwnerOfBooking(owner, appt, { paid: true });
-  } catch (e) {
-    console.error("[vakilcard/booking] webhook notify lookup failed:", e && (e.message || e));
-  }
-
-  console.log(
-    `[vakilcard/booking] payment confirmed appt=${appt.id} link=${linkId} payment=${paymentId} signature_verified=${signatureOk}`
-  );
-  return json(res, 200, { ok: true, appointment_id: appt.id });
-}
-
-function upiDeepLink({ upiId, name, amountInr, note }) {
-  if (!upiId) return null;
-  const params = new URLSearchParams({
-    pa: upiId,
-    pn: str(name, 60) || "VakilCard",
-    cu: "INR",
-    tn: str(note, 60) || "VakilCard appointment",
-  });
-  if (amountInr != null) params.set("am", String(amountInr));
-  return `upi://pay?${params.toString()}`;
 }
 
 module.exports = async function handler(req, res) {
@@ -623,35 +497,12 @@ module.exports = async function handler(req, res) {
     // readJsonBody(req) calls return it rather than re-reading a consumed
     // stream (see its first line in _lib.js). Vercel usually pre-parses
     // req.body for JSON content-types; this works whether it did or not.
-    //
-    // rawBody is captured HERE and nowhere else. The Razorpay webhook's HMAC is
-    // computed over the exact bytes, and reading the stream is a one-shot
-    // operation -- readJsonBody() would consume it and leave nothing to hash.
-    // When the platform has already parsed req.body the bytes are gone before
-    // this function runs; handleBookingWebhook is built to be correct without
-    // them (it re-fetches from Razorpay rather than trusting the payload).
-    let rawBody = null;
     if (req.method === "POST" && (!req.body || typeof req.body !== "object")) {
-      const chunks = [];
-      for await (const c of req) chunks.push(c);
-      rawBody = Buffer.concat(chunks).toString("utf8");
-      try {
-        req.body = rawBody ? JSON.parse(rawBody) : {};
-      } catch {
-        req.body = {};
-      }
+      req.body = await readJsonBody(req);
     }
     const action = String(
       req.query.action || (req.body && typeof req.body === "object" && req.body.action) || ""
     );
-
-    // ---- Razorpay booking webhook — provider-authed by signature, never by a
-    // session, and dispatched on the HEADER rather than an `action` because
-    // Razorpay controls the request body, not us. Same detection as
-    // subscription.js. Must stay ABOVE every owner-auth branch.
-    if (req.method === "POST" && req.headers["x-razorpay-signature"]) {
-      return handleBookingWebhook(req, res, req.body || {}, rawBody);
-    }
 
     // ---- GET ?action=gcal_start — owner auth (header or query token), Pro
     if (req.method === "GET" && action === "gcal_start") {
@@ -933,13 +784,15 @@ module.exports = async function handler(req, res) {
       return json(res, 200, {
         pro,
         slots,
-        payment: pro
-          ? {
-              required: true,
-              consultation_fee: profile.payment ? profile.payment.consultation_fee : null,
-              upi_configured: !!(profile.payment && profile.payment.upi_id),
-            }
-          : { required: false },
+        // `required` is deliberately FALSE for everyone now: nothing is
+        // collected before a booking, on any plan. `amount_due` is what the
+        // visitor will owe the advocate AT the appointment, shown so the fee is
+        // never a surprise. An older cached card bundle reads `required` and
+        // simply shows no payment step, which is exactly the new behaviour.
+        payment: {
+          required: false,
+          amount_due: pro && profile.payment ? Number(profile.payment.consultation_fee) || null : null,
+        },
       });
     }
 
@@ -956,26 +809,16 @@ module.exports = async function handler(req, res) {
       const endsAt = b.end ? new Date(b.end) : null;
       if (!startsAt || isNaN(startsAt.getTime())) return json(res, 400, { error: "invalid_slot" });
 
-      let bookingType = "consultation";
-      let amountInr = null;
-      let paymentStatus = "not_required";
-      let payLink = null;
-
-      if (pro) {
-        bookingType = b.booking_type === "custom" ? "custom" : "consultation";
-        if (bookingType === "consultation") {
-          amountInr = profile.payment ? Number(profile.payment.consultation_fee) || null : null;
-        } else {
-          amountInr = Number.isFinite(+b.amount_inr) ? Math.max(1, +b.amount_inr) : null;
-        }
-        const upiId = profile.payment && profile.payment.upi_id;
-        if (upiId && amountInr) {
-          paymentStatus = "pending";
-          payLink = upiDeepLink({ upiId, name: profile.username, amountInr, note: "VakilCard appointment" });
-        }
-        // No UPI ID / no fee configured on a Pro profile: degrade to
-        // not_required rather than blocking the booking — never a dead end.
-      }
+      // The fee is the ADVOCATE'S configured consultation fee and nothing else.
+      // A UPI id is no longer consulted: money does not move through this flow,
+      // so whether the advocate has published a VPA has no bearing on whether a
+      // booking can be made or what is owed. `booking_type` still accepts
+      // "custom" so historical rows and any older client keep working, but the
+      // amount always comes from the profile — a visitor typing their own
+      // number made sense only when they were pre-paying it.
+      const bookingType = b.booking_type === "custom" ? "custom" : "consultation";
+      const amountInr = pro && profile.payment ? Number(profile.payment.consultation_fee) || null : null;
+      const paymentStatus = amountInr ? "due" : "not_required";
 
       const [saved] = await db("vakilcard_appointment_requests", {
         method: "POST",
@@ -991,141 +834,54 @@ module.exports = async function handler(req, res) {
           booking_type: bookingType,
           amount_inr: amountInr,
           payment_status: paymentStatus,
-          payment_provider: paymentStatus === "pending" ? "upi_manual" : null,
+          // Left NULL on every new booking. payment_provider records who
+          // vouched for money arriving, and at creation nobody has -- it is set
+          // only if the advocate later marks the fee received. The 'pending'
+          // branch that used to sit here could never fire again: nothing writes
+          // that state now.
+          payment_provider: null,
           is_pro_booking: pro,
         },
         prefer: "return=representation",
       });
 
-      // ---- Upgrade the honour-system link to a VERIFIABLE one, when allowed.
-      //
-      // 🔴 UNRESOLVED BUSINESS DECISION — READ BEFORE SETTING PAYMENTS_ENABLED.
-      //
-      // These two payment paths do not move money to the same place, and that
-      // difference is not a technical detail:
-      //
-      //   upi:// deep link  — the visitor pays the ADVOCATE directly (`pa` is
-      //     the advocate's own UPI id). Vakilpedia never touches the funds.
-      //     That is also precisely WHY it can never be verified: there is no
-      //     gateway in the path, so there is nothing to send a webhook.
-      //
-      //   Razorpay Payment Link — the visitor pays into the account this
-      //     RAZORPAY_KEY_ID belongs to, i.e. DatarOne's. Verification and
-      //     custody are the same coin: we can confirm the money only because
-      //     we received it. Vakilpedia then OWES the advocate their fee.
-      //
-      // Collecting third parties' fees is a funds-flow and regulatory question
-      // (payment-aggregator territory in India), not an engineering one. The
-      // clean answer is Razorpay Route: onboard each advocate as a Linked
-      // Account (name, contact, email, bank details) and split the payment so
-      // it settles to them, with only a platform fee retained. That is an
-      // additive change here -- a `transfers` array on the link -- not a
-      // rewrite, which is why this code is shaped this way.
-      //
-      // Until that decision is made, this branch stays unreachable: it requires
-      // rzp.paymentsAllowed(), which is PAYMENTS_ENABLED and defaults OFF.
-      // Do not flip that variable to test booking payments without settling
-      // where the advocate's money is supposed to land.
-      //
-      // The row is written FIRST and the link created after, on purpose: the
-      // appointment exists even if Razorpay is having a bad morning, and its id
-      // is what binds the link back to this row. Every failure here degrades to
-      // the upi:// link already computed above -- a visitor never sees a dead
-      // end because a gateway was slow.
-      //
-      // Both gates must be open. paymentsAllowed() is the DatarOne
-      // incorporation switch (PAYMENTS_ENABLED, default OFF): until the
-      // Certificate issues, this whole branch is unreachable and behaviour is
-      // byte-identical to what shipped before it existed.
-      let payUrl = null;
-      if (paymentStatus === "pending" && amountInr && rzp.configured() && rzp.paymentsAllowed()) {
-        try {
-          // Razorpay requires expire_by comfortably in the future, so a slot
-          // starting within the next half hour simply gets no expiry rather
-          // than a rejected request. Otherwise the link dies at the slot start
-          // or in 24h, whichever comes first -- an unpaid link must never stay
-          // payable after the appointment it was for.
-          const slotMs = startsAt.getTime();
-          const nowMs = Date.now();
-          const expiryMs = Math.min(slotMs, nowMs + 24 * 3600 * 1000);
-          const expireBy = expiryMs - nowMs > 30 * 60 * 1000 ? Math.floor(expiryMs / 1000) : undefined;
-
-          const link = await rzp.createPaymentLink({
-            amountInr,
-            description: `Appointment with ${profile.full_name || profile.username} — ${formatSlotIST(startsAt)}`,
-            customerName: clientName,
-            customerPhone: clientPhone,
-            referenceId: saved.id,
-            callbackUrl: `${GCAL_DASHBOARD_SITE}/${profile.username}`,
-            expireBy,
-            notes: {
-              product: "vakilcard",
-              appointment_id: saved.id,
-              profile_id: profile.id,
-            },
-          });
-          if (link && link.short_url && link.id) {
-            await db(`vakilcard_appointment_requests?id=eq.${encodeURIComponent(saved.id)}`, {
-              method: "PATCH",
-              body: { razorpay_payment_link_id: link.id, payment_provider: "razorpay" },
-              prefer: "return=minimal",
-            });
-            payUrl = link.short_url;
-            // The upi:// link is withheld once a verifiable one exists. Offering
-            // both would hand the visitor a way to pay that we cannot confirm,
-            // for a booking the webhook will then never confirm.
-            payLink = null;
-          }
-        } catch (e) {
-          console.error("[vakilcard/booking] payment link creation failed:", e && (e.message || e));
-        }
-      }
-
       trackEvent(profile.id, "appointment", req.headers["referer"]).catch(() => {});
 
-      // Nothing is owed, so the advocate is told now. When money IS owed the
-      // notification waits for the webhook -- an alert for a slot nobody has
-      // paid for trains the advocate to ignore the alerts that matter.
-      if (paymentStatus === "not_required") {
-        notifyOwnerOfBooking(profile, saved, { paid: false }).catch(() => {});
-      }
+      // Every booking now alerts the advocate immediately, because every
+      // booking is final the moment it is made -- there is no payment step left
+      // to wait on. The alert carries the amount due so they know what to
+      // collect when the client arrives.
+      notifyOwnerOfBooking(profile, saved).catch(() => {});
 
+      // No pay_link and no pay_url: nothing is payable through VakilCard.
+      // amount_due is information for the visitor, not a checkout.
       return json(res, 200, {
         ok: true,
         id: saved.id,
         payment_status: paymentStatus,
-        pay_link: payLink,
-        pay_url: payUrl,
-        amount_inr: amountInr,
+        amount_due: amountInr,
       });
     }
 
-    // ---- POST {action:"confirm_payment"} — no auth, visitor self-report -
+    // ---- POST {action:"confirm_payment"} — RETIRED 2026-08-29 ------------
+    //
+    // This set payment_status to 'claimed_paid' on the strength of a visitor
+    // tapping "I've paid". That is not evidence of anything, and the state it
+    // wrote looked exactly like a verified one to every screen that read it --
+    // worse than having no state at all. Under pay-at-appointment there is
+    // nothing for a visitor to report: the booking is already final and the fee
+    // is settled in person.
+    //
+    // The branch is kept, and answers rather than mutating, only because a
+    // cached copy of the card bundle may still post here. Removing it outright
+    // would let those requests fall through to the owner-auth gate and come
+    // back "unauthenticated" -- the same misleading 401 that hid the dispatch
+    // bug in f10f1a5 for months. It never touches a row.
     if (req.method === "POST" && action === "confirm_payment") {
-      const b = await readJsonBody(req);
-      const id = str(b.request_id, 100);
-      if (!id) return json(res, 400, { error: "request_id_required" });
-      const rows = await db(
-        `vakilcard_appointment_requests?id=eq.${encodeURIComponent(id)}&select=id,profile_id,payment_status,razorpay_payment_link_id`
-      );
-      const reqRow = rows[0];
-      if (!reqRow) return json(res, 404, { error: "not_found" });
-      // A booking issued a Razorpay Payment Link is confirmed by the webhook or
-      // not at all. Letting the visitor self-report on that path would recreate
-      // exactly the hole the gateway was introduced to close -- and would do it
-      // invisibly, since the row would read "claimed_paid" as though a human
-      // owner still had to check.
-      if (reqRow.razorpay_payment_link_id) {
-        return json(res, 409, { error: "gateway_payment_pending" });
-      }
-      if (reqRow.payment_status !== "pending") return json(res, 409, { error: "not_pending" });
-      await db(`vakilcard_appointment_requests?id=eq.${encodeURIComponent(id)}`, {
-        method: "PATCH",
-        body: { payment_status: "claimed_paid" },
-        prefer: "return=minimal",
+      return json(res, 410, {
+        error: "payment_confirmation_retired",
+        message: "Appointments are confirmed on the slot. The fee is paid directly to the advocate at the appointment.",
       });
-      trackEvent(reqRow.profile_id, "payment_claimed", null).catch(() => {});
-      return json(res, 200, { ok: true, payment_status: "claimed_paid" });
     }
 
     // ---- Everything below requires the owner's own session --------------
@@ -1175,8 +931,13 @@ module.exports = async function handler(req, res) {
       const target = rows[0];
       if (!target) return json(res, 404, { error: "not_found" });
 
+      // The advocate recording that the fee reached them. This is the ONLY
+      // way payment_status ever becomes 'confirmed', because the advocate is
+      // the only party who can see the money. 'pending' and 'claimed_paid' stay
+      // accepted so historical rows from the retired prepaid flow can still be
+      // closed out.
       if (b.op === "confirm_payment_received") {
-        if (!["pending", "claimed_paid"].includes(target.payment_status))
+        if (!["due", "pending", "claimed_paid"].includes(target.payment_status))
           return json(res, 409, { error: "no_payment_pending" });
         await db(`vakilcard_appointment_requests?id=eq.${encodeURIComponent(id)}`, {
           method: "PATCH",
@@ -1189,13 +950,18 @@ module.exports = async function handler(req, res) {
       const status = str(b.status, 20);
       if (!["confirmed", "declined", "completed"].includes(status))
         return json(res, 400, { error: "invalid_status" });
-      // Pro bookings that required payment must have it confirmed by the
-      // owner before the appointment itself can be confirmed — never
-      // auto-confirm an unpaid Pro booking just because the owner clicked
-      // "confirm" on the appointment itself.
-      if (status === "confirmed" && target.is_pro_booking && target.payment_status !== "not_required" && target.payment_status !== "confirmed") {
-        return json(res, 409, { error: "payment_not_confirmed" });
-      }
+      // THE PREPAID GATE IS GONE, and removing it is the point of this model.
+      //
+      // It used to refuse to confirm an appointment until payment_status was
+      // 'confirmed', which was correct while the fee was supposed to arrive
+      // BEFORE the slot. Under pay-at-appointment the fee arrives AFTER
+      // confirmation by definition, so leaving the gate would make every
+      // fee-bearing booking permanently unconfirmable — the advocate would
+      // click Confirm and get "payment_not_confirmed" forever.
+      //
+      // Money and scheduling are now independent: `status` is whether the
+      // appointment is happening, `payment_status` is whether the fee has
+      // reached the advocate. Neither blocks the other.
       await db(`vakilcard_appointment_requests?id=eq.${encodeURIComponent(id)}`, {
         method: "PATCH",
         body: { status },

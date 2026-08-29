@@ -1,14 +1,24 @@
-// Booking payments: the Razorpay webhook, and the hole it closes.
+// Booking under PAY-AT-APPOINTMENT.
 // Run: node tests/vakilcard-booking-payments.test.js
-// No network, no database: `db` is an in-memory PostgREST fake, `_razorpay` is
-// stubbed, and the messaging provider is forced to `console`.
+// No network, no database: `db` is an in-memory PostgREST fake and the
+// messaging provider is forced to `console`.
 //
 // WHAT THESE TESTS ENCODE (product decisions, not implementation detail):
-//   1. A booking that was issued a Razorpay Payment Link can NEVER be marked
-//      paid by the visitor's own say-so. Before this change, confirm_payment
-//      took anyone's word for any booking.
-//   2. The webhook believes Razorpay's API, never Razorpay's payload.
-//   3. A redelivered webhook confirms once. Razorpay retries on any non-2xx.
+//   1. A configured fee produces an appointment that is BOOKED and OWED --
+//      payment_status 'due' -- and no payable link of any kind. VakilCard is
+//      not in the money path and must never appear to be.
+//   2. The advocate can confirm the appointment while the fee is still due.
+//      The old prepaid gate made that impossible and would now deadlock every
+//      fee-bearing booking.
+//   3. The visitor can no longer self-report payment. `claimed_paid` on a
+//      stranger's word looked like verification and was not.
+//   4. The payment prefs embed arrives as an OBJECT, not an array. Getting
+//      this wrong silently zeroed every fee on the platform.
+//
+// The nine Razorpay webhook tests that stood here until 2026-08-29 were
+// removed with the flow they covered. They were correct about a design that no
+// longer exists: a Payment Link put DatarOne in custody of the advocate's fee,
+// which is Payment Aggregator activity and is prohibited here.
 process.env.VAKILPEDIA_AUTH_SECRET = "test-secret-do-not-use";
 process.env.VERIFICATION_PROVIDER = "console";
 
@@ -39,29 +49,17 @@ async function fakeDb(pathq, { method = "GET", body } = {}) {
     rows.filter(match).forEach((r) => Object.assign(r, body));
     return [];
   }
-  return rows.filter(match);
+  // Return COPIES. A real PostgREST read produces fresh JSON every time, and
+  // loadPublicProfile does `delete p.vakilcard_payment_prefs` after unwrapping
+  // -- handing back the stored object itself would let the first read strip the
+  // embed out of the fixture and make the second read look like a bug in the
+  // code rather than in this fake.
+  return rows.filter(match).map((r) => ({ ...r }));
 }
 
 const libPath = path.resolve(__dirname, "../api/vakilcard/_lib.js");
 const real = require(libPath);
 require.cache[libPath].exports = { ...real, db: fakeDb };
-
-/* ---------- Razorpay stub: the ONLY source of payment truth ---------- */
-const rzpPath = path.resolve(__dirname, "../api/vakilcard/_razorpay.js");
-const realRzp = require(rzpPath);
-const rzpState = { links: {}, throwOnFetch: false };
-require.cache[rzpPath].exports = {
-  ...realRzp,
-  configured: () => true,
-  paymentsAllowed: () => true,
-  verifyBookingWebhookSignature: () => true,
-  async fetchPaymentLink(id) {
-    if (rzpState.throwOnFetch) throw new Error("provider down");
-    const l = rzpState.links[id];
-    if (!l) throw new Error("no such link");
-    return l;
-  },
-};
 
 const handler = require("../api/vakilcard/booking.js");
 
@@ -74,174 +72,119 @@ async function call(req) {
   await handler({ headers: {}, query: {}, ...req }, res);
   return { status: res.statusCode, data: JSON.parse(res.body || "{}") };
 }
-const webhook = (body) =>
-  call({ method: "POST", headers: { "x-razorpay-signature": "sig" }, body });
-
-function seedBooking(overrides = {}) {
-  const id = `appt-${idCounter++}`;
-  const row = {
-    id,
-    profile_id: "prof-1",
-    client_name: "Test Client",
-    client_phone: "+919876543210",
-    starts_at: new Date(Date.now() + 864e5).toISOString(),
-    amount_inr: 500,
-    payment_status: "pending",
-    payment_provider: "razorpay",
-    razorpay_payment_link_id: `plink_${id}`,
-    razorpay_payment_id: null,
-    is_pro_booking: true,
-    ...overrides,
-  };
-  (store.vakilcard_appointment_requests || (store.vakilcard_appointment_requests = [])).push(row);
-  rzpState.links[row.razorpay_payment_link_id] = {
-    id: row.razorpay_payment_link_id,
-    status: "paid",
-    amount: 50000,
-    amount_paid: 50000,
-    order_id: "order_test",
-    notes: { product: "vakilcard", appointment_id: id, profile_id: "prof-1" },
-  };
-  return row;
-}
-const find = (id) => store.vakilcard_appointment_requests.find((r) => r.id === id);
+const future = new Date(Date.now() + 30 * 864e5).toISOString();
 
 store.vakilcard_profiles = [
-  { id: "prof-1", username: "testadvocate", full_name: "Test Advocate", account_id: null, phone: null, whatsapp: null },
+  {
+    id: "prof-fee",
+    username: "feeadvocate",
+    full_name: "Fee Advocate",
+    account_id: null,
+    phone: null,
+    whatsapp: null,
+    is_published: true,
+    subscription_plan: "PRO",
+    subscription_status: "ACTIVE",
+    subscription_expires_at: future,
+    booking_windows: null,
+    // The OBJECT shape, which is what PostgREST actually returns here:
+    // vakilcard_payment_prefs has PRIMARY KEY (profile_id), so the embed
+    // resolves to-ONE.
+    vakilcard_payment_prefs: { profile_id: "prof-fee", consultation_fee: "2000.00", upi_id: "advocate@upi" },
+  },
+  {
+    id: "prof-free",
+    username: "freeadvocate",
+    full_name: "Free Advocate",
+    account_id: null,
+    phone: null,
+    whatsapp: null,
+    is_published: true,
+    subscription_plan: "FREE",
+    subscription_status: "ACTIVE",
+    subscription_expires_at: null,
+    booking_windows: null,
+  },
 ];
+
+const book = (username) =>
+  call({
+    method: "POST",
+    body: {
+      action: "request",
+      username,
+      client_name: "Test Client",
+      client_phone: "+919876543210",
+      start: new Date(Date.now() + 2 * 864e5).toISOString(),
+      end: new Date(Date.now() + 2 * 864e5 + 18e5).toISOString(),
+    },
+  });
+const rowFor = (pid) => store.vakilcard_appointment_requests.find((x) => x.profile_id === pid);
 
 /* ---------- tests ---------- */
 const tests = [];
 const test = (name, fn) => tests.push([name, fn]);
 
-test("confirm_payment cannot mark a GATEWAY booking paid — the visitor's word is not evidence", async () => {
-  // THE HOLE THIS CLOSES. confirm_payment sets payment_status='claimed_paid' on
-  // nothing but a request_id. Left ungated on the Razorpay path, any visitor
-  // could reach a paid-looking state for a booking they never paid for -- and
-  // it would look identical to the honour-system flow, where a human owner
-  // still has to vouch. Prove it is refused, and prove the row did not move.
-  const row = seedBooking();
+test("a configured fee books the slot and records it as DUE, collecting nothing", async () => {
+  const r = await book("feeadvocate");
+  assert.equal(r.status, 200);
+  assert.equal(r.data.payment_status, "due", "a fee that exists must be recorded as owed");
+  assert.equal(r.data.amount_due, 2000);
+
+  // The whole point: VakilCard is not in the money path, so it must not hand
+  // the visitor anything that looks like a way to pay through us.
+  assert.equal(r.data.pay_link, undefined, "no upi:// link may be issued by booking");
+  assert.equal(r.data.pay_url, undefined, "no gateway link may be issued by booking");
+
+  const row = rowFor("prof-fee");
+  assert.ok(row, "the appointment must exist");
+  assert.equal(row.payment_status, "due");
+  assert.equal(Number(row.amount_inr), 2000);
+  assert.ok(!row.razorpay_payment_link_id, "nothing may be written to the dormant gateway columns");
+});
+
+test("the to-ONE payment_prefs embed is unwrapped — the bug that zeroed every fee", async () => {
+  // vakilcard_payment_prefs has PRIMARY KEY (profile_id), so PostgREST returns
+  // the embed as a single OBJECT. booking.js unwrapped only the array shape and
+  // mapped the object to null, so profile.payment was always null: the fee read
+  // as unset and every booking looked free. _lib.js:361 has handled both shapes
+  // all along, which is why the SSR card displayed a fee the booking sheet
+  // insisted did not exist.
+  const r = await call({ method: "GET", query: { action: "public_slots", username: "feeadvocate" } });
+  assert.equal(r.status, 200);
+  assert.equal(r.data.payment.amount_due, 2000, "the fee must survive the to-one embed");
+  assert.equal(r.data.payment.required, false, "nothing is ever required up front");
+});
+
+test("no fee configured still books, and owes nothing", async () => {
+  const r = await book("freeadvocate");
+  assert.equal(r.status, 200);
+  assert.equal(r.data.payment_status, "not_required");
+  assert.equal(r.data.amount_due, null);
+  assert.equal(rowFor("prof-free").payment_status, "not_required");
+});
+
+test("the visitor can no longer self-report payment, and cannot move a row", async () => {
+  // 'claimed_paid' was written on nothing but a tap. It read as verified to
+  // every screen that consumed it.
+  const row = rowFor("prof-fee");
+  const before = row.payment_status;
   const r = await call({ method: "POST", body: { action: "confirm_payment", request_id: row.id } });
-  assert.equal(r.status, 409);
-  assert.equal(r.data.error, "gateway_payment_pending");
-  assert.equal(find(row.id).payment_status, "pending", "row must not move");
+  assert.equal(r.status, 410, "the endpoint must answer, not fall through to the owner-auth 401");
+  assert.equal(r.data.error, "payment_confirmation_retired");
+  assert.equal(rowFor("prof-fee").payment_status, before, "the row must not move");
 });
 
-test("confirm_payment still works on the honour-system (upi://) path", async () => {
-  // The guard must be narrow. Bookings with no payment link are the pre-existing
-  // behaviour and must be untouched, or this change quietly breaks every
-  // advocate who takes UPI directly.
-  const row = seedBooking({ razorpay_payment_link_id: null, payment_provider: "upi_manual" });
-  const r = await call({ method: "POST", body: { action: "confirm_payment", request_id: row.id } });
-  assert.equal(r.status, 200);
-  assert.equal(find(row.id).payment_status, "claimed_paid");
-});
-
-test("webhook confirms a paid link, records provenance, and is idempotent on redelivery", async () => {
-  const row = seedBooking();
-  const body = {
-    event: "payment_link.paid",
-    payload: {
-      payment_link: { entity: { id: row.razorpay_payment_link_id } },
-      payment: { entity: { id: "pay_test_1" } },
-    },
-  };
-  const first = await webhook(body);
-  assert.equal(first.status, 200);
-  const after = find(row.id);
-  assert.equal(after.payment_status, "confirmed");
-  assert.equal(after.payment_provider, "razorpay", "provenance: Razorpay vouched, not the owner");
-  assert.equal(after.razorpay_payment_id, "pay_test_1");
-  assert.ok(after.paid_at, "paid_at must be stamped");
-
-  // Razorpay retries on any non-2xx and can deliver twice regardless. A second
-  // delivery must be a no-op that still answers 2xx, or the retries never stop.
-  const second = await webhook(body);
-  assert.equal(second.status, 200);
-  assert.equal(second.data.idempotent, true);
-});
-
-test("webhook believes Razorpay's API, not the payload it was handed", async () => {
-  // The payload claims paid; the API says the link is still unpaid. The API
-  // wins. This is the whole reason the handler re-fetches -- a forged POST is
-  // free to write, and a signature cannot always be checked (Vercel eats the
-  // raw body), so the payload can never be the authority.
-  const row = seedBooking();
-  rzpState.links[row.razorpay_payment_link_id].status = "created";
-  const r = await webhook({
-    event: "payment_link.paid",
-    payload: { payment_link: { entity: { id: row.razorpay_payment_link_id } } },
-  });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.ignored, true);
-  assert.equal(find(row.id).payment_status, "pending", "an unpaid link must never confirm a booking");
-});
-
-test("webhook refuses a link that belongs to a different booking", async () => {
-  // notes.appointment_id points at row B while the link id belongs to row A.
-  // Without the cross-check, one real payment could confirm a second booking.
-  const a = seedBooking();
-  const b = seedBooking();
-  rzpState.links[a.razorpay_payment_link_id].notes.appointment_id = b.id;
-  const r = await webhook({
-    event: "payment_link.paid",
-    payload: {
-      payment_link: { entity: { id: a.razorpay_payment_link_id } },
-      payment: { entity: { id: "pay_test_x" } },
-    },
-  });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.reason, "link_mismatch");
-  assert.equal(find(b.id).payment_status, "pending");
-  assert.equal(find(a.id).payment_status, "pending");
-});
-
-test("webhook refuses an underpayment", async () => {
-  const row = seedBooking();
-  rzpState.links[row.razorpay_payment_link_id].amount_paid = 10000; // Rs 100 of Rs 500
-  const r = await webhook({
-    event: "payment_link.paid",
-    payload: {
-      payment_link: { entity: { id: row.razorpay_payment_link_id } },
-      payment: { entity: { id: "pay_test_short" } },
-    },
-  });
-  assert.equal(r.status, 200);
-  assert.equal(r.data.reason, "amount_mismatch");
-  assert.equal(find(row.id).payment_status, "pending");
-});
-
-test("webhook returns a RETRYABLE status when Razorpay is unreachable", async () => {
-  // 2xx means "stop retrying". A provider outage must not be acknowledged as
-  // handled, or a real payment is lost with no second delivery.
-  const row = seedBooking();
-  rzpState.throwOnFetch = true;
-  try {
-    const r = await webhook({
-      event: "payment_link.paid",
-      payload: { payment_link: { entity: { id: row.razorpay_payment_link_id } } },
-    });
-    assert.ok(r.status >= 500, `expected a retryable 5xx, got ${r.status}`);
-  } finally {
-    rzpState.throwOnFetch = false;
-  }
-  assert.equal(find(row.id).payment_status, "pending");
-});
-
-test("non-paid link events are acknowledged, never acted on", async () => {
-  for (const event of ["payment_link.cancelled", "payment_link.expired", "payment_link.partially_paid"]) {
-    const r = await webhook({ event, payload: { payment_link: { entity: { id: "plink_whatever" } } } });
-    assert.equal(r.status, 200, `${event} must be acknowledged so Razorpay stops retrying`);
-    assert.equal(r.data.ignored, true);
-  }
-});
-
-test("the webhook branch never reaches the owner-auth gate", async () => {
-  // It is dispatched on the header, above every session check. A regression
-  // here would answer Razorpay with 401 and silently lose every payment.
-  const r = await webhook({ event: "payment_link.paid", payload: {} });
-  assert.notEqual(r.status, 401);
-  assert.equal(r.status, 200);
+test("booking.js still dispatches `action` from the POST body", async () => {
+  // Guards 37d4e5c. Query-only dispatch made every POST branch unreachable and
+  // presented as a session error. "request" with no username 404s before it
+  // touches the database, so 404 means dispatched and 401 means it fell through.
+  const viaBody = await call({ method: "POST", body: { action: "request" } });
+  assert.equal(viaBody.status, 404);
+  const viaQuery = await call({ method: "POST", query: { action: "request" }, body: {} });
+  assert.equal(viaQuery.status, 404);
+  const unknown = await call({ method: "POST", body: { action: "definitely_not_an_action" } });
+  assert.equal(unknown.status, 401);
 });
 
 /* ---------- runner ---------- */

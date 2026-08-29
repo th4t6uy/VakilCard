@@ -761,7 +761,12 @@
         " · " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
     };
     var pro = !!data.pro;
-    var payReq = pro && data.payment && data.payment.required;
+    // amount_due is what the visitor will owe the ADVOCATE at the appointment.
+    // Nothing is collected here and there is no payment step -- see
+    // api/vakilcard/booking.js. `payment.required` is gone from the API and an
+    // older cached bundle reading it simply shows no payment UI, which is the
+    // new behaviour anyway.
+    var amountDue = (data.payment && data.payment.amount_due) || null;
     var body =
       '<div style="font-size:12.5px;font-weight:700;color:var(--text-hi);margin-bottom:10px">' + fmt(slot.start) + "</div>" +
       // font-size 16px on every real text input in this sheet — below that,
@@ -770,25 +775,21 @@
       '<input id="vc-bk-phone" placeholder="Phone number" type="tel" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">' +
       '<textarea id="vc-bk-purpose" placeholder="What\'s this about? (optional)" rows="2" style="width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px;resize:vertical"></textarea>';
 
-    if (payReq) {
-      var fee = data.payment.consultation_fee;
+    if (amountDue) {
+      // Stated before they book, never after -- the fee must not be a surprise
+      // on the day. It is a notice, not a checkout: no amount to choose, no
+      // method to pick, nothing to pay here.
       body +=
-        '<div style="display:flex;gap:8px;margin:4px 0 8px">' +
-        '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);font-size:12.5px;color:var(--text-hi)"><input type="radio" name="vc-bk-type" value="consultation" checked>Consultation' + (fee ? " (₹" + fee + ")" : "") + "</label>" +
-        '<label style="flex:1;display:flex;align-items:center;gap:6px;padding:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);font-size:12.5px;color:var(--text-hi)"><input type="radio" name="vc-bk-type" value="custom">Other amount</label>' +
+        '<div style="display:flex;align-items:baseline;justify-content:space-between;gap:10px;margin:4px 0 10px;padding:11px 13px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick)">' +
+        '<span style="font-size:12.5px;color:var(--text-low)">Consultation fee</span>' +
+        '<span style="font-size:14px;font-weight:800;color:var(--text-hi)">₹' + amountDue + "</span>" +
         "</div>" +
-        '<input id="vc-bk-amount" placeholder="Amount (₹)" type="number" min="1" style="display:none;width:100%;box-sizing:border-box;padding:11px 13px;margin-bottom:8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px">';
+        '<div style="font-size:11px;color:var(--text-dim);margin:-4px 0 10px;line-height:1.45">Payable directly to the advocate at your appointment. Nothing is charged now.</div>';
     }
     body += '<button id="vc-bk-submit" style="' + sheetBtnCss + ';justify-content:center;margin-top:4px">Request this slot</button>' +
       '<div id="vc-bk-err" style="font-size:11.5px;color:var(--danger,#f66);margin-top:6px;display:none"></div>';
 
     var s = openSheet("Confirm your details", body);
-    var amountInput = s.panel.querySelector("#vc-bk-amount");
-    if (payReq) {
-      s.panel.querySelectorAll('input[name="vc-bk-type"]').forEach(function (r) {
-        r.addEventListener("change", function () { amountInput.style.display = r.value === "custom" && r.checked ? "block" : "none"; });
-      });
-    }
     s.panel.querySelector("#vc-bk-submit").addEventListener("click", function () {
       var name = s.panel.querySelector("#vc-bk-name").value.trim();
       var phone = s.panel.querySelector("#vc-bk-phone").value.trim();
@@ -798,8 +799,6 @@
         errEl.style.display = "block";
         return;
       }
-      var bookingType = payReq ? (s.panel.querySelector('input[name="vc-bk-type"]:checked') || {}).value || "consultation" : "consultation";
-      var amount = bookingType === "custom" ? +(amountInput && amountInput.value) : undefined;
       fetch("/api/vakilcard/booking", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -811,8 +810,6 @@
           purpose: s.panel.querySelector("#vc-bk-purpose").value.trim(),
           start: slot.start,
           end: slot.end,
-          booking_type: bookingType,
-          amount_inr: amount,
         }),
       })
         .then(function (r) { return r.json(); })
@@ -823,59 +820,17 @@
             errEl.style.display = "block";
             return;
           }
-          // pay_url (Razorpay, verified) wins over pay_link (upi://, honour
-          // system) when the server issued one. The server never returns both.
-          if (d.payment_status === "pending" && d.pay_url) renderGatewayPaymentStep(d);
-          else if (d.payment_status === "pending" && d.pay_link) renderPaymentStep(d);
-          else renderRequestDone("Request sent! You'll be confirmed shortly.");
+          // One outcome now. There is no payment step to branch into.
+          renderRequestDone(
+            d.amount_due
+              ? "Request sent! ₹" + d.amount_due + " is payable to the advocate at your appointment."
+              : "Request sent! You'll be confirmed shortly."
+          );
         })
         .catch(function () {
           errEl.textContent = "Couldn't send your request — please try again or message directly.";
           errEl.style.display = "block";
         });
-    });
-  }
-
-  /* Razorpay-hosted payment. Deliberately just a link: the card is rendered
-     from a verbatim design export, so nothing here loads a third-party SDK or
-     opens a modal inside the export's own sheet UI. The visitor already leaves
-     the page for their UPI app on the other path, so this costs nothing in
-     experience and keeps the public card's script surface at zero.
-
-     There is no "I've paid" button, and that is the entire point of this
-     screen: on this path the visitor's word is not evidence and is never
-     asked for. The Razorpay webhook confirms the booking. */
-  function renderGatewayPaymentStep(reqResult) {
-    var body =
-      '<div style="font-size:12.5px;color:var(--text-low);margin-bottom:10px">Pay <b style="color:var(--text-hi)">₹' + reqResult.amount_inr + '</b> to confirm — your slot is held until then.</div>' +
-      '<a href="' + reqResult.pay_url + '" target="_blank" rel="noopener noreferrer" id="vc-bk-paynow" style="' + sheetBtnCss + ';justify-content:center;text-decoration:none">Pay ₹' + reqResult.amount_inr + ' securely</a>' +
-      '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">UPI, card or netbanking. Your appointment is confirmed automatically once the payment goes through — nothing else to do.</div>';
-    var s = openSheet("Complete payment", body);
-    s.panel.querySelector("#vc-bk-paynow").addEventListener("click", function () {
-      // Not a confirmation — the webhook does that. This only stops the sheet
-      // sitting on "pay" behind the payment tab the visitor just opened.
-      setTimeout(function () {
-        renderRequestDone("Once your payment goes through, your appointment is confirmed automatically.");
-      }, 1200);
-    });
-  }
-
-  function renderPaymentStep(reqResult) {
-    var q = reqResult.pay_link.split("?")[1] || "";
-    var body =
-      '<div style="font-size:12.5px;color:var(--text-low);margin-bottom:8px">Pay <b style="color:var(--text-hi)">₹' + reqResult.amount_inr + '</b> to confirm — your slot is held until then.</div>' +
-      upiLauncherHtml(q, reqResult.pay_link) +
-      '<button id="vc-bk-paid" style="' + sheetBtnCss + ';justify-content:center;margin-top:10px">I\'ve paid</button>' +
-      '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">Paid directly via UPI — no gateway in between. The lawyer confirms receipt before your appointment is finalised.</div>';
-    var s = openSheet("Complete payment", body);
-    s.panel.querySelector("#vc-bk-paid").addEventListener("click", function () {
-      fetch("/api/vakilcard/booking", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "confirm_payment", request_id: reqResult.id }),
-      })
-        .then(function () { renderRequestDone("Thanks! Your payment is noted — you'll be confirmed once it's verified."); })
-        .catch(function () { renderRequestDone("Noted. If confirmation doesn't arrive, message directly."); });
     });
   }
 

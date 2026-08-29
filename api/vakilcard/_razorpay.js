@@ -173,86 +173,6 @@ function verifyWebhookSignature(rawBody, signature) {
   return timingSafeEqualStr(expected, signature);
 }
 
-/* -------------------------------------------------------------------------
- * ONE-OFF PAYMENTS — VakilCard appointment bookings (2026-08-29).
- *
- * Subscriptions above are a MANDATE the advocate signs once. A booking is the
- * opposite shape: a stranger, on someone else's public card, paying a single
- * amount that differs every time. Razorpay models that as a Payment Link.
- *
- * WHY PAYMENT LINKS AND NOT ORDERS + CHECKOUT. The public card is rendered from
- * design_system/vakilcard/ — a verbatim design export that must never be edited
- * (only mount.js is ours). Orders means loading Razorpay's checkout.js into
- * that page and building a modal inside the export's sheet UI. A Payment Link
- * is a URL: mount.js swaps the href it already renders and nothing else moves.
- * The visitor already leaves the page today for their UPI app, so there is no
- * UX regression to trade away. If we ever want the visitor kept on-card, an
- * Orders adapter is a sibling of these three functions — the webhook handler
- * and the schema in booking.js do not change.
- * ---------------------------------------------------------------------------- */
-
-/**
- * Create a Payment Link for a single appointment.
- *
- * `notes` come back VERBATIM in the webhook, which is how the webhook maps a
- * payment to an appointment row with no extra lookup table — the same trick
- * createSubscription() uses. Amount is in PAISE (Razorpay's smallest unit);
- * callers hold rupees, so the conversion happens here, once.
- */
-async function createPaymentLink({ amountInr, description, customerName, customerPhone, notes, referenceId, callbackUrl, expireBy }) {
-  const body = {
-    amount: Math.round(Number(amountInr) * 100),
-    currency: "INR",
-    accept_partial: false,
-    description: String(description || "VakilCard appointment").slice(0, 2048),
-    notes: notes || {},
-    // Razorpay caps reference_id at 40 characters. An appointment id is a
-    // 36-character uuid, so it fits exactly as-is — no encoding, no prefix.
-    ...(referenceId ? { reference_id: String(referenceId).slice(0, 40) } : {}),
-    ...(callbackUrl ? { callback_url: callbackUrl, callback_method: "get" } : {}),
-    ...(expireBy ? { expire_by: expireBy } : {}),
-    // Razorpay's own SMS/email nudges are OFF. We already own the client's
-    // phone and message them ourselves through MessagingService; a second,
-    // differently-worded reminder from an unfamiliar sender is how a first-time
-    // client decides the booking was a scam.
-    notify: { sms: false, email: false },
-    reminder_enable: false,
-  };
-  if (customerName || customerPhone) {
-    body.customer = {
-      ...(customerName ? { name: String(customerName).slice(0, 120) } : {}),
-      ...(customerPhone ? { contact: String(customerPhone).slice(0, 20) } : {}),
-    };
-  }
-  return rzpFetch("/payment_links", { method: "POST", body: JSON.stringify(body) });
-}
-
-/** Authoritative state of a Payment Link. The webhook acts on THIS, never on
- *  the payload it was handed. */
-async function fetchPaymentLink(paymentLinkId) {
-  return rzpFetch(`/payment_links/${encodeURIComponent(paymentLinkId)}`);
-}
-
-/**
- * Booking-webhook signature.
- *
- * Razorpay allows up to 30 webhook URLs per account, each with its OWN secret
- * and its own event selection, so the booking webhook is a second dashboard
- * entry pointing at /api/vakilcard/booking and subscribed to payment_link.*
- * only. RAZORPAY_BOOKING_WEBHOOK_SECRET holds that secret; it falls back to
- * RAZORPAY_WEBHOOK_SECRET so an existing single-secret setup keeps working
- * without a second variable being set first.
- */
-function verifyBookingWebhookSignature(rawBody, signature) {
-  const secret =
-    process.env.RAZORPAY_BOOKING_WEBHOOK_SECRET ||
-    process.env.RAZORPAY_WEBHOOK_SECRET ||
-    "";
-  if (!secret || !signature) return false;
-  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
-  return timingSafeEqualStr(expected, signature);
-}
-
 /** Dashboard-created Offer id for a coupon code, if configured. */
 function offerIdForCoupon(code) {
   if (!code) return null;
@@ -271,8 +191,4 @@ module.exports = {
   verifySubscriptionCheckout,
   verifyWebhookSignature,
   offerIdForCoupon,
-  // one-off payments (appointment bookings)
-  createPaymentLink,
-  fetchPaymentLink,
-  verifyBookingWebhookSignature,
 };
