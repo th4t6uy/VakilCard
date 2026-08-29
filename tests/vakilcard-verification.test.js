@@ -520,6 +520,39 @@ test("Google Business tile + Pro pay fields (profile.js SSR boot)", async () => 
   assert.ok(body.includes('"reviewLabel":"View Reviews"'), "Free caption falls back to View Reviews");
 });
 
+test("booking.js dispatches `action` from the POST BODY, not just the query", async () => {
+  // THE REGRESSION THIS GUARDS. From f10f1a5 until 2026-08-29, booking.js read
+  // `const action = String(req.query.action || "")` -- query only -- while every
+  // client in the estate sends action in the JSON body. So every POST branch in
+  // that file was unreachable: save_windows, manage, gcal_disconnect, and the
+  // two the PUBLIC card posts, `request` and `confirm_payment`. No visitor could
+  // book an appointment, and the failure looked like a session problem because
+  // unmatched requests fell through to the owner-auth check and returned 401.
+  //
+  // "request" is the probe because it is visitor-facing (no auth) and returns
+  // 404 before touching the database when the username is missing. So:
+  //   404 -> the body action was dispatched   (correct)
+  //   401 -> it was ignored and fell through  (the bug)
+  const handler = require(path.resolve(__dirname, "../api/vakilcard/booking.js"));
+  const call = async (req) => {
+    const res = fakeRes();
+    await handler({ headers: {}, query: {}, ...req }, res);
+    return { status: res.statusCode, data: JSON.parse(res.body || "{}") };
+  };
+
+  const viaBody = await call({ method: "POST", body: { action: "request" } });
+  assert.equal(viaBody.status, 404, "body-supplied action must reach its branch, not fall through to owner auth");
+  assert.equal(viaBody.data.error, "not_found");
+
+  // The query path must keep working -- OAuth redirects and GET links use it.
+  const viaQuery = await call({ method: "POST", query: { action: "request" }, body: {} });
+  assert.equal(viaQuery.status, 404, "query-supplied action must still dispatch");
+
+  // An unknown action still falls through to the owner-auth gate.
+  const unknown = await call({ method: "POST", body: { action: "definitely_not_an_action" } });
+  assert.equal(unknown.status, 401, "unknown actions still require an owner session");
+});
+
 /* ---------- runner ---------- */
 (async () => {
   let failed = 0;

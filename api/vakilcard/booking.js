@@ -341,7 +341,34 @@ function upiDeepLink({ upiId, name, amountInr, note }) {
 
 module.exports = async function handler(req, res) {
   try {
-    const action = String(req.query.action || "");
+    // `action` must be readable from the QUERY STRING **or** the POST BODY.
+    //
+    // It was query-only from f10f1a5 until 2026-08-29, and EVERY client in the
+    // estate sends it in the body, so every POST branch in this file was
+    // unreachable in production. Not a subtle degradation -- the requests fell
+    // past all of them to the owner-auth check at the bottom and came back
+    // "unauthenticated", which reads like a session problem and is why it
+    // survived this long. Proven against the live deployment:
+    //   POST {"action":"request"}      -> 401  (ignored, fell through)
+    //   POST ?action=request           -> 404  (dispatched correctly)
+    //
+    // What was silently dead: save_windows (Save availability), manage
+    // (accept/decline a request), gcal_disconnect (Disconnect Calendar), and
+    // -- worst -- `request` and `confirm_payment`, which the PUBLIC card posts
+    // from mount.js:807/848. No visitor has ever been able to book an
+    // appointment. "No requests yet" on the dashboard was not a quiet product;
+    // it was an endpoint nobody could reach.
+    //
+    // The body is parsed once here and cached on req, so the downstream
+    // readJsonBody(req) calls return it rather than re-reading a consumed
+    // stream (see its first line in _lib.js). Vercel usually pre-parses
+    // req.body for JSON content-types; this works whether it did or not.
+    if (req.method === "POST" && (!req.body || typeof req.body !== "object")) {
+      req.body = await readJsonBody(req);
+    }
+    const action = String(
+      req.query.action || (req.body && typeof req.body === "object" && req.body.action) || ""
+    );
 
     // ---- GET ?action=gcal_start — owner auth (header or query token), Pro
     if (req.method === "GET" && action === "gcal_start") {
