@@ -8,7 +8,13 @@
 import React, { useCallback, useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import {
-  ArrowRight, Banknote, Briefcase, CalendarClock, Check, Copy, Download,
+  // ArrowRight left with the ecosystem rail (now components/EcosystemRail.js).
+  // Dropped as dead code, not to save the build: package.json builds with
+  // `DISABLE_ESLINT_PLUGIN=true CI=false craco build`, so no unused-import
+  // rule runs at all here. (An earlier note in this file claimed CI=true made
+  // it fatal; that is not this repo's config. Link2 has sat unused in this
+  // same import for a while without breaking anything, which proves it.)
+  Banknote, Briefcase, CalendarClock, Check, Copy, Download,
   ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
   Lock, LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
   Smartphone, Sparkles, Star, Trash2, UserRound, X,
@@ -28,6 +34,7 @@ import UpgradeSheet from "../components/UpgradeSheet";
 import SignupPage, { PasswordInput, StrengthBar } from "./vakilcard/SignupPage";
 import BrandWordmark from "../components/BrandWordmark";
 import SEOHead from "../components/SEOHead";
+import EcosystemRail from "../components/EcosystemRail";
 
 // Password errors — kept local since VakilCardPage never shows the full
 // onboarding ERRORS map, just the handful relevant to Change Password.
@@ -57,77 +64,17 @@ const EVENT_LABELS = [
   ["save_contact", "Contacts"], ["qr_download", "QR scans"],
 ];
 
-// Vakilpedia ecosystem cross-promotion (dashboard right rail). VakilCard is
-// free-forever by design — it's the top of the Vakilpedia funnel. This rail
-// is the sales surface: real product art (the same icons used on the
-// marketing homepage), not text links, so it reads as "a Vakilpedia
-// product" rather than a bolted-on directory. CaseLinx is the featured
-// upsell (matches Home.js's hero-card treatment, just compact).
-// VakilCard is deployed on its own subdomain (vakilcard.vakilpedia.com), so
-// a root-relative href like "/caselinx" resolves to a page on THIS domain
-// (404 — VakilCard has no such route) instead of the main site. Every
-// cross-sell link must be absolute to CARD_ORIGIN.
-const CASELINX = {
-  name: "CaseLinx", tag: "the Litigation OS.", badge: "Beta Open",
-  desc: "Case diary, cause lists, billing and e-signing — everything your VakilCard clients need you to run in the background.",
-  href: `${CARD_ORIGIN}/caselinx`, icon: "/caselinx_icon_v2.png", cta: "Explore CaseLinx",
-};
-const ECOSYSTEM = [
-  ["IPC / BNS Converter", "Old-to-new criminal law sections, instantly.", `${CARD_ORIGIN}/ipc-to-bns-converter`, null, "/ipc_bns_converter_icon.png"],
-  ["EvidenceHash", "SHA-256 hashing for digital evidence.", `${CARD_ORIGIN}/evidence-hash-sha256`, null, "/evidencehash_icon.png"],
-  ["Vakilnama", "The Vakilpedia publication for lawyers.", `${CARD_ORIGIN}/vakilnama`, null, "/Vakilnama_cover.png"],
-  ["CourtQue", "Display-board alerts on WhatsApp.", `${CARD_ORIGIN}/courtque`, "New", "/courtque_icon_v3.png"],
-];
-
-function EcosystemRail({ compactGrid = false }) {
-  return (
-    <div className="bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[2rem] p-5">
-      <div className="flex items-center gap-2 mb-4">
-        <img src="/logo.png" alt="" className="h-5 w-auto object-contain flex-none" />
-        <p className="text-xs font-black uppercase tracking-widest text-[#635BFF]">More from <BrandWordmark /></p>
-      </div>
-
-      {/* Featured: CaseLinx — the sale this whole rail exists to make */}
-      <a
-        href={CASELINX.href}
-        className="group relative block rounded-[1.75rem] p-5 mb-3 overflow-hidden bg-gradient-to-br from-indigo-50/90 via-white to-blue-50/70 border-2 border-indigo-200 hover:border-[#635BFF] hover:shadow-lg hover:shadow-indigo-100 transition-all no-underline"
-      >
-        <span className="absolute top-4 right-4 bg-[#635BFF] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">{CASELINX.badge}</span>
-        <div className="w-12 h-12 rounded-2xl overflow-hidden bg-white shadow-sm grid place-items-center mb-3">
-          <img src={CASELINX.icon} alt="CaseLinx" className="w-full h-full object-cover" />
-        </div>
-        <p className="text-lg font-black text-slate-900 tracking-tight leading-none">{CASELINX.name}</p>
-        <p className="text-[#635BFF] font-bold text-xs mt-1">{CASELINX.tag}</p>
-        <p className="text-xs text-slate-600 mt-2 text-left hyphens-none leading-snug">{CASELINX.desc}</p>
-        <span className="inline-flex items-center gap-1 text-xs font-black text-slate-900 group-hover:text-[#635BFF] group-hover:gap-2 transition-all mt-3">
-          {CASELINX.cta}<ArrowRight className="h-3.5 w-3.5" />
-        </span>
-      </a>
-
-      <div className={compactGrid ? "grid sm:grid-cols-2 xl:grid-cols-4 gap-3" : "space-y-3"}>
-        {ECOSYSTEM.map(([name, desc, href, badge, icon]) => (
-          <a
-            key={name}
-            href={href}
-            className="flex items-center gap-3 rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all p-3 no-underline"
-          >
-            <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-50 shadow-sm grid place-items-center flex-none">
-              <img src={icon} alt="" className="w-full h-full object-cover" />
-            </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-1.5">
-                <p className="text-sm font-black text-slate-900 truncate">{name}</p>
-                {badge && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 flex-none">{badge}</span>}
-              </div>
-              <p className="text-[11px] text-slate-500 mt-0.5 text-left hyphens-none leading-snug line-clamp-2">{desc}</p>
-            </div>
-          </a>
-        ))}
-      </div>
-      <p className="text-[11px] font-bold text-slate-400 text-center pt-3">More products coming soon</p>
-    </div>
-  );
-}
+// The ecosystem cross-sell rail moved to components/EcosystemRail.js on
+// 2026-08-26 so that the marketing site's free-tool sidebars are the SAME
+// object rather than a second interpretation of it (founder: "this sidebar
+// was designed in VakilCard - find it and make all cross sell sidebars
+// same"). The design is unchanged; only its address is.
+//
+// origin={CARD_ORIGIN} is still load-bearing: VakilCard is deployed on
+// vakilcard.vakilpedia.com, so a root-relative "/caselinx" would resolve to
+// a route THIS app does not have and 404 instead of reaching the marketing
+// page. The component takes the origin rather than hard-coding it, because
+// on www the same paths are local.
 
 // Every editable section opens DIRECTLY — no wizard replay.
 // 2026-08-16: the "office" entry used to be labelled just "Office address"
@@ -1411,7 +1358,7 @@ export default function VakilCardPage() {
           </div>
 
           {/* ecosystem — inline here below xl (the third column takes over on xl) */}
-          <div className="xl:hidden"><EcosystemRail compactGrid /></div>
+          <div className="xl:hidden"><EcosystemRail origin={CARD_ORIGIN} compactGrid /></div>
         </div>
 
         {/* live card — always in sight while managing */}
@@ -1421,7 +1368,7 @@ export default function VakilCardPage() {
 
         {/* third column: the Vakilpedia ecosystem, product discovery */}
         <div className="hidden xl:block sticky top-8">
-          <EcosystemRail />
+          <EcosystemRail origin={CARD_ORIGIN} />
         </div>
       </div>
 
