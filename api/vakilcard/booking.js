@@ -64,13 +64,42 @@ async function fetchWithTimeout(url, opts = {}, timeoutMs = 6000) {
 //
 // INERT BY DEFAULT: every branch below 503s with a clear message until
 // GOOGLE_OAUTH_CLIENT_ID / GOOGLE_OAUTH_CLIENT_SECRET / GOOGLE_OAUTH_REDIRECT_URI
-// are set. No fake/simulated connection is ever created. Scope is the
-// minimum needed to read free/busy — never full calendar read/write.
+// are set. No fake/simulated connection is ever created.
 const GCAL_CLIENT_ID = process.env.GOOGLE_OAUTH_CLIENT_ID || "";
 const GCAL_CLIENT_SECRET = process.env.GOOGLE_OAUTH_CLIENT_SECRET || "";
 const GCAL_REDIRECT_URI = process.env.GOOGLE_OAUTH_REDIRECT_URI || "";
 const GCAL_DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
-const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.freebusy";
+// 2026-08-29: calendar.events, NOT calendar.freebusy. This is a deliberate
+// trade the founder made with the facts in front of him, and the reasoning
+// matters more than the constant.
+//
+// The Google Cloud project (caselinx-500307) is verified and in production,
+// and the sensitive scope it has APPROVED is calendar.events. calendar.freebusy
+// was never registered on the consent screen at all. Requesting an unregistered
+// sensitive scope is exactly the condition Google's Audience page describes:
+// users see the "unverified app" screen and the project's 100-user cap applies
+// to them. So the narrower scope was not buying privacy in practice -- it was
+// buying a hard ceiling at 100 advocates, on the one feature meant to scale.
+//
+// Switching to the already-approved scope removes the cap today, with no new
+// verification round, and it is also what lets a future booking write the
+// appointment INTO the advocate's calendar.
+//
+// 🔴 THE COST, AND THE OBLIGATION IT CREATES. calendar.events grants read AND
+// WRITE on every event in every calendar the advocate owns. That is far more
+// than this app uses: the only call made today is freeBusy(), which returns
+// busy time ranges and no event contents. But we now HOLD the broader
+// permission, so no user-facing copy may claim we cannot see their appointments.
+// It said exactly that until today. The dashboard copy and the privacy policy
+// were rewritten in the same commit to separate what Google GRANTS from what
+// VakilCard USES. If that distinction ever stops being stated plainly, this
+// scope choice stops being defensible -- these are advocates, and their diaries
+// are privileged.
+//
+// Existing connections are unaffected: tokens already granted for freebusy keep
+// satisfying freeBusy() calls. They simply will not carry write access until
+// the owner reconnects, which nothing needs yet.
+const GCAL_SCOPE = "https://www.googleapis.com/auth/calendar.events";
 // 2026-08-26: business.manage (Google Business Profile) is NO LONGER REQUESTED.
 // It is a SENSITIVE Google scope, it was bundled into the same consent screen as
 // Calendar free/busy -- so anyone who wanted booking availability was also asked
@@ -401,9 +430,10 @@ module.exports = async function handler(req, res) {
 
 
     // ---- GET ?action=google_connect_start — owner auth, Pro. THE primary
-    // dashboard CTA. Since 2026-08-26 it requests Calendar free/busy ONLY:
-    // consent is asked for at the moment the owner connects their calendar, and
-    // for nothing else. requirePro's `feature` label is informational only
+    // dashboard CTA. Since 2026-08-26 it requests a CALENDAR scope only --
+    // Business Profile management is no longer bundled in. See GCAL_SCOPE above
+    // for why that scope is calendar.events rather than the narrower
+    // calendar.freebusy. requirePro's `feature` label is informational only
     // (never validated against PRO_FEATURES — see _entitlements.js).
     if (req.method === "GET" && action === "google_connect_start") {
       if (!calendarConfigured()) return notConfigured(res);

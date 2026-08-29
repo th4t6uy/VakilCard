@@ -177,7 +177,13 @@ function GoogleConnectHero({ pro }) {
           <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF]" /></span>
           <div>
             <p className="text-sm font-black text-slate-900">Connect Google Calendar</p>
-            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">Clients can only book times you are actually free. Vakilpedia sees when you are busy — never what the appointments are.</p>
+            {/* 2026-08-29: this said "Vakilpedia sees when you are busy — never
+                what the appointments are." That stopped being true the moment
+                the scope became calendar.events (see GCAL_SCOPE in
+                api/vakilcard/booking.js). What Google GRANTS and what VakilCard
+                USES are now different things, and both are stated. Do not
+                collapse them back into one reassuring sentence. */}
+            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">Clients can only book times you are actually free. Google will ask you to allow viewing and editing calendar events — VakilCard uses it only to read when you are busy.</p>
           </div>
         </div>
         <button
@@ -491,7 +497,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
             {!cfg.calendar_connected && (
               <>
                 <p className="text-xs text-slate-500 mt-2 mb-1 hyphens-none">
-                  Connect your Google Calendar so clients can only book times you are actually free. Vakilpedia sees when you are busy — never what the appointments are.
+                  Connect your Google Calendar so clients can only book times you are actually free. Google’s consent screen asks for permission to view and edit events on your calendars — that is the access Google grants. VakilCard reads only your busy times to block slots, and does not read what your appointments are.
                 </p>
                 <button type="button" onClick={connectGoogle} className={btn + " mt-1"}><Sparkles className="h-4 w-4" />Connect Google Calendar</button>
               </>
