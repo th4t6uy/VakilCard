@@ -44,6 +44,7 @@ const { db, readJsonBody, resolveAccount, trackEvent, sanitizeBookingWindows, ex
 const { isProActive, requirePro } = require("./_entitlements");
 const { sign, verify } = require("./_jwt");
 const messaging = require("./_messaging");
+const email = require("./_email");
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -375,6 +376,11 @@ async function storeCalendarConnection(pid, t) {
         refresh_token: t.refresh_token,
         token_expires_at: expires_at,
         calendar_id: "primary",
+        // What Google ACTUALLY granted, straight from the token response. The
+        // requested scope and the granted scope are not the same thing, and a
+        // token minted before ab08f87 widened GCAL_SCOPE carries only
+        // free/busy — writing an event with it 403s.
+        granted_scopes: t.scope || null,
       },
       prefer: "resolution=merge-duplicates,return=minimal",
     });
@@ -439,6 +445,89 @@ function formatSlotIST(startsAt) {
   }
 }
 
+/** Does this connection's grant allow writing events? NULL scope means the
+ *  connection predates the recording of it — unknown, so we try anyway and let
+ *  Google answer, rather than silently skipping. */
+function scopeAllowsWrite(grantedScopes) {
+  if (!grantedScopes) return true; // unknown — attempt it
+  return /calendar\.events|auth\/calendar(\s|$)/.test(grantedScopes);
+}
+
+/**
+ * Put the appointment in the advocate's connected Google Calendar.
+ *
+ * NEVER THROWS AND NEVER BLOCKS. A booking is confirmed by the row in our
+ * database; the calendar is a convenience on top. Google being slow, revoked or
+ * read-only must not cost the advocate a client. Returns a short reason string
+ * for the logs so a failure is diagnosable instead of invisible — the previous
+ * failure mode here was "the feature silently does nothing".
+ */
+async function gcalCreateEvent(profile, appointment) {
+  try {
+    if (!calendarConfigured()) return { ok: false, reason: "not_configured" };
+    const rows = await db(
+      `vakilcard_calendar_connections?profile_id=eq.${profile.id}&select=calendar_id,granted_scopes`
+    );
+    const conn = rows[0];
+    if (!conn) return { ok: false, reason: "not_connected" };
+    if (!scopeAllowsWrite(conn.granted_scopes)) {
+      console.error(`[vakilcard/booking] calendar write skipped pid=${profile.id} — grant is read-only, reconnect required`);
+      return { ok: false, reason: "reconnect_required" };
+    }
+    const token = await gcalValidAccessToken(profile.id);
+    if (!token) return { ok: false, reason: "no_token" };
+
+    const calendarId = conn.calendar_id || "primary";
+    const start = new Date(appointment.starts_at);
+    // Fall back to a 30-minute block when the slot carried no explicit end —
+    // Google rejects an event without one.
+    const end = appointment.ends_at ? new Date(appointment.ends_at) : new Date(start.getTime() + 30 * 60000);
+    const amount = Number(appointment.amount_inr);
+
+    const description = [
+      `Client: ${appointment.client_name || "—"}`,
+      `Phone: ${appointment.client_phone || "—"}`,
+      appointment.purpose ? `Purpose: ${appointment.purpose}` : null,
+      amount ? `Amount due: Rs ${amount} (payable to you at the appointment)` : "No fee set",
+      "",
+      "Booked via VakilCard",
+    ]
+      .filter(Boolean)
+      .join("\n");
+
+    const r = await fetchWithTimeout(
+      `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(calendarId)}/events`,
+      {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          summary: `Consultation — ${appointment.client_name || "Client"} (VakilCard)`,
+          description,
+          start: { dateTime: start.toISOString(), timeZone: "Asia/Kolkata" },
+          end: { dateTime: end.toISOString(), timeZone: "Asia/Kolkata" },
+          source: { title: "VakilCard", url: `${GCAL_DASHBOARD_SITE}/${profile.username || ""}` },
+        }),
+      },
+      8000
+    );
+    if (!r.ok) {
+      const body = await r.text().catch(() => "");
+      // 403 with an insufficient-scope body is the stale-grant case, and it is
+      // the one an advocate can actually fix — say so distinctly.
+      const reason =
+        r.status === 403 && /insufficient|scope/i.test(body) ? "reconnect_required" : `http_${r.status}`;
+      console.error(`[vakilcard/booking] calendar insert failed pid=${profile.id} ${reason} ${body.slice(0, 200)}`);
+      return { ok: false, reason };
+    }
+    const ev = await r.json().catch(() => ({}));
+    console.log(`[vakilcard/booking] calendar event created pid=${profile.id} event=${ev.id}`);
+    return { ok: true, eventId: ev.id || null };
+  } catch (e) {
+    console.error("[vakilcard/booking] calendar insert threw:", e && (e.message || e));
+    return { ok: false, reason: "exception" };
+  }
+}
+
 /**
  * Tell the advocate a client booked, and what to collect.
  *
@@ -448,28 +537,83 @@ function formatSlotIST(startsAt) {
  * who can see it arrive.
  */
 async function notifyOwnerOfBooking(profile, appointment) {
+  const amount = Number(appointment.amount_inr);
+  const paymentLine = amount ? `Rs ${amount} due at the appointment` : "No fee set";
+  const when = formatSlotIST(appointment.starts_at);
+  const dashboard = `${GCAL_DASHBOARD_SITE}/${profile.username || ""}/dashboard`;
+  const client = appointment.client_name || "A client";
+
+  // ---- WhatsApp -----------------------------------------------------------
   try {
     const phone = await ownerPhone(profile);
-    if (!phone) return;
-    const amount = Number(appointment.amount_inr);
-    const paymentLine = amount ? `Rs ${amount} due at the appointment` : "No fee set";
-    const dashboard = `${GCAL_DASHBOARD_SITE}/${profile.username || ""}/dashboard`;
-    await messaging.sendTemplate({
-      product: "vakilcard",
-      module: "notification",
-      templateName: "vakilcard_booking_alert",
-      phoneE164: phone,
-      accountId: profile.account_id || null,
-      bodyParams: [
-        appointment.client_name || "A client",
-        formatSlotIST(appointment.starts_at),
-        paymentLine,
-        dashboard,
-      ],
-    });
+    if (phone) {
+      const sent = await messaging.sendTemplate({
+        product: "vakilcard",
+        module: "notification",
+        templateName: "vakilcard_booking_alert",
+        phoneE164: phone,
+        accountId: profile.account_id || null,
+        bodyParams: [client, when, paymentLine, dashboard],
+      });
+
+      // FALLBACK, and the reason this exists: message_templates rows are OUR
+      // registry, not a Meta approval. Until Meta approves
+      // vakilcard_booking_alert the template send returns template_missing and
+      // the advocate hears NOTHING -- which is exactly what happened on
+      // 2026-08-29 (three 'skipped' rows in message_log against real bookings).
+      //
+      // Free-form session text needs an open 24-hour customer-service window,
+      // so it reaches an advocate who has messaged the business number recently
+      // and not one who hasn't. That is a real limitation, not a fix: it is
+      // strictly better than silence and strictly worse than approval. Both
+      // attempts are logged, so "why did nobody get told" stays answerable.
+      if (!sent || !sent.ok) {
+        console.error(
+          `[vakilcard/booking] template alert unavailable (${sent && sent.error}) — falling back to session text`
+        );
+        await messaging.sendText({
+          product: "vakilcard",
+          phoneE164: phone,
+          accountId: profile.account_id || null,
+          text:
+            `New appointment booked via VakilCard\n\n` +
+            `Client: ${client}\n` +
+            `Phone: ${appointment.client_phone || "—"}\n` +
+            `When: ${when}\n` +
+            `${paymentLine}\n\n` +
+            `Details: ${dashboard}`,
+        });
+      }
+    }
   } catch (e) {
-    // Never rethrow into a booking or a webhook response.
-    console.error("[vakilcard/booking] owner notification failed:", e && (e.message || e));
+    console.error("[vakilcard/booking] whatsapp alert failed:", e && (e.message || e));
+  }
+
+  // ---- Email --------------------------------------------------------------
+  // A second, independent channel on purpose: WhatsApp delivery here depends on
+  // a Meta approval we do not control, and an advocate who misses the booking
+  // misses the client.
+  try {
+    if (profile.email) {
+      await email.sendEmail({
+        to: profile.email,
+        accountId: profile.account_id || null,
+        subject: `New appointment: ${client} — ${when}`,
+        text:
+          `You have a new appointment, booked via VakilCard.\n\n` +
+          `Client:    ${client}\n` +
+          `Phone:     ${appointment.client_phone || "—"}\n` +
+          `When:      ${when}\n` +
+          (appointment.purpose ? `Purpose:   ${appointment.purpose}\n` : "") +
+          `Payment:   ${paymentLine}\n\n` +
+          `The fee is paid directly to you at the appointment. VakilCard does\n` +
+          `not collect or hold any client payment.\n\n` +
+          `Manage this booking: ${dashboard}\n\n` +
+          `Booked via VakilCard`,
+      });
+    }
+  } catch (e) {
+    console.error("[vakilcard/booking] email alert failed:", e && (e.message || e));
   }
 }
 
@@ -847,11 +991,16 @@ module.exports = async function handler(req, res) {
 
       trackEvent(profile.id, "appointment", req.headers["referer"]).catch(() => {});
 
-      // Every booking now alerts the advocate immediately, because every
-      // booking is final the moment it is made -- there is no payment step left
-      // to wait on. The alert carries the amount due so they know what to
-      // collect when the client arrives.
+      // Every booking alerts the advocate immediately and lands in their
+      // calendar, because the booking is final the moment it is made -- there
+      // is no payment step left to wait on.
+      //
+      // BOTH ARE FIRE-AND-FORGET AND NEITHER CAN BLOCK. The appointment row is
+      // already written; Meta, Google or Resend having a bad minute must never
+      // turn a real booking into an error the visitor sees. Every failure path
+      // inside these two logs its own reason.
       notifyOwnerOfBooking(profile, saved).catch(() => {});
+      gcalCreateEvent(profile, saved).catch(() => {});
 
       // No pay_link and no pay_url: nothing is payable through VakilCard.
       // amount_due is information for the visitor, not a checkout.

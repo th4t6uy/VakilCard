@@ -824,7 +824,8 @@
           renderRequestDone(
             d.amount_due
               ? "Request sent! ₹" + d.amount_due + " is payable to the advocate at your appointment."
-              : "Request sent! You'll be confirmed shortly."
+              : "Request sent! You'll be confirmed shortly.",
+            { name: name, phone: phone, slot: slot, amountDue: d.amount_due }
           );
         })
         .catch(function () {
@@ -834,10 +835,44 @@
     });
   }
 
-  function renderRequestDone(message) {
+  /* The advocate is notified server-side (WhatsApp + email), but that depends
+     on a Meta template approval and a mail provider we do not control. This
+     button is the visitor's own copy of the booking, sent from their phone to
+     the advocate's WhatsApp -- it needs no approval, no provider and no
+     network of ours, so it is the one channel that cannot fail silently.
+     links.whatsapp is already in the card's boot payload (the WhatsApp action
+     the card has always had), so no new data is exposed to do this. */
+  function renderRequestDone(message, booking) {
+    var fmtWhen = function (iso) {
+      var d = new Date(iso);
+      return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) +
+        " at " + d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
+    };
+    var shareHref = null;
+    if (booking && links.whatsapp) {
+      var lines = [
+        "Hello, I have just booked an appointment with you via VakilCard.",
+        "",
+        "Name: " + booking.name,
+        "Phone: " + booking.phone,
+        "When: " + fmtWhen(booking.slot.start),
+      ];
+      if (booking.amountDue) lines.push("Amount due: Rs " + booking.amountDue + " (payable at the appointment)");
+      lines.push("", "Booked via VakilCard");
+      // links.whatsapp is already https://wa.me/<number>; append the text.
+      shareHref = links.whatsapp + (links.whatsapp.indexOf("?") === -1 ? "?" : "&") +
+        "text=" + encodeURIComponent(lines.join("\n"));
+    }
+
     var body = '<div style="display:flex;flex-direction:column;align-items:center;gap:10px;padding:10px 0 4px;text-align:center">' +
       '<div style="width:44px;height:44px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:20px">✓</div>' +
       '<div style="font-size:13.5px;color:var(--text-hi);line-height:1.5">' + message + "</div></div>";
+    if (shareHref) {
+      body +=
+        '<a href="' + shareHref + '" target="_blank" rel="noopener noreferrer" style="' + sheetBtnCss + ';justify-content:center;margin-top:12px">' +
+        nounIcon("whatsapp") + "Share on WhatsApp</a>" +
+        '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">Sends your booking details straight to the advocate.</div>';
+    }
     openSheet("All set", body);
   }
 

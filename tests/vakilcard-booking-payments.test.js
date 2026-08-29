@@ -61,6 +61,37 @@ const libPath = path.resolve(__dirname, "../api/vakilcard/_lib.js");
 const real = require(libPath);
 require.cache[libPath].exports = { ...real, db: fakeDb };
 
+// Force both notification channels to blow up. The contract under test is that
+// a booking survives it: the appointment is already written when these run, and
+// Meta, Google or Resend having a bad minute must never turn a real booking
+// into an error the visitor sees.
+const msgPath = path.resolve(__dirname, "../api/vakilcard/_messaging.js");
+const realMsg = require(msgPath);
+const notifyState = { explode: false, templateOk: false, sessionTextSent: 0 };
+require.cache[msgPath].exports = {
+  ...realMsg,
+  async sendTemplate() {
+    if (notifyState.explode) throw new Error("meta is down");
+    return notifyState.templateOk ? { ok: true } : { ok: false, error: "template_missing" };
+  },
+  async sendText() {
+    notifyState.sessionTextSent++;
+    return { ok: true };
+  },
+};
+const emailPath = path.resolve(__dirname, "../api/vakilcard/_email.js");
+const realEmail = require(emailPath);
+const emailState = { sent: 0, explode: false };
+require.cache[emailPath].exports = {
+  ...realEmail,
+  configured: () => true,
+  async sendEmail() {
+    if (emailState.explode) throw new Error("resend is down");
+    emailState.sent++;
+    return { ok: true };
+  },
+};
+
 const handler = require("../api/vakilcard/booking.js");
 
 /* ---------- helpers ---------- */
@@ -81,7 +112,8 @@ store.vakilcard_profiles = [
     full_name: "Fee Advocate",
     account_id: null,
     phone: null,
-    whatsapp: null,
+    whatsapp: "+919876500000",
+    email: "advocate@example.com",
     is_published: true,
     subscription_plan: "PRO",
     subscription_status: "ACTIVE",
@@ -185,6 +217,45 @@ test("booking.js still dispatches `action` from the POST body", async () => {
   assert.equal(viaQuery.status, 404);
   const unknown = await call({ method: "POST", body: { action: "definitely_not_an_action" } });
   assert.equal(unknown.status, 401);
+});
+
+test("an unapproved WhatsApp template falls back to session text, and email still goes", async () => {
+  // THE 2026-08-29 FAILURE. message_templates rows are our registry, not a Meta
+  // approval: vakilcard_booking_alert was inactive, sendTemplate returned
+  // template_missing, and the advocate heard NOTHING against three real
+  // bookings. Silence is the one outcome that must not happen.
+  notifyState.templateOk = false;
+  notifyState.sessionTextSent = 0;
+  emailState.sent = 0;
+  const r = await book("feeadvocate");
+  assert.equal(r.status, 200);
+  await new Promise((res) => setImmediate(res)); // notifications are fire-and-forget
+  assert.equal(notifyState.sessionTextSent, 1, "a refused template must fall back to session text");
+  assert.equal(emailState.sent, 1, "email is an independent channel and must still fire");
+});
+
+test("a booking survives every notification channel throwing", async () => {
+  // The row is written before any of this runs, and nothing downstream may
+  // surface as an error to the visitor.
+  //
+  // HONEST NOTE ON WHAT THIS PROVES. Containment here is TWO layers: the
+  // per-channel try/catch inside notifyOwnerOfBooking, and the .catch() on the
+  // fire-and-forget call. Removing either one alone still passes this test,
+  // because the other still holds -- so do not read a pass as evidence that
+  // both are load-bearing. Removing BOTH fails it. The second layer is kept
+  // regardless: an unhandled rejection from a floating promise is a lambda
+  // crash, not a logged warning.
+  notifyState.explode = true;
+  emailState.explode = true;
+  try {
+    const r = await book("feeadvocate");
+    assert.equal(r.status, 200, "notification failure must never break a booking");
+    assert.equal(r.data.payment_status, "due");
+    await new Promise((res) => setImmediate(res));
+  } finally {
+    notifyState.explode = false;
+    emailState.explode = false;
+  }
 });
 
 /* ---------- runner ---------- */
