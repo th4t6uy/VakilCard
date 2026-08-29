@@ -823,13 +823,40 @@
             errEl.style.display = "block";
             return;
           }
-          if (d.payment_status === "pending" && d.pay_link) renderPaymentStep(d);
+          // pay_url (Razorpay, verified) wins over pay_link (upi://, honour
+          // system) when the server issued one. The server never returns both.
+          if (d.payment_status === "pending" && d.pay_url) renderGatewayPaymentStep(d);
+          else if (d.payment_status === "pending" && d.pay_link) renderPaymentStep(d);
           else renderRequestDone("Request sent! You'll be confirmed shortly.");
         })
         .catch(function () {
           errEl.textContent = "Couldn't send your request — please try again or message directly.";
           errEl.style.display = "block";
         });
+    });
+  }
+
+  /* Razorpay-hosted payment. Deliberately just a link: the card is rendered
+     from a verbatim design export, so nothing here loads a third-party SDK or
+     opens a modal inside the export's own sheet UI. The visitor already leaves
+     the page for their UPI app on the other path, so this costs nothing in
+     experience and keeps the public card's script surface at zero.
+
+     There is no "I've paid" button, and that is the entire point of this
+     screen: on this path the visitor's word is not evidence and is never
+     asked for. The Razorpay webhook confirms the booking. */
+  function renderGatewayPaymentStep(reqResult) {
+    var body =
+      '<div style="font-size:12.5px;color:var(--text-low);margin-bottom:10px">Pay <b style="color:var(--text-hi)">₹' + reqResult.amount_inr + '</b> to confirm — your slot is held until then.</div>' +
+      '<a href="' + reqResult.pay_url + '" target="_blank" rel="noopener noreferrer" id="vc-bk-paynow" style="' + sheetBtnCss + ';justify-content:center;text-decoration:none">Pay ₹' + reqResult.amount_inr + ' securely</a>' +
+      '<div style="font-size:10.5px;color:var(--text-dim);margin-top:8px;text-align:center;line-height:1.4">UPI, card or netbanking. Your appointment is confirmed automatically once the payment goes through — nothing else to do.</div>';
+    var s = openSheet("Complete payment", body);
+    s.panel.querySelector("#vc-bk-paynow").addEventListener("click", function () {
+      // Not a confirmation — the webhook does that. This only stops the sheet
+      // sitting on "pay" behind the payment tab the visitor just opened.
+      setTimeout(function () {
+        renderRequestDone("Once your payment goes through, your appointment is confirmed automatically.");
+      }, 1200);
     });
   }
 

@@ -17,7 +17,7 @@
     "prebuild": "node scripts/build-vakilcard-ds.cjs",
     "build": "DISABLE_ESLINT_PLUGIN=true CI=false craco build",
     "dev:api": "node scripts/dev-api-server.cjs",
-    "test": "node tests/vakilcard-verification.test.js && node tests/vakilcard-entitlements.test.js && node tests/vakilcard-onboarding.test.js && node tests/vakilcard-upload.test.js"
+    "test": "node tests/vakilcard-verification.test.js && node tests/vakilcard-entitlements.test.js && node tests/vakilcard-onboarding.test.js && node tests/vakilcard-upload.test.js && node tests/vakilcard-booking-payments.test.js"
   },
   "browserslist": {
     "production": [
