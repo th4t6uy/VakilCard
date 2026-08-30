@@ -147,6 +147,14 @@
         // reaches here; tapping opens the upsell instead of the old
         // showFreePaySheet() QR+UPI-ID flow.
         if (links.upi) { track("pay"); showPaySheet(); }
+        // FREE IS NOT DISABLED, IT IS REDUCED (founder, 2026-08-29). links.upi
+        // is Pro-only by server decision, so a Free card reaching here still
+        // pays -- by QR. The visitor scans it, or double-taps to download it to
+        // their own phone and pays from their UPI app. What Pro buys is the
+        // one-TAP native app launcher, not the ability to be paid at all.
+        // showPayLockedSheet() is now only for a card with nothing to show:
+        // no UPI id and no uploaded QR, where a pay sheet would be a dead end.
+        else if (boot.upiId || boot.payQr) { track("pay"); showFreePaySheet(); }
         else { track("pay_locked"); showPayLockedSheet(); }
         return;
       }
@@ -589,12 +597,17 @@
   }
 
   /* ---------- FREE pay: the lawyer's own uploaded QR + UPI ID ----------
-     ORPHANED as of the 2026-08-16 change above — Free's Pay Now now opens
-     showPayLockedSheet() instead of this. Left intact (not deleted) in case
-     "Free payments fully gated behind Pro" turns out not to be the
-     intended read of that instruction — reverting is then a one-line
-     change back to calling this, instead of rebuilding a tested sheet from
-     scratch. Delete this block once the gating decision is confirmed. ---- */
+     LIVE AGAIN as of 2026-08-29, and the note that used to sit here called it:
+     it said this was orphaned by the 2026-08-16 gating change, left intact
+     rather than deleted "in case 'Free payments fully gated behind Pro' turns
+     out not to be the intended read of that instruction", and that reverting
+     would then be a one-line change instead of rebuilding a tested sheet.
+     That is exactly what happened. Founder, 2026-08-29: Free keeps Pay Now
+     with reduced function — a QR the visitor can scan or download — because a
+     Free advocate should still be payable; the one-TAP native launcher is what
+     Pro sells.
+
+     Whoever left that note: it saved the work. ------------------------------ */
 
   function showFreePaySheet() {
     // Free Pay Now sheet (founder direction 2026-08-15): the UPI app
@@ -614,9 +627,12 @@
       "&cu=INR";
     var upiUri = "upi://pay?" + q;
     var body = "";
-    if (isMobile && upiId) {
-      body += upiLauncherHtml(q, upiUri);
-    }
+    // NO NATIVE APP LAUNCHER HERE. This sheet used to render upiLauncherHtml on
+    // mobile, which handed a Free card the one-tap GPay/PhonePe/Paytm grid --
+    // and did it by building the upi:// URI locally from boot.upiId, quietly
+    // bypassing the Pro gate profile.js applies to links.upi. That bypass is
+    // very likely why the 2026-08-16 change cut the whole sheet rather than
+    // trimming it. The QR below is the Free capability; the launcher is Pro's.
     if (boot.payQr || upiId) {
       body +=
         '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:' + (isMobile && upiId ? "12px" : "4px") + '">' +
@@ -629,9 +645,9 @@
     if (upiId) {
       body +=
         '<div style="text-align:center;font-size:12.5px;color:var(--text-low);margin-top:12px">' +
-        (isMobile ? "Paying " : "Scan to pay ") +
+        "Scan or download to pay " +
         '<b style="color:var(--text-hi)">' + upiId + "</b>" +
-        (isMobile ? " directly — no middleman." : " with any UPI app.") +
+        " with any UPI app — directly, no middleman." +
         "</div>" +
         '<button id="vc-freepay-copy" style="' + sheetBtnCss + ';justify-content:center;margin-top:10px">Copy UPI ID</button>';
     } else if (!boot.payQr) {
