@@ -1371,6 +1371,54 @@
     });
   }
 
+  /* ---------- Remove the hardcoded Premium banner ----------
+     VakilCardApp.jsx ships an unconditional "Add your chamber logo & branding
+     / Go Premium / [Upgrade]" tile. It is plain JSX with no prop and no gate,
+     so it renders on EVERY card to EVERY viewer -- Free and Pro alike, client
+     and owner alike. A client holding their advocate's card was being asked to
+     buy VakilCard Pro, which is the one thing this card must never do, and it
+     appeared on Pro cards too, selling them what they had already bought.
+
+     It is removed here rather than in the component because
+     design_system/vakilcard/ is a verbatim design export and is not edited;
+     mount.js is the wiring layer and the sanctioned place for this.
+
+     Removed for EVERYONE, including the owner: owners get the "Unlock with
+     VakilCard Pro" panel instead, which is accurate, itemised and driven by
+     the entitlement layer rather than a hardcoded line about logos.
+
+     Matched on the element's own text, since the tile carries no id or class.
+     If the export renames it this silently stops matching -- a no-op, never a
+     broken card, which is the right failure direction for cosmetic surgery on
+     someone else's component. */
+  (function removePremiumBanner() {
+    var strip = function () {
+      var nodes = document.querySelectorAll("div");
+      for (var i = 0; i < nodes.length; i++) {
+        var el = nodes[i];
+        if (el.children.length > 4) continue;
+        var t = el.textContent || "";
+        if (t.indexOf("Add your chamber logo") === -1) continue;
+        // climb to the tile itself (the gradient container), not the label
+        var tile = el;
+        for (var up = 0; up < 4 && tile.parentElement; up++) {
+          if ((tile.style.background || "").indexOf("gradient") !== -1) break;
+          tile = tile.parentElement;
+        }
+        (tile || el).remove();
+        return true;
+      }
+      return false;
+    };
+    if (!strip()) {
+      // The DS mounts asynchronously; retry briefly rather than racing it.
+      var tries = 0;
+      var iv = setInterval(function () {
+        if (strip() || ++tries > 20) clearInterval(iv);
+      }, 100);
+    }
+  })();
+
   /* ---------- Owner auto-detect → minimal Edit chip ----------
      The dashboard and public cards share an origin, so the owner's session
      tokens are readable here. If the stored access token's pid matches this

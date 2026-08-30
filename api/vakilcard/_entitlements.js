@@ -81,8 +81,9 @@ const CARD_LOCKABLE_FEATURES = [
   },
   {
     key: "remove_branding",
-    title: "Remove Vakilpedia branding",
-    detail: "Your card, without the “Powered by Vakilpedia” badge.",
+    title: "Hide the VakilCard badge",
+    detail:
+      "Every card carries a small tier badge — “VakilCard Free” or “VakilCard Pro ✦”. Pro is the only plan that can switch it off.",
   },
 ];
 

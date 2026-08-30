@@ -404,7 +404,19 @@ function renderPage(p, themeOverride, mode = "live") {
   // Branding: hide_branding is null (auto — hides iff Pro, the original
   // behaviour) unless the owner explicitly overrode it (Pro-only write,
   // guarded in me.js). true/false always win over the plan default.
-  const hideBranding = demo ? true : typeof p.hide_branding === "boolean" ? p.hide_branding : pro;
+  // TIER BADGE, not a "powered by" ad (founder, 2026-08-29). The badge now
+  // states which VakilCard the visitor is looking at -- "VakilCard Free" or
+  // "VakilCard Pro ✦" -- so it is worth showing on a Pro card rather than
+  // being the thing Pro removes.
+  //
+  // THE DEFAULT FLIPS, and this changes live Pro cards. It used to be
+  // `typeof hide_branding === "boolean" ? hide_branding : pro`, so a Pro owner
+  // who had never touched the setting got NO badge. A Pro card that has not
+  // opted out now shows "VakilCard Pro ✦". remove_branding stays a real Pro
+  // feature: only Pro can set hide_branding (Pro-only write, guarded in me.js),
+  // so only Pro can turn the badge off. Free cannot.
+  const hideBranding = demo ? true : p.hide_branding === true;
+  const tierLabel = pro ? "VakilCard Pro ✦" : "VakilCard Free";
   const boot = demo
     ? { demo: true, theme, pro: true }
     : {
@@ -527,7 +539,7 @@ html, body { overflow: hidden; height: 100%; touch-action: manipulation; }
 </head>
 <body>
 <div id="root"></div>
-${hideBranding ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">Powered by Vakilpedia</a>`}
+${hideBranding ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">${esc(tierLabel)}</a>`}
 <script>window.__VAKILCARD_BOOT__ = ${JSON.stringify(boot).replace(/</g, "\\u003c")};</script>
 <script src="/ds/react.production.min.js"></script>
 <script src="/ds/react-dom.production.min.js"></script>
