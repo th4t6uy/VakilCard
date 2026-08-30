@@ -1366,8 +1366,64 @@
         return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")));
       } catch (e) { return null; }
     };
+    /* ---------- Owner-only "Unlock with Pro" panel ----------
+       Every card-visible Pro feature the owner does not have, in one place,
+       with one CTA. The list comes from boot.locked, which profile.js fills
+       from the entitlement layer -- VakilCard's plan logic is not restated
+       here, and adding a Pro feature to the card means one entry in
+       _entitlements.js rather than an edit in three files.
+
+       INJECTED CLIENT-SIDE, NEVER SERVER-RENDERED. The SSR card is served with
+       Cache-Control: public, s-maxage=3600 -- one copy of the HTML for every
+       viewer -- so anything viewer-specific has to be added after load or the
+       cache breaks and 1,200+ public cards lose their SEO response. This is
+       the same approach the Pay sheet's Pro preview already takes.
+
+       ONLY THE OWNER EVER SEES IT. A client looking at their lawyer's card is
+       not the person who can buy a plan, and pitching one at them is the kind
+       of detail that makes a professional card feel like an ad. Visitors get
+       no DOM change at all: this function is reached only from the owner
+       detection below. */
+    var renderProPanel = function () {
+      var locked = (boot.locked || []).filter(function (f) { return f && f.key && f.title; });
+      if (!locked.length) return;                       // Pro: nothing to say
+      if (document.getElementById("vc-pro-panel")) return;
+      var host = document.querySelector(".vp-scroll") || document.body;
+
+      var rows = locked
+        .map(function (f) {
+          return (
+            '<div style="display:flex;gap:10px;align-items:flex-start;padding:9px 0;border-top:1px solid var(--hairline)">' +
+            '<span style="flex:0 0 auto;margin-top:2px;color:var(--text-dim)">' +
+            '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>' +
+            "</span>" +
+            '<span style="min-width:0">' +
+            '<span style="display:block;font-size:12.5px;font-weight:800;color:var(--text-hi)">' + esc(f.title) + "</span>" +
+            '<span style="display:block;font-size:11px;color:var(--text-low);line-height:1.45;margin-top:1px">' + esc(f.detail || "") + "</span>" +
+            "</span></div>"
+          );
+        })
+        .join("");
+
+      var wrap = document.createElement("div");
+      wrap.id = "vc-pro-panel";
+      wrap.style.cssText =
+        "margin:14px 12px 20px;padding:13px 14px;border-radius:18px;position:relative;" +
+        "border:1px dashed var(--hairline-strong);background:var(--glass-thick)";
+      wrap.innerHTML =
+        '<span style="position:absolute;top:-8px;left:14px;padding:2px 8px;border-radius:999px;background:var(--violet-400);color:#fff;' +
+        'font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-sans)">Only you can see this</span>' +
+        '<div style="font-size:13px;font-weight:800;color:var(--text-hi);margin-bottom:2px">Unlock with VakilCard Pro</div>' +
+        '<div style="font-size:11px;color:var(--text-low);line-height:1.45">Your clients see your card exactly as it is now. These are the parts you have not switched on.</div>' +
+        rows +
+        '<a href="' + ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener" ' +
+        'data-vc-native-link data-ev="upgrade" style="' + sheetBtnCss + ';justify-content:center;margin-top:12px">Upgrade to Pro →</a>';
+      host.appendChild(wrap);
+    };
+
     var showEditChip = function () {
       ownerViewing = true;
+      renderProPanel();
       if (document.getElementById("vc-edit-chip")) return;
       var a = document.createElement("a");
       a.id = "vc-edit-chip";

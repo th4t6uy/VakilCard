@@ -36,6 +36,64 @@ const PRO_FEATURES = [
   "google_business",
 ];
 
+/**
+ * The Pro features that have a VISIBLE affordance on a public card, with the
+ * copy used when an owner is shown what they are missing.
+ *
+ * This lives here, not in profile.js or mount.js, because _entitlements.js is
+ * the single source of plan truth — adding a Pro feature to the card should
+ * mean adding one entry here, not editing a renderer and a bundle in step.
+ *
+ * DELIBERATELY NARROWER THAN PRO_FEATURES, and each omission is a decision:
+ *   google_review   — the feature behind it was REMOVED with the Google
+ *                     Business OAuth flow on 2026-08-29 and nothing can
+ *                     populate google_review_link any more. The key survives
+ *                     in PRO_FEATURES purely as a compatibility surface for
+ *                     cached bundles. Pitching it would sell an owner a
+ *                     feature that no longer exists.
+ *   google_business — founder decision 2026-08-29: the Business tile is shown
+ *                     to Free and Pro alike. Not a Pro feature on the card.
+ *   booking         — Free has booking (fixed weekly windows). Not locked.
+ *   custom_username — decided at signup, not a card surface.
+ *   analytics       — dashboard surface, never rendered on a card.
+ */
+const CARD_LOCKABLE_FEATURES = [
+  {
+    key: "native_pay",
+    title: "Accept payments on your card",
+    detail: "Clients pay your consultation fee by UPI in one tap — native app buttons and a scannable QR.",
+  },
+  {
+    key: "website",
+    title: "Link your website",
+    detail: "Add your firm or chamber website as a tile clients can open straight from the card.",
+  },
+  {
+    key: "premium_themes",
+    title: "Premium card themes",
+    detail: "Midnight and Ivory finishes, beyond the default card.",
+  },
+  {
+    key: "remove_branding",
+    title: "Remove Vakilpedia branding",
+    detail: "Your card, without the “Powered by Vakilpedia” badge.",
+  },
+];
+
+/**
+ * Which card-visible Pro features this profile does NOT have.
+ *
+ * Returns [] for Pro. The list is IDENTICAL for every viewer of a given card,
+ * which is what keeps the SSR response CDN-cacheable — it describes the CARD's
+ * plan, never the viewer. Deciding whether to actually pitch an upgrade is the
+ * client's job and depends on whether the OWNER is looking; a visitor must
+ * never be shown a pitch aimed at the lawyer.
+ */
+function lockedCardFeatures(profile) {
+  if (isProActive(profile)) return [];
+  return CARD_LOCKABLE_FEATURES.map((f) => ({ key: f.key, title: f.title, detail: f.detail }));
+}
+
 function isProActive(profile) {
   if (!profile) return false;
   if (profile.subscription_plan !== "PRO") return false;
@@ -75,4 +133,12 @@ function requirePro(res, profile, feature) {
   return false;
 }
 
-module.exports = { PRICING, PRO_FEATURES, isProActive, entitlementsFor, requirePro };
+module.exports = {
+  PRICING,
+  PRO_FEATURES,
+  CARD_LOCKABLE_FEATURES,
+  lockedCardFeatures,
+  isProActive,
+  entitlementsFor,
+  requirePro,
+};

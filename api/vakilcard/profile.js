@@ -17,7 +17,7 @@ const {
   readJsonBody,
 } = require("./_lib");
 const { verify: verifyJwt } = require("./_jwt");
-const { isProActive } = require("./_entitlements");
+const { isProActive, lockedCardFeatures } = require("./_entitlements");
 
 const SITE = "https://www.vakilpedia.com";
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js.
@@ -418,6 +418,19 @@ function renderPage(p, themeOverride, mode = "live") {
         // Owner dashboard origin — mount.js builds owner-facing URLs (Edit
         // chip, upgrade links) from this instead of hardcoding paths.
         dash: DASHBOARD_SITE,
+        // Card-visible Pro features this card does NOT have, straight from the
+        // entitlement layer. [] for Pro.
+        //
+        // SAFE TO CACHE, AND THAT IS THE POINT. This describes the CARD's plan,
+        // which is identical for everyone who loads it, so the SSR response
+        // stays behind `Cache-Control: public, s-maxage=3600` exactly as
+        // before. It carries no VALUES a Free plan withholds — the website URL
+        // is still omitted above — only the fact that the feature is locked.
+        //
+        // Whether to PITCH any of this is decided client-side, and only when
+        // mount.js has detected the owner. A client looking at their lawyer's
+        // card must never be shown the lawyer's upgrade offer.
+        locked: lockedCardFeatures(p),
         // Consultation fee (₹) for the Pro pay sheet's default option.
         fee:
           p.payment && p.payment.show_upi !== false && Number(p.payment.consultation_fee) > 0
