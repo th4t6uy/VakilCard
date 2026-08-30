@@ -73,13 +73,23 @@ test("lockedCardFeatures: Pro locks nothing, Free locks only REAL card-visible f
     assert.ok(f.title && f.detail, `${f.key} needs owner-facing copy`);
   }
 
-  // 🔴 google_review MUST NOT be pitched. _entitlements.js records that the
-  // feature behind it was removed on 2026-08-29 with the Google Business OAuth
-  // flow and that nothing can populate google_review_link any more; the key
-  // survives in PRO_FEATURES purely as a compatibility surface for cached
-  // bundles. Offering it to an owner would be selling a feature that no longer
-  // exists — the worst possible upsell.
-  assert.ok(!keys.includes("google_review"), "google_review is retired and must never be offered");
+  // google_review IS offered, and this assertion was INVERTED on 2026-08-29
+  // within hours of being written. It first read "google_review is retired and
+  // must never be offered", on the strength of a comment in _entitlements.js
+  // saying nothing could populate google_review_link any more.
+  //
+  // The comment was stale by two commits. 9140920 dropped the business.manage
+  // OAuth scope; 73708b4 restored the feature through the PLACES API, which
+  // returns Google's own googleMapsLinks.writeAReviewUri, and booking.js's
+  // places_link writes it. Production carries rows with the column populated.
+  //
+  // Left as a warning as much as a test: a comment is not evidence. This
+  // assertion was written, reviewed and committed without anyone querying the
+  // column it made a claim about.
+  assert.ok(
+    keys.includes("google_review"),
+    "google_review is live via the Places API and must be offered to Free owners"
+  );
 
   // google_business is shown to Free and Pro alike (founder, 2026-08-29), and
   // booking is a Free-tier feature. Neither is a lock.
@@ -98,4 +108,27 @@ test("a lapsed Pro card is treated as Free for the upsell, exactly like every ot
   assert.ok(lockedCardFeatures(lapsed).length > 0, "lapsed must not keep Pro's empty lock list");
   const cancelled = { subscription_plan: "PRO", subscription_status: "CANCELLED", subscription_expires_at: future };
   assert.ok(lockedCardFeatures(cancelled).length > 0);
+});
+
+test("the review path degrades correctly: Pro gets one tap, Free still reaches Google", () => {
+  // The card must never hand a client a dead button. Pro gets the one-tap
+  // writeAReviewUri; Free falls back to the listing itself (reviewView), where
+  // a visitor can still read and leave a review through Google's own UI. That
+  // extra couple of taps IS the thing Pro removes -- which is what makes the
+  // upsell honest rather than invented.
+  const proFeat = entitlementsFor({
+    subscription_plan: "PRO", subscription_status: "ACTIVE", subscription_expires_at: future,
+  }).features;
+  const freeFeat = entitlementsFor({ subscription_plan: "FREE", subscription_status: "ACTIVE" }).features;
+  assert.equal(proFeat.google_review, true, "Pro must hold the one-tap review entitlement");
+  assert.equal(freeFeat.google_review, false, "Free must not");
+
+  // google_business is NOT gated with it: the listing tile is shown to both
+  // plans (founder, 2026-08-29). Pro buys the review ACTION, not the listing.
+  assert.ok(
+    !lockedCardFeatures({ subscription_plan: "FREE", subscription_status: "ACTIVE" })
+      .map((f) => f.key)
+      .includes("google_business"),
+    "the Business listing tile must stay free for everyone"
+  );
 });

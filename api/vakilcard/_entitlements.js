@@ -21,17 +21,23 @@ const PRO_FEATURES = [
   "analytics",
   "premium_themes",
   "remove_branding",
-  // "google_review" STAYS, even though the feature behind it was removed on
-  // 2026-08-29 with the Google Business OAuth flow. This list is a
-  // COMPATIBILITY SURFACE, not a menu: entitlementsFor() turns it into
-  // features{} that clients read, and a browser holding an older cached
-  // bundle will still look up features.google_review. Dropping the key turns
-  // that lookup into `undefined` and a paying Pro owner's row renders locked.
-  // tests/vakilcard-entitlements.test.js guards this on purpose -- "existing
-  // keys must never silently disappear (preserves current users' plans)".
-  // The feature is unreachable either way: nothing can populate
-  // google_review_link any more. Retire the key on its own clock, once the
-  // cached bundles have aged out.
+  // "google_review" is LIVE. Correcting a stale note that stood here and was
+  // believed twice: it said the feature had been removed with the Google
+  // Business OAuth flow and that "nothing can populate google_review_link any
+  // more". True for two commits. 9140920 dropped the business.manage OAuth
+  // scope, and 73708b4 -- "the review feature back for real" -- restored it
+  // through the PLACES API, which returns Google's own
+  // googleMapsLinks.writeAReviewUri. booking.js's places_link writes that
+  // column today, and production has rows proving it.
+  //
+  // Verify against the DATA before acting on a comment like that one: a stale
+  // comment is indistinguishable from a true one until you check.
+  //
+  // Keep the key regardless of feature status: this list is also a
+  // COMPATIBILITY SURFACE. entitlementsFor() turns it into features{} that
+  // clients read, and a browser on an older cached bundle still looks up
+  // features.google_review -- dropping the key makes that `undefined` and a
+  // paying Pro owner's row renders locked.
   "google_review",
   "google_business",
 ];
@@ -45,12 +51,6 @@ const PRO_FEATURES = [
  * mean adding one entry here, not editing a renderer and a bundle in step.
  *
  * DELIBERATELY NARROWER THAN PRO_FEATURES, and each omission is a decision:
- *   google_review   — the feature behind it was REMOVED with the Google
- *                     Business OAuth flow on 2026-08-29 and nothing can
- *                     populate google_review_link any more. The key survives
- *                     in PRO_FEATURES purely as a compatibility surface for
- *                     cached bundles. Pitching it would sell an owner a
- *                     feature that no longer exists.
  *   google_business — founder decision 2026-08-29: the Business tile is shown
  *                     to Free and Pro alike. Not a Pro feature on the card.
  *   booking         — Free has booking (fixed weekly windows). Not locked.
@@ -62,6 +62,12 @@ const CARD_LOCKABLE_FEATURES = [
     key: "native_pay",
     title: "Accept payments on your card",
     detail: "Clients pay your consultation fee by UPI in one tap — native app buttons and a scannable QR.",
+  },
+  {
+    key: "google_review",
+    title: "One-tap Google reviews",
+    detail:
+      "Clients leave you a Google review straight from the card. Link your Google Business listing and Pro turns on the one-tap link; without it they reach your listing and review from there.",
   },
   {
     key: "website",
