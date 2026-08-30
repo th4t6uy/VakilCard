@@ -1393,19 +1393,37 @@
      someone else's component. */
   (function removePremiumBanner() {
     var strip = function () {
-      var nodes = document.querySelectorAll("div");
+      /* Search INSIDE #root only, and never climb out of it.
+         The first version of this walked `document.querySelectorAll("div")`
+         and climbed 4 parents unconditionally. textContent is inherited, so
+         the very first div in document order -- the app wrapper, which has
+         few enough children to pass the guard -- "contained" the banner text
+         and the climb ran straight past #root and body to <html>, which was
+         then removed. That blanked every card in production (263ae4d). The
+         three guards below make the failure mode a no-op again:
+           1. scope: only descendants of #root are ever considered;
+           2. size:  the matched node's own text must be banner-sized, so a
+                     wrapper carrying the whole card's text can never match;
+           3. climb: stops at #root and the result must still be inside it. */
+      var root = document.getElementById("root");
+      if (!root) return false;
+      var nodes = root.querySelectorAll("div");
       for (var i = 0; i < nodes.length; i++) {
         var el = nodes[i];
         if (el.children.length > 4) continue;
         var t = el.textContent || "";
         if (t.indexOf("Add your chamber logo") === -1) continue;
+        if (t.trim().length > 200) continue; // a wrapper, not the tile
         // climb to the tile itself (the gradient container), not the label
         var tile = el;
-        for (var up = 0; up < 4 && tile.parentElement; up++) {
+        for (var up = 0; up < 4; up++) {
           if ((tile.style.background || "").indexOf("gradient") !== -1) break;
-          tile = tile.parentElement;
+          var parent = tile.parentElement;
+          if (!parent || parent === root || !root.contains(parent)) break;
+          tile = parent;
         }
-        (tile || el).remove();
+        if (!tile || tile === root || !root.contains(tile)) return false;
+        tile.remove();
         return true;
       }
       return false;
