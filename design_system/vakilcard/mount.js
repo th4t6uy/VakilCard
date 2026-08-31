@@ -627,19 +627,52 @@
       "&cu=INR";
     var upiUri = "upi://pay?" + q;
     var body = "";
-    // NO NATIVE APP LAUNCHER HERE. This sheet used to render upiLauncherHtml on
-    // mobile, which handed a Free card the one-tap GPay/PhonePe/Paytm grid --
-    // and did it by building the upi:// URI locally from boot.upiId, quietly
-    // bypassing the Pro gate profile.js applies to links.upi. That bypass is
-    // very likely why the 2026-08-16 change cut the whole sheet rather than
-    // trimming it. The QR below is the Free capability; the launcher is Pro's.
+    // SAME SHEET AS PRO, WITH THE APP GRID LOCKED (founder, 2026-08-30).
+    //
+    // This line has moved three times, so the history matters: the sheet
+    // originally rendered a live upiLauncherHtml on mobile, built from
+    // boot.upiId -- which bypassed the Pro gate profile.js applies to
+    // links.upi, and is very likely why 2026-08-16 cut the whole sheet rather
+    // than trimming it. 2026-08-29 restored the sheet without the launcher.
+    // The founder's call now: Free and Pro must LOOK the same, with Free's
+    // app buttons visibly disabled and a tap explaining the lock.
+    //
+    // So the grid is rendered from the same upiLauncherHtml() Pro uses, then
+    // defused two ways -- pointer-events:none on the greyed inner layer, and
+    // every href rewritten to data-locked-href so a keyboard Enter cannot
+    // reach a upi:// intent either. NO WORKING PAYMENT INTENT IS EMITTED ON A
+    // FREE CARD. What stays live is the QR: scan it, or double-tap to download
+    // it, and pay from any UPI app. That is Free's real capability and the
+    // reason the sheet is not a dead end.
     if (boot.payQr || upiId) {
       body +=
         '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;margin-top:' + (isMobile && upiId ? "12px" : "4px") + '">' +
         '<div id="vc-freeqr" data-qr-zoom data-qr-name="' + (upiId || "upi").replace(/"/g, "") + '-qr" data-qr-caption="Scan with any UPI app" role="button" tabindex="0" aria-label="Payment QR — tap to enlarge, double-tap to download" ' +
-        'style="width:150px;height:150px;border-radius:14px;background:#fff;padding:8px;display:flex;align-items:center;justify-content:center;cursor:zoom-in;box-shadow:0 4px 14px rgba(0,0,0,.25)">' +
+        'style="width:190px;height:190px;border-radius:14px;background:#fff;padding:8px;display:flex;align-items:center;justify-content:center;cursor:zoom-in;box-shadow:0 4px 14px rgba(0,0,0,.25)">' +
         '<div style="font-size:11px;color:#555">Loading QR…</div></div>' +
         '<div style="font-size:10.5px;color:var(--text-dim)">Tap to enlarge · Double-tap to download</div>' +
+        "</div>";
+    }
+    // The Pro sheet's own controls, shown disabled: the fee/custom chooser and
+    // the app grid, in the same order and shape Pro renders them, so the two
+    // sheets read as one product with one part switched off.
+    if (upiId) {
+      var lockedFee = typeof boot.fee === "number" && boot.fee > 0 ? boot.fee : null;
+      var lockedChooser =
+        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
+        (lockedFee
+          ? '<span style="' + segBtnCss + segBtnOnCss + ';display:block">Pay consultation fee<span style="display:block;font-size:15px;margin-top:2px">₹' + lockedFee + "</span></span>"
+          : "") +
+        '<span style="' + segBtnCss + ';display:block">Custom amount<span style="display:block;font-size:10px;font-weight:600;color:var(--text-low);margin-top:2px">client chooses</span></span>' +
+        "</div>";
+      // Same grid Pro renders, with every payment intent removed.
+      var lockedGrid = upiLauncherHtml("pa=" + encodeURIComponent(upiId), upiUri).replace(/href=/g, "data-locked-href=");
+      body +=
+        '<div id="vc-pro-lock" role="button" tabindex="0" aria-label="One-tap UPI apps are a Pro feature" ' +
+        'style="position:relative;margin-top:16px;padding:12px 10px 8px;border-radius:16px;border:1px dashed var(--hairline-strong);cursor:pointer">' +
+        '<span style="position:absolute;top:-8px;left:12px;padding:2px 8px;border-radius:999px;background:var(--violet-400);color:#fff;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-sans)">Pro</span>' +
+        '<div style="opacity:.42;filter:grayscale(1);pointer-events:none">' + lockedChooser + lockedGrid + "</div>" +
+        '<div id="vc-pro-lock-note" style="display:none;font-size:11.5px;color:var(--text-low);line-height:1.45;margin-top:8px"></div>' +
         "</div>";
     }
     if (upiId) {
@@ -653,25 +686,30 @@
     } else if (!boot.payQr) {
       body += '<div style="text-align:center;font-size:12.5px;color:var(--text-low);padding:10px 0">Scan the QR on the card with any UPI app.</div>';
     }
-    // Educate the (detected) owner of a Free card: show exactly what the Pro
-    // pay sheet adds — greyed out, non-interactive — so they see what they're
-    // missing (founder direction 2026-08-15). NEVER shown to visitors: a
-    // client paying a lawyer must never see the lawyer's plan pitched.
-    if (ownerViewing && !boot.pro) {
-      body +=
-        '<div style="margin-top:14px;padding:12px;border-radius:16px;border:1px dashed var(--hairline-strong);position:relative">' +
-        '<span style="position:absolute;top:-8px;left:12px;padding:2px 8px;border-radius:999px;background:var(--violet-400);color:#fff;font-size:9px;font-weight:900;letter-spacing:.08em;text-transform:uppercase;font-family:var(--font-sans)">Pro preview</span>' +
-        '<div style="opacity:.45;filter:grayscale(1);pointer-events:none">' +
-        '<div style="display:flex;gap:8px;margin-bottom:8px">' +
-        '<span style="' + segBtnCss + segBtnOnCss + ';display:block">Pay consultation fee<span style="display:block;font-size:15px;margin-top:2px">₹ your fee</span></span>' +
-        '<span style="' + segBtnCss + ';display:block">Custom amount<span style="display:block;font-size:10px;font-weight:600;color:var(--text-low);margin-top:2px">client chooses</span></span>' +
-        "</div>" +
-        "</div>" +
-        '<div style="font-size:11px;color:var(--text-low);line-height:1.45;margin-top:8px">Only you can see this. On <b style="color:var(--text-hi)">VakilCard Pro</b>, clients pay your set consultation fee — or any amount — in one tap, straight into your UPI.</div>' +
-        '<a href="' + ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener" style="display:inline-block;margin-top:8px;font-size:12px;font-weight:800;color:var(--violet-400);text-decoration:none;font-family:var(--font-sans)">Upgrade to Pro →</a>' +
-        "</div>";
-    }
     var s = openSheet(isMobile ? "Pay with UPI" : "Pay via UPI", body);
+    // Tapping the disabled grid says why it is disabled. The COPY DIFFERS BY
+    // AUDIENCE, deliberately: only the owner can act on an upgrade, so only the
+    // owner is offered one. A client tapping it is told the QR above already
+    // pays -- pitching a client the lawyer's plan would be selling to the wrong
+    // person, and would leave them thinking they have to buy something to pay
+    // their advocate.
+    var lock = s.panel.querySelector("#vc-pro-lock");
+    if (lock) {
+      var openLockNote = function () {
+        var note = s.panel.querySelector("#vc-pro-lock-note");
+        if (!note || note.style.display === "block") return;
+        note.style.display = "block";
+        note.innerHTML = ownerViewing
+          ? 'One-tap payment apps and consultation-fee collection are <b style="color:var(--text-hi)">VakilCard Pro</b>. Clients pay your set fee — or any amount — in one tap, straight into your UPI.' +
+            '<a href="' + ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;") + '" target="_blank" rel="noopener" data-vc-native-link style="display:inline-block;margin-top:8px;font-size:12px;font-weight:800;color:var(--violet-400);text-decoration:none;font-family:var(--font-sans)">Upgrade to Pro →</a>'
+          : 'One-tap app payments are a <b style="color:var(--text-hi)">VakilCard Pro</b> feature on this card. Scan the QR above — or double-tap it to save it — and pay ' +
+            esc((profile && profile.name) || "the owner") + " from any UPI app.";
+      };
+      lock.addEventListener("click", openLockNote);
+      lock.addEventListener("keydown", function (e) {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openLockNote(); }
+      });
+    }
     var copyBtn = s.panel.querySelector("#vc-freepay-copy");
     if (copyBtn)
       copyBtn.addEventListener("click", function () {
