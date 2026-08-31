@@ -51,7 +51,7 @@ async function storageDelete(objectPath) {
   try {
     await fetch(`${SUPABASE_URL}/storage/v1/object/vakilcard/${objectPath}`, {
       method: "DELETE",
-      headers: { Authorization: `Bearer ${SERVICE_KEY}` },
+      headers: { apikey: SERVICE_KEY, Authorization: `Bearer ${SERVICE_KEY}` },
     });
   } catch {
     /* best effort — replaced objects must never block the flow */
@@ -108,6 +108,17 @@ module.exports = async function handler(req, res) {
     const r = await fetch(`${SUPABASE_URL}/storage/v1/object/vakilcard/${objectPath}`, {
       method: "POST",
       headers: {
+        // BOTH headers, always. A publishable/secret key (sb_secret_...) is
+        // only honoured in Authorization when it exactly equals `apikey`:
+        //   "You cannot send a publishable or secret key in the
+        //    Authorization: Bearer ... header, except if the value exactly
+        //    equals the apikey header."  -- supabase.com/docs/guides/api/api-keys
+        // These two calls sent Authorization alone, so once the project moved
+        // off legacy JWT keys Storage tried to parse the secret key as a JWT
+        // and refused every write with {"code":"AccessDenied","message":
+        // "Invalid Compact JWS"}. Uploads were dead project-wide while every
+        // DB call kept working, because _lib.js has always sent both headers.
+        apikey: SERVICE_KEY,
         Authorization: `Bearer ${SERVICE_KEY}`,
         "Content-Type": fmt.mime,
         "x-upsert": "true",
