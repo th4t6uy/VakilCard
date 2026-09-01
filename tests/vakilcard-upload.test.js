@@ -42,7 +42,7 @@ require.cache[libPath].exports = {
 
 const storageCalls = [];
 global.fetch = async (url, opts = {}) => {
-  storageCalls.push({ url: String(url), method: opts.method || "GET" });
+  storageCalls.push({ url: String(url), method: opts.method || "GET", headers: opts.headers || {} });
   return { ok: true, status: 200, json: async () => ({}), text: async () => "" };
 };
 
@@ -102,6 +102,34 @@ test("QR PNG (lossless): stored as upiqr.png, upi_qr_url upserted", async () => 
   assert.ok(data.url.includes("upiqr.png?v="));
   assert.equal(store.vakilcard_payment_prefs[0].profile_id, "prof-1");
   assert.ok(store.vakilcard_payment_prefs[0].upi_qr_url.includes("upiqr.png"));
+});
+
+test("every Storage call carries apikey AND Authorization (2026-08-31 outage)", async () => {
+  // Storage refused EVERY write project-wide -- {"code":"AccessDenied",
+  // "message":"Invalid Compact JWS"} -- for as long as it took to notice,
+  // because these two calls sent Authorization alone. A publishable/secret
+  // key (sb_secret_...) is only honoured in Authorization when it exactly
+  // equals the apikey header; sent alone it is parsed as a JWT and rejected.
+  // Every DB call kept working the whole time, because _lib.js has always
+  // sent both -- which is why nothing else looked broken.
+  //
+  // This asserts the header pair on POST *and* DELETE. Delete this at your
+  // peril: photo and QR upload are the only things in the product that write
+  // to Storage, so nothing else would catch the regression.
+  resetCalls();
+  await call("POST", { kind: "upiqr", data: PNG.toString("base64") });
+  assert.ok(storageCalls.length, "expected storage traffic");
+  for (const c of storageCalls) {
+    const h = c.headers || {};
+    assert.ok(h.apikey, `${c.method} ${c.url} sent no apikey header`);
+    assert.equal(
+      h.Authorization,
+      `Bearer ${h.apikey}`,
+      `${c.method}: Authorization must be the same key as apikey`
+    );
+  }
+  const methods = new Set(storageCalls.map((c) => c.method));
+  assert.ok(methods.has("POST") && methods.has("DELETE"), "both verbs covered");
 });
 
 test("rejections: empty, non-image magic, oversized", async () => {
