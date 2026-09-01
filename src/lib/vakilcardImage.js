@@ -132,9 +132,109 @@ async function optimizePhoto(img) {
 }
 
 /** QR pipeline: sharpness first — lossless PNG, gentle fallbacks only. */
+/** Locate the QR inside a picked image and return a tightly-cropped canvas.
+ *  Returns null when nothing is found, so callers fall back to the whole image.
+ *
+ *  WHY THIS EXISTS. Lawyers upload what their bank app gave them: a full
+ *  PhonePe/GPay POSTER -- logo, "ACCEPTED HERE", merchant name, terms -- in
+ *  which the QR itself is maybe a third of the frame. The card then renders
+ *  that whole poster inside a 190px square, so the actual scannable part is
+ *  ~60px and unusable. Cropping to the code turns the same upload into a
+ *  full-size, scannable QR, and drops the file size as a side effect.
+ *
+ *  jsQR is loaded with a dynamic import so it lands in its own chunk and only
+ *  downloads when someone actually picks a QR image -- the main bundle is
+ *  unchanged. BarcodeDetector would have cost nothing at all, but it does not
+ *  exist in iOS Safari, which is exactly where these uploads come from.
+ *
+ *  DECODING, NOT GUESSING: the crop is taken from a code jsQR successfully
+ *  READ, so we never crop to a logo or a block of text that merely looks
+ *  dense. If it cannot read one, we leave the image alone. */
+async function cropToQr(img) {
+  try {
+    const maxDim = 1024; // enough detail to decode, cheap enough to scan
+    const scale = Math.min(1, maxDim / Math.max(img.width, img.height));
+    const w = Math.max(1, Math.round(img.width * scale));
+    const h = Math.max(1, Math.round(img.height * scale));
+    const c = document.createElement("canvas");
+    c.width = w;
+    c.height = h;
+    const ctx = c.getContext("2d", { willReadFrequently: true });
+    // A transparent PNG poster decodes as black-on-black without this.
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+    ctx.drawImage(img, 0, 0, w, h);
+
+    // jsqr ships UMD (module.exports IS the function). Webpack's interop puts
+    // that on .default, but take either shape rather than depend on it.
+    const mod = await import("jsqr");
+    const jsQR = mod && mod.default ? mod.default : mod;
+    const data = ctx.getImageData(0, 0, w, h);
+    const found = jsQR(data.data, w, h, { inversionAttempts: "attemptBoth" });
+    if (!found || !found.location) return null;
+
+    const pts = [
+      found.location.topLeftCorner,
+      found.location.topRightCorner,
+      found.location.bottomLeftCorner,
+      found.location.bottomRightCorner,
+    ].filter(Boolean);
+    if (pts.length < 4) return null;
+
+    const xs = pts.map((p) => p.x);
+    const ys = pts.map((p) => p.y);
+    let x0 = Math.min(...xs), x1 = Math.max(...xs);
+    let y0 = Math.min(...ys), y1 = Math.max(...ys);
+    const side = Math.max(x1 - x0, y1 - y0);
+    // Sanity: a real QR is a decent fraction of the frame and roughly square.
+    if (side < Math.min(w, h) * 0.08) return null;
+
+    // Square it up around the centre, then add a quiet zone. The QR spec wants
+    // 4 modules of margin; 10% of the side is a safe stand-in without knowing
+    // the module count, and scanners need it to lock on.
+    const cx = (x0 + x1) / 2;
+    const cy = (y0 + y1) / 2;
+    const half = side / 2 + side * 0.1;
+    x0 = cx - half; y0 = cy - half;
+    const box = half * 2;
+
+    const out = document.createElement("canvas");
+    const size = Math.max(1, Math.round(box * (1 / scale)));
+    out.width = size;
+    out.height = size;
+    const octx = out.getContext("2d");
+    // Pad with the QR's OWN surrounding colour, not white. Plenty of bank
+    // posters print a light QR on a dark card; a white quiet zone around one
+    // of those inverts the contrast right at the border, which is the edge a
+    // scanner locks onto. Sampled just outside the code, and only visible at
+    // all when the crop runs past the image edge.
+    let pad = "#fff";
+    try {
+      const sx = Math.max(0, Math.min(w - 1, Math.round(cx - side * 0.6)));
+      const sy = Math.max(0, Math.min(h - 1, Math.round(cy - side * 0.6)));
+      const px = ctx.getImageData(sx, sy, 1, 1).data;
+      pad = "rgb(" + px[0] + "," + px[1] + "," + px[2] + ")";
+    } catch (e) {
+      /* keep white */
+    }
+    octx.fillStyle = pad;
+    octx.fillRect(0, 0, size, size);
+    octx.drawImage(
+      img,
+      x0 / scale, y0 / scale, box / scale, box / scale,
+      0, 0, size, size
+    );
+    return out;
+  } catch (e) {
+    return null; // never let this block an upload
+  }
+}
+
 async function optimizeQr(img) {
+  const cropped = await cropToQr(img);
+  const source = cropped || img;
   for (const dim of [640, 512, 448]) {
-    const canvas = draw(img, { square: false, maxDim: dim });
+    const canvas = draw(source, { square: false, maxDim: dim });
     const png = await encode(canvas, "image/png");
     if (png && png.size <= HARD_CAP) return png;
     // Camera photos of printed QRs don't compress losslessly — use a

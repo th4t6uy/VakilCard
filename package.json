@@ -4,6 +4,7 @@
   "private": true,
   "description": "VakilCard — standalone digital chamber card product, extracted from Apps/Vakilpedia-website. Consumes SupraCore services where available; currently self-contained pending that integration.",
   "dependencies": {
+    "jsqr": "^1.4.0",
     "lucide-react": "^0.507.0",
     "qrcode-generator": "^1.4.4",
     "react": "^19.0.0",
