@@ -1475,6 +1475,26 @@
     }
   })();
 
+  /* ---------- Free's Pay Now is a live button, so it should look like one ----
+     The component greys it -- style={!profile.pro ? {opacity:.45,
+     filter:'grayscale(1)'} : undefined} (VakilCardApp.jsx:452) -- from when
+     Free could not be paid at all. Free now opens a real pay sheet with a
+     working QR, so a greyed button misreads as broken and costs the advocate
+     the payment (founder, 2026-08-30). What is locked inside that sheet is the
+     one-tap app grid, and the sheet says so itself.
+
+     A CSS rule rather than clearing the inline style in JS: this has to beat
+     an inline style, and it has to survive React re-rendering the button on a
+     theme toggle. !important on a single aria-label selector does both with no
+     observer. Pro never sets those properties, so the rule is a no-op there --
+     it is gated anyway to keep the intent legible. */
+  if (!boot.pro) {
+    var payStyle = document.createElement("style");
+    payStyle.textContent =
+      '#root button[aria-label="Pay Now"]{opacity:1!important;filter:none!important}';
+    document.head.appendChild(payStyle);
+  }
+
   /* ---------- CONNECT tile labels: no bleed ----------
      "Appointment" is one unbreakable 90px word in an 80px tile, and the label
      span is overflow:visible, so it bled past the tile edge (founder,
