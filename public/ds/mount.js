@@ -1475,6 +1475,77 @@
     }
   })();
 
+  /* ---------- CONNECT tile labels: no bleed ----------
+     "Appointment" is one unbreakable 90px word in an 80px tile, and the label
+     span is overflow:visible, so it bled past the tile edge (founder,
+     2026-08-30). Fixed here rather than in the component because
+     design_system/vakilcard/ is a verbatim design export and mount.js is the
+     sanctioned wiring layer.
+
+       1. RETEXT to "Book a Meeting" -- it carries spaces, so it wraps to two
+          lines on its own. The click delegate above already matches
+          label.indexOf("book") === 0, so routing is unchanged (verified by
+          clicking the tile, not assumed).
+       2. A MEASURED CLAMP so a long label can never bleed again: any label
+          span actually WIDER than its own button gets capped to that button's
+          width and allowed to break inside the word.
+
+     THE CLAMP IS MEASURED, NOT A BLANKET CSS RULE, and that distinction is the
+     whole design. The first attempt was
+       #root button span{max-width:100%;overflow-wrap:anywhere}
+     which regressed every tile: max-width:100% resolves against the button's
+     CONTENT box (~64px), not its 80px border box, so "WhatsApp" (73px) and
+     "Directions" (75px) -- both of which fit the tile fine today and merely
+     overhang into the padding -- were forced to break as "WhatsA / pp" and
+     "Directio / ns". Switching anywhere->break-word did not help, because the
+     cap was the cause. Clamping only the spans that genuinely overflow leaves
+     every currently-correct label untouched.
+
+     This only ever SETS TEXT AND STYLE. It never removes a node and never
+     walks up the tree -- the two things that made removePremiumBanner blank
+     every card in 263ae4d. Worst case is that nothing matches and the tiles
+     stay exactly as they are. */
+  (function fixTileLabelBleed() {
+    var root = document.getElementById("root");
+    if (!root) return;
+
+    var eachLabel = function (fn) {
+      var btns = root.querySelectorAll("button");
+      for (var i = 0; i < btns.length; i++) {
+        var spans = btns[i].querySelectorAll("span");
+        for (var j = 0; j < spans.length; j++) {
+          if (!spans[j].children.length) fn(spans[j], btns[i]);
+        }
+      }
+    };
+
+    var apply = function () {
+      eachLabel(function (el, btn) {
+        if ((el.textContent || "").trim() === "Appointment") {
+          el.textContent = "Book a Meeting";
+        }
+        var bw = btn.getBoundingClientRect().width;
+        if (bw && el.getBoundingClientRect().width > bw) {
+          el.style.maxWidth = bw + "px";
+          el.style.overflowWrap = "break-word";
+        }
+      });
+    };
+
+    apply();
+    // The DS mounts asynchronously, and a theme toggle re-renders the grid
+    // from the component's own props -- which would restore "Appointment".
+    // Re-applying on mutation covers both. Attributes are deliberately NOT
+    // observed, so writing el.style above cannot feed back into this.
+    if (window.MutationObserver) {
+      new MutationObserver(apply).observe(root, {
+        childList: true,
+        subtree: true,
+        characterData: true,
+      });
+    }
+  })();
+
   /* ---------- Owner auto-detect → minimal Edit chip ----------
      The dashboard and public cards share an origin, so the owner's session
      tokens are readable here. If the stored access token's pid matches this
