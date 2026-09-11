@@ -14,7 +14,7 @@ import { useNavigate } from "react-router-dom";
 import {
   ArrowLeft, ArrowRight, Check, ChevronDown, Eye, EyeOff, Globe, Landmark,
   Loader2, Lock, Mail, MapPin, MessageCircle, PartyPopper, Pencil, Phone,
-  ShieldCheck, UserRound, Youtube, Linkedin, Instagram, IndianRupee,
+  ShieldCheck, IndianRupee, Link2, X,
 } from "lucide-react";
 import {
   startVerification, resendVerification, verifyCode, checkUsername,
@@ -23,6 +23,10 @@ import {
   googleSignIn,
 } from "../../lib/vakilcardApi";
 import UpgradeSheet from "../../components/UpgradeSheet";
+import SiteNav from "../../components/SiteNav";
+import SiteFooter from "../../components/SiteFooter";
+import EcosystemRail from "../../components/EcosystemRail";
+import { WWW } from "../../config/ecosystem";
 import { isQaPhone, startQaSession, QaBadge } from "../../lib/vakilcardQa";
 
 // Google sign-in is live (full alternative to phone — see auth.js
@@ -127,27 +131,54 @@ export function StrengthBar({ password }) {
 
 /* ---------------- marketing building blocks ---------------- */
 
-// Wide by default on desktop — content spreads instead of stacking into a
-// narrow column, cutting scroll length. `narrow` for focused blocks (forms).
-const Section = ({ children, className = "", narrow = false }) => (
-  <section className={`px-4 sm:px-8 py-8 sm:py-12 ${className}`}>
-    <div className={`${narrow ? "max-w-xl" : "max-w-6xl xl:max-w-7xl 2xl:max-w-[88rem]"} mx-auto`}>{children}</div>
-  </section>
-);
+// BORROWED from the marketing site so this page reads as one of its product
+// pages (Apps/Vakilpedia-code/frontend-next): SectionHead and FeatureTile are
+// SignlinxPage.js's, the layout frame is ProductPageLayout's `wide` + `rail`
+// mode, the nav/footer are SiteNav/SiteFooter. VakilCard's accent (#635BFF)
+// takes the place of SignLinx's ink blue. Keep them in step with www.
+const ACCENT = "#635BFF";
 
-const H2 = ({ children }) => (
-  <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 text-center mb-3">{children}</h2>
-);
+// ProductPageLayout's `wide` text normalisation — globals.css (copied here as
+// index.css) justifies every <p> and force-centres headings below 768px; a
+// page of tiles wants neither. Applied to the content and rail columns only:
+// the sign-in card keeps its own centred lines.
+const WIDE_TEXT =
+  "[&_h1]:!text-left [&_h2]:!text-left [&_h3]:!text-left [&_h4]:!text-left [&_p]:!text-left [&_li]:!text-left [&_p]:!hyphens-none [&_li]:!hyphens-none";
 
-// Text-first tiles: title → visual → caption, all centered on every
-// breakpoint, equal vertical rhythm (title mb-4 / visual / caption mt-4).
-const FeatureCard = ({ title, caption, children }) => (
-  <div className={`${glass} rounded-[2rem] p-6 h-full flex flex-col items-center text-center`}>
-    <h3 className="text-xl font-black tracking-tight text-slate-900 text-center">{title}</h3>
-    <div className="my-4 flex-1 w-full flex flex-col items-center justify-center">{children}</div>
-    <p className="text-sm text-slate-500 text-center hyphens-none mt-auto">{caption}</p>
-  </div>
-);
+function SectionHead({ id, eyebrow, children, sub }) {
+  return (
+    <div>
+      <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 m-0">{eyebrow}</p>
+      <h2 id={id} className="text-2xl sm:text-3xl font-black text-slate-900 tracking-[-0.03em] mt-2 mb-0">
+        {children}
+      </h2>
+      {sub && <p className="text-slate-600 mt-3 max-w-2xl leading-relaxed mb-0">{sub}</p>}
+    </div>
+  );
+}
+
+function FeatureTile({ icon: Icon, title, body }) {
+  return (
+    <div className="flex items-start gap-4 bg-white border border-slate-200 rounded-3xl p-5 h-full">
+      <span className="grid place-items-center w-12 h-12 rounded-2xl flex-none" style={{ backgroundColor: `${ACCENT}12` }} aria-hidden="true">
+        <Icon className="w-6 h-6" style={{ color: ACCENT }} />
+      </span>
+      <div className="min-w-0 flex-1">
+        <h3 className="text-base sm:text-lg font-black tracking-tight text-slate-900 m-0">{title}</h3>
+        <p className="mt-1.5 text-[0.92rem] text-slate-600 leading-relaxed font-medium mb-0">{body}</p>
+      </div>
+    </div>
+  );
+}
+
+const FEATURES = [
+  { icon: Link2, title: "One link. Every detail.", body: "Instead of sending your phone number, chamber address, fee details and payment QR separately, share one VakilCard that contains everything your client needs." },
+  { icon: Pencil, title: "Never reprint visiting cards", body: "Your VakilCard updates instantly whenever you change your office, phone number or website. The same link always stays valid." },
+  { icon: IndianRupee, title: "Get paid faster", body: "Let clients pay consultation fees with a single tap using your personal UPI QR code. No screenshots. No typing UPI IDs." },
+  { icon: MapPin, title: "Help clients reach you", body: "Your chamber address and directions are always one tap away. No more sending your location every time someone asks." },
+  { icon: Globe, title: "Professional everywhere", body: "Whether a client finds you through Google, WhatsApp, LinkedIn or a QR code, they always see the same polished professional profile." },
+  { icon: Landmark, title: "Built for lawyers", body: "Enrollment number, chamber details, practice areas and professional identity — designed for advocates and law firms, not generic business cards." },
+];
 
 const INCLUDED = [
   "Permanent professional profile", "One memorable Vakilpedia link",
@@ -234,7 +265,15 @@ function DemoPhone({ onCreate }) {
       setViewport({ w: vw, h: window.innerHeight });
       // Page gutter either side, plus the phone's own bezel, then never
       // upscale past the native design width.
-      const avail = Math.min(DS_W, vw - PAGE_GUTTER * 2 - BEZEL_AT_FULL * 2);
+      //
+      // From lg up the phone sits BESIDE the headline in the centre column
+      // of a three-column page (rail | content | sign-in), so it is capped
+      // to what that column can spare at each width. Still derived from the
+      // viewport only — never from anything this component renders — for
+      // the reason above.
+      const desktopCap =
+        vw >= 1680 ? 340 : vw >= 1536 ? 310 : vw >= 1440 ? 290 : vw >= 1366 ? 240 : vw >= 1280 ? 215 : vw >= 1024 ? 235 : DS_W;
+      const avail = Math.min(DS_W, desktopCap, vw - PAGE_GUTTER * 2 - BEZEL_AT_FULL * 2);
       if (avail > 0) setScale(avail / DS_W);
     };
     measure();
@@ -312,7 +351,11 @@ function DemoPhone({ onCreate }) {
   };
 
   return (
-    <div className="mx-auto w-[88vw] max-w-[436px]">
+    // Centred by a flex parent, NOT .mx-auto: index.css forces every .mx-auto
+    // to width:100% with 1rem padding below 768px, which squeezed this box
+    // narrower than the phone and pushed the frame off-centre.
+    <div className="flex justify-center max-w-full">
+    <div className="max-w-full" style={expanded ? undefined : { width: frameW }}>
       <style>{`
         @keyframes vcFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-5px)}}
         @media(min-width:1024px){.vc-float{animation:vcFloat 9s ease-in-out infinite}}
@@ -411,6 +454,7 @@ function DemoPhone({ onCreate }) {
           </div>
         </div>
       </div>
+    </div>
     </div>
   );
 }
@@ -523,7 +567,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
       [googleBtnHero.current, googleBtnLogin.current].forEach((node) => {
         if (node && !node.dataset.rendered) {
           window.google.accounts.id.renderButton(node, {
-            theme: "outline", size: "large", width: 280, text: "continue_with", shape: "pill",
+            theme: "outline", size: "large", width: 256, text: "continue_with", shape: "pill",
           });
           node.dataset.rendered = "1";
         }
@@ -565,7 +609,6 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
     if (step !== "phone") window.scrollTo(0, 0);
   }, [step]);
 
-  const railRef = useRef(null);
   // THE single CTA helper — every current and future call-to-action funnels
   // through this. Scrolls to whichever signup card is visible (desktop
   // sticky rail vs mobile in-flow), focuses the phone input with the cursor
@@ -573,8 +616,8 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   // immediate focus attempt runs inside the click's user-gesture context so
   // mobile browsers open the numeric keypad where policy allows.
   const goToSignup = useCallback(() => {
-    const rail = railRef.current;
-    const target = rail && rail.offsetParent !== null ? rail : formRef.current;
+    // One sign-in card on the page now (it used to be two), so one ref.
+    const target = formRef.current;
     if (!target) return;
     target.scrollIntoView({ behavior: "smooth", block: "center" });
     const focusInput = () => {
@@ -767,7 +810,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   /* ------- verification card (shared between inline + focused views) ------- */
 
   const renderVerifyCard = (refEl) => (
-    <div ref={refEl} className={`${glass} rounded-[2.5rem] p-7 sm:p-9`}>
+    <div ref={refEl} className={`${glass} rounded-[2.5rem] p-6 sm:p-8 lg:p-7`}>
       {step === "phone" && (
         <>
           <h3 className="text-2xl font-black tracking-tight text-slate-900">
@@ -801,7 +844,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
           {/* Existing-owner entry — a deliberate, unmissable brand-purple
               tile. Opens the dedicated Welcome Back (password-first) view;
               registration stays exactly where it was behind its ← Back. */}
-          <div className="mt-6 rounded-[1.75rem] bg-[#635BFF] p-6 text-center shadow-lg shadow-[#635BFF]/25">
+          <div className="mt-6 rounded-[1.75rem] bg-[#635BFF] p-5 text-center shadow-lg shadow-[#635BFF]/25">
             <p className="text-sm font-bold text-white/90">Already have a VakilCard?</p>
             <button
               type="button"
@@ -1041,15 +1084,31 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
     </div>
   );
 
-  const bg = { background: "linear-gradient(120deg, rgba(205,239,251,.35), rgba(253,238,203,.35)), #fff" };
+  // Every view on this page wears the marketing site's frame: the one
+  // animated backdrop, the global nav and the global footer — exactly what
+  // ProductPageLayout + SiteShell give every page on www.
+  const openLogin = () => {
+    setError("");
+    setView("login");
+    window.scrollTo(0, 0);
+  };
+  const frame = (children, cta) => (
+    <div className="min-h-screen bg-transparent font-inter-tight selection:bg-slate-900 selection:text-white">
+      <div className="bg-animated" aria-hidden="true"><div className="bg-glow-amber" /></div>
+      <QaBadge />
+      <SiteNav cta={cta} />
+      {children}
+      <SiteFooter />
+    </div>
+  );
+  const poweredBy = <p className="text-center text-xs text-slate-500 mt-5">Powered by Vakilpedia · Free forever</p>;
 
   /* ------- Welcome Back — existing users, password-first ------- */
 
   if (view === "login" && step === "phone") {
-    return (
-      <div className="min-h-screen flex items-start sm:items-center justify-center" style={bg}>
-        <QaBadge />
-        <div className="w-full max-w-md px-4 py-10">
+    return frame(
+      <main className="relative z-10 pt-28 sm:pt-32 lg:pt-36 pb-16 px-4">
+        <div className="w-full max-w-md mx-auto">
           {/* Always-visible escape hatch back to registration. */}
           <button
             type="button"
@@ -1122,18 +1181,18 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               Tip: password sign-in is instant — no waiting for a WhatsApp code.
             </p>
           </div>
-          <p className="text-center text-xs text-slate-500 mt-6">Powered by Vakilpedia · Free forever</p>
+          {poweredBy}
         </div>
-      </div>
+      </main>,
+      null
     );
   }
 
   // Focused view once verification starts — no marketing noise mid-flow.
   if (step !== "phone") {
-    return (
-      <div className="min-h-screen flex items-start sm:items-center justify-center" style={bg}>
-        <QaBadge />
-        <div className="w-full max-w-md px-4 py-10">
+    return frame(
+      <main className="relative z-10 pt-28 sm:pt-32 lg:pt-36 pb-16 px-4">
+        <div className="w-full max-w-md mx-auto">
           {step === "code" && view === "login" && (
             <button
               type="button"
@@ -1144,234 +1203,198 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             </button>
           )}
           {renderVerifyCard(formRef)}
-          <p className="text-center text-xs text-slate-500 mt-6">Powered by Vakilpedia · Free forever</p>
+          {poweredBy}
         </div>
-      </div>
+      </main>,
+      null
     );
   }
 
   /* ---------------- product landing + signup ---------------- */
 
-  return (
-    <div className="min-h-screen" style={bg}>
-      {/* NOTE: no items-start here — the aside must stretch to full column
-          height or its sticky child has no room to float while scrolling. */}
-      <div className="lg:flex lg:gap-6 xl:gap-8 max-w-[96rem] min-[1700px]:max-w-[1600px] mx-auto lg:px-8">
-      <div className="flex-1 min-w-0">
-      {/* hero */}
-      <Section className="pt-12 sm:pt-16 !pb-4">
-        <div className="text-center">
-          <span className="inline-block rounded-full bg-white/80 border border-slate-200/60 px-4 py-1.5 text-xs font-black uppercase tracking-widest text-[#635BFF] mb-6">✨ Free Forever</span>
-          <img src="/vakilcard_card.webp" alt="VakilCard — Your Practice. One Link." className="mx-auto w-full max-w-[300px] sm:max-w-[360px] drop-shadow-2xl" width="1320" height="791" />
-          <h1 className="text-4xl sm:text-5xl font-black tracking-tight leading-[1.02] text-slate-900 mt-7">
-            Create your VakilCard.
-          </h1>
-          <p className="text-xl font-instrument-italic text-slate-700 mt-3 text-center">Your Digital Chamber.</p>
-          <p className="text-lg text-slate-600 mt-4 max-w-md mx-auto text-center hyphens-none">
-            Your verified digital identity for clients, chambers, payments and professional networking. Your practice. One link.
-          </p>
-          <p className="text-sm font-bold text-slate-500 mt-4 text-center hyphens-none">
-            Built for advocates. Live in under 3 minutes. Verified securely on WhatsApp.
-          </p>
-          <button onClick={scrollToForm} className="mt-7 rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-9 py-4 font-bold inline-flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" /> Get Started — Free
-          </button>
-        </div>
-      </Section>
+  // ONE grid, three columns on xl — the cross-sell rail on the left (as on
+  // every free-tool page on www), the page in the middle, the sign-in card on
+  // the right (as on /courtque). On lg the rail folds under the content; on a
+  // phone everything is one column in reading order: headline → sign-in →
+  // live demo → the rest → rail. The sign-in card exists ONCE in the DOM: it
+  // used to be rendered twice (in-flow + sticky rail), which also meant the
+  // Google button's single ref could only ever land in one of them.
+  //
+  // The hero wrapper is `contents` below lg so its two children join the
+  // outer grid and the sign-in card can sit BETWEEN them on a phone; from lg
+  // it is a real two-column box (headline | phone).
+  return frame(
+    <main className="relative z-10 pt-28 sm:pt-32 lg:pt-36 pb-16">
+      <div className="mx-auto max-w-[112rem] px-4 sm:px-6 lg:px-8">
+        <div className="grid items-start gap-6 lg:gap-8 lg:grid-cols-[minmax(0,1fr)_22rem] xl:grid-cols-[17rem_minmax(0,1fr)_22rem] 2xl:grid-cols-[19rem_minmax(0,1fr)_24rem] lg:grid-rows-[auto_auto_auto] xl:grid-rows-[auto_1fr]">
 
-      {/* interactive product demo — the centerpiece */}
-      <Section className="!py-8">
-        <p className="text-center text-xs font-black uppercase tracking-widest text-[#635BFF] mb-2">See your future VakilCard</p>
-        <p className="text-center text-slate-600 mb-7 max-w-sm mx-auto hyphens-none">
-          Everything your clients need. One beautiful, verified profile. Built in under three minutes.
-        </p>
-        <DemoPhone onCreate={goToSignup} />
-        <div className="text-center mt-7">
-          <button onClick={() => { track("cta_click"); scrollToForm(); }} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-9 py-4 font-bold inline-flex items-center gap-2">
-            Create Mine Free <ArrowRight className="h-5 w-5" />
-          </button>
-        </div>
-      </Section>
-
-      {/* why lawyers love it */}
-      <Section>
-        <H2>Why Lawyers Love VakilCard</H2>
-        <p className="text-slate-500 text-center mb-8 hyphens-none">Not a business card. The digital front door to your practice.</p>
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
-          <FeatureCard title="One Link. Every Detail." caption="Instead of sending your phone number, chamber address, fee details and payment QR separately, share one VakilCard that contains everything your client needs.">
-            <div className="grid grid-cols-5 gap-1.5">
-              <MiniAction icon={Phone} label="Call" />
-              <MiniAction icon={MessageCircle} label="WhatsApp" />
-              <MiniAction icon={Mail} label="Email" />
-              <MiniAction icon={Globe} label="Website" />
-              <MiniAction icon={UserRound} label="Save" />
-            </div>
-          </FeatureCard>
-
-          <FeatureCard title="Never Reprint Visiting Cards" caption="Your VakilCard updates instantly whenever you change your office, phone number or website. The same link always stays valid.">
-            <div className="flex items-center gap-3 justify-center">
-              <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Pencil className="h-4 w-4 text-[#635BFF]" /></span>
-              <div className="text-sm text-center">
-                <p className="font-black text-slate-900 text-center hyphens-none">Edit once. Updated everywhere.</p>
-                <p className="text-slate-500 text-center hyphens-none">Your link never changes.</p>
+          {/* ── Hero: headline | live phone ─────────────────────────────── */}
+          <div className="contents lg:grid lg:col-start-1 lg:row-start-1 xl:col-start-2 lg:grid-cols-[minmax(0,1fr)_auto] lg:gap-6 2xl:gap-10 lg:items-center">
+            <div className={`order-1 lg:order-none min-w-0 ${WIDE_TEXT}`}>
+              <div className="flex items-center gap-4">
+                <img src="/app-icons/vakilcard.webp" alt="" width={64} height={64} className="w-14 h-14 sm:w-16 sm:h-16 rounded-[22.37%] object-cover flex-none shadow-lg shadow-slate-900/10" />
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xl font-black text-slate-900 tracking-tight">VakilCard</span>
+                    <span className="text-[0.6rem] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-full" style={{ backgroundColor: `${ACCENT}14`, color: ACCENT }}>
+                      Free forever
+                    </span>
+                  </div>
+                  <p className="text-slate-500 italic text-base m-0">Your Digital Chamber.</p>
+                </div>
               </div>
-            </div>
-          </FeatureCard>
 
-          <FeatureCard title="Get Paid Faster" caption="Let clients pay consultation fees with a single tap using your personal UPI QR code. No screenshots. No typing UPI IDs.">
-            <div className="flex items-center gap-4 justify-center">
-              <div>
-                <p className="text-[11px] font-bold text-slate-500 text-center">UPI ID</p>
-                <p className="font-black text-slate-900 text-center hyphens-none">yourname@upi</p>
-                <div className="mt-2 inline-flex items-center gap-1.5 rounded-full bg-slate-900 text-white text-sm font-bold px-5 py-2"><IndianRupee className="h-4 w-4" />Pay Now</div>
-              </div>
-              <div className="h-16 w-16 rounded-xl border border-slate-200 bg-white grid grid-cols-4 gap-0.5 p-1.5 flex-none" aria-hidden="true">
-                {Array.from({ length: 16 }).map((_, i) => (
-                  <div key={i} className={`rounded-[2px] ${[0,1,3,4,6,9,10,12,15,5].includes(i) ? "bg-slate-900" : "bg-slate-100"}`} />
-                ))}
-              </div>
-            </div>
-          </FeatureCard>
-
-          <FeatureCard title="Help Clients Reach You" caption="Your chamber address and directions are always one tap away. No more sending your location every time someone asks.">
-            <div className="flex items-center gap-3 justify-center">
-              <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-4 w-4 text-[#635BFF]" /></span>
-              <div className="text-sm text-center">
-                <p className="font-black text-slate-900 text-center hyphens-none">Your chamber, on the map</p>
-                <p className="text-slate-500 text-center hyphens-none">Address · Directions · Office timings</p>
-              </div>
-            </div>
-          </FeatureCard>
-
-          <FeatureCard title="Make Every Interaction Professional" caption="Whether a client finds you through Google, WhatsApp, LinkedIn or a QR code, they always see the same polished professional profile.">
-            <div className="flex items-center gap-3 justify-center">
-              {[Linkedin, Youtube, Instagram, Globe].map((Icon, i) => (
-                <span key={i} className="h-9 w-9 rounded-full bg-slate-100 flex items-center justify-center"><Icon className="h-4 w-4 text-slate-600" /></span>
-              ))}
-            </div>
-          </FeatureCard>
-
-          <FeatureCard title="Built For Lawyers" caption="Designed specifically for advocates and law firms — not generic business cards. Your enrollment number, chamber details, practice areas and professional identity, exactly the way clients expect.">
-            <div className="flex flex-col items-center gap-2.5">
-              <div className="flex items-center gap-3 justify-center">
-                <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Landmark className="h-4 w-4 text-[#635BFF]" /></span>
-                <p className="text-sm font-black text-slate-900 text-center hyphens-none">Enrollment · Practice areas · About</p>
-              </div>
-              <div className="flex flex-wrap gap-1.5 justify-center">
-                {["Civil", "Criminal", "Property"].map((a) => (
-                  <span key={a} className="rounded-full bg-slate-100 text-slate-700 text-xs font-semibold px-3 py-1">{a}</span>
-                ))}
-              </div>
-            </div>
-          </FeatureCard>
-        </div>
-      </Section>
-
-      {/* everything included */}
-      <Section className="!py-6">
-        <H2>Every VakilCard includes</H2>
-        <div className={`${glass} rounded-[2rem] p-6 sm:p-8 mt-5`}>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-x-6 gap-y-2.5">
-            {INCLUDED.map((item) => (
-              <p key={item} className="flex gap-2.5 text-[15px] text-slate-700 justify-center sm:justify-start text-left hyphens-none">
-                <Check className="h-4 w-4 text-emerald-600 flex-none mt-1" />{item}
+              <h1 className="text-4xl sm:text-5xl lg:text-[2.4rem] min-[1440px]:text-5xl 2xl:text-6xl font-black text-slate-900 tracking-[-0.04em] leading-[1.02] mt-6 mb-0">
+                Create your VakilCard.
+              </h1>
+              <p className="text-slate-600 text-lg leading-relaxed mt-4 mb-0 max-w-xl">
+                Your verified digital identity for clients, chambers, payments and professional networking.
               </p>
-            ))}
+              <p className="font-instrument-italic text-slate-900 text-2xl mt-3 mb-0">Your practice. One link.</p>
+              <p className="text-sm font-bold text-slate-500 mt-3 mb-0">
+                Built for advocates. Live in under 3 minutes. Verified securely on WhatsApp.
+              </p>
+
+              <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 mt-6 [&>button]:whitespace-nowrap">
+                <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors">
+                  <MessageCircle className="h-4 w-4" /> Get Started — Free
+                </button>
+                <button onClick={openLogin} className="inline-flex items-center justify-center px-7 py-3.5 rounded-full bg-white border border-slate-200 text-slate-900 text-sm font-bold hover:bg-slate-50 transition-colors">
+                  I already have one
+                </button>
+              </div>
+
+              <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mt-7 mb-2">Perfect for</p>
+              <div className="flex flex-wrap gap-1.5">
+                {PERFECT_FOR.map((p) => (
+                  <span key={p} className="rounded-full bg-white/80 border border-slate-200/70 px-3 py-1.5 text-xs font-semibold text-slate-700 inline-flex items-center gap-1">
+                    <Check className="h-3 w-3 text-emerald-600" />{p}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            <div className="order-3 lg:order-none min-w-0">
+              <DemoPhone onCreate={goToSignup} />
+              <p className="text-center text-[11px] font-black uppercase tracking-widest mt-4 mb-0" style={{ color: ACCENT }}>
+                See your future VakilCard
+              </p>
+            </div>
           </div>
-        </div>
-      </Section>
 
-      {/* story: visiting card vs VakilCard */}
-      <Section>
-        <H2>Better than a visiting card</H2>
-        <div className="grid sm:grid-cols-2 gap-5 mt-6">
-          <div className="rounded-[2rem] border border-slate-200 bg-white/50 p-6">
-            <p className="text-xs font-black uppercase tracking-widest text-slate-400 mb-3 text-center sm:text-left">Traditional visiting card</p>
-            <ul className="space-y-2 text-[15px] text-slate-500">
-              {["Printed once. Outdated tomorrow.", "Gets misplaced.", "Can't accept payments.", "Can't show directions.", "Can't update itself."].map((t) => (
-                <li key={t} className="text-center sm:text-left hyphens-none">{t}</li>
-              ))}
-            </ul>
+          {/* ── Sign-in card — right column, sticky; second on a phone ─── */}
+          <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-3 xl:col-start-3 xl:row-span-2 lg:self-stretch" aria-label="Create or sign in to your VakilCard">
+            <div className="lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
+              {renderVerifyCard(formRef)}
+              <p className="text-xs text-slate-500 mt-4 px-2 text-center hyphens-none leading-relaxed">
+                <span className="inline-flex items-center gap-1.5 font-black text-slate-800"><ShieldCheck className="h-3.5 w-3.5" style={{ color: ACCENT }} />Powered by Vakilpedia</span>
+                <br />
+                Privacy-first. Your mobile number stays private unless you choose to display it.
+              </p>
+            </div>
+          </aside>
+
+          {/* ── The rest of the page — centre column ────────────────────── */}
+          <div className={`order-4 lg:order-none lg:col-start-1 lg:row-start-2 xl:col-start-2 min-w-0 space-y-12 sm:space-y-14 lg:pt-6 ${WIDE_TEXT}`}>
+
+            <div role="region" aria-labelledby="why">
+              <SectionHead id="why" eyebrow="Why lawyers love VakilCard">
+                Not a business card. <span style={{ color: ACCENT }}>The front door to your practice.</span>
+              </SectionHead>
+              {/* Phones: one swipeable row (snap) instead of six stacked tiles —
+                  about 1,300px of scrolling becomes one tile's height. */}
+              <div className="-mx-4 px-4 sm:mx-0 sm:px-0 mt-6 flex sm:grid sm:grid-cols-2 2xl:grid-cols-3 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory pb-2 sm:pb-0" style={{ scrollbarWidth: "none" }}>
+                {FEATURES.map((f) => (
+                  <div key={f.title} className="snap-start flex-none w-[80%] min-[480px]:w-[60%] sm:w-auto">
+                    <FeatureTile {...f} />
+                  </div>
+                ))}
+              </div>
+              <p className="sm:hidden text-[11px] font-bold text-slate-400 mt-2 mb-0">Swipe for more →</p>
+            </div>
+
+            <div role="region" aria-labelledby="included">
+              <SectionHead id="included" eyebrow="Free forever">Every VakilCard includes</SectionHead>
+              <ul className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 mt-6 grid grid-cols-2 min-[1440px]:grid-cols-3 gap-x-4 sm:gap-x-5 gap-y-2 list-none m-0">
+                {INCLUDED.map((item) => (
+                  <li key={item} className="flex gap-1.5 sm:gap-2 text-[13px] sm:text-sm text-slate-700 leading-snug">
+                    <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 flex-none mt-0.5" />{item}
+                  </li>
+                ))}
+              </ul>
+            </div>
+
+            {/* The estate's dark band (SignLinx's "proof" block), used for
+                the one comparison on this page. */}
+            <div role="region" aria-labelledby="compare">
+              <div className="rounded-[2rem] bg-slate-900 text-white px-6 sm:px-10 py-10">
+                <div className="grid md:grid-cols-2 gap-8 md:gap-10 items-start">
+                  <div>
+                    <p className="text-xs font-black uppercase tracking-[0.14em] text-[#A5A0FF] m-0">Better than a visiting card</p>
+                    <h2 id="compare" className="text-2xl sm:text-3xl font-black tracking-tight m-0 mt-3 text-white">One tap. Forever.</h2>
+                    <ul className="mt-5 grid grid-cols-2 md:grid-cols-1 gap-x-3 gap-y-2 list-none p-0 m-0">
+                      {["Always current.", "Always shareable.", "Always verified.", "Accepts payments.", "Shows your chamber.", "Works on every smartphone."].map((t) => (
+                        <li key={t} className="flex gap-2 text-[15px] font-semibold text-white"><Check className="h-4 w-4 text-emerald-400 flex-none mt-1" />{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                  <div className="rounded-[1.5rem] bg-white/5 border border-white/10 p-6">
+                    <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-slate-400 m-0">Traditional visiting card</p>
+                    <ul className="mt-4 space-y-2 list-none p-0 m-0">
+                      {["Printed once. Outdated tomorrow.", "Gets misplaced.", "Can't accept payments.", "Can't show directions.", "Can't update itself."].map((t) => (
+                        <li key={t} className="flex gap-2 text-[15px] text-slate-400"><X className="h-4 w-4 text-slate-500 flex-none mt-1" />{t}</li>
+                      ))}
+                    </ul>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div role="region" aria-labelledby="faq">
+              <SectionHead id="faq" eyebrow="Questions">Before you start</SectionHead>
+              <div className="grid sm:grid-cols-2 gap-3 mt-6 items-start">
+                {FAQS.map(([q, a]) => (
+                  <details key={q} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 group">
+                    <summary className="flex items-center justify-between cursor-pointer list-none font-bold text-slate-800 text-[15px]">
+                      {q}
+                      <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform flex-none ml-3" />
+                    </summary>
+                    <p className="text-sm text-slate-500 mt-2.5 mb-0">{a}</p>
+                  </details>
+                ))}
+              </div>
+            </div>
+
+            {/* Closing CTA — the estate's amber band (SignLinx, CourtQue). */}
+            <div>
+              <div className="bg-gradient-to-r from-amber-50 to-slate-50 border border-amber-200 rounded-[2rem] py-10 px-6 sm:px-10 grid 2xl:grid-cols-[1fr_auto] gap-6 2xl:gap-10 items-center">
+                <div>
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-[-0.03em] m-0">
+                    Your next client is already <span className="font-instrument-italic font-normal">searching online.</span>
+                  </h2>
+                  <p className="text-slate-600 mt-3 max-w-2xl leading-relaxed mb-0">
+                    Verify your WhatsApp. Build your profile. Share one trusted link forever.
+                  </p>
+                </div>
+                <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors w-full sm:w-auto justify-self-start">
+                  <MessageCircle className="h-4 w-4" /> Create My Free VakilCard
+                </button>
+              </div>
+            </div>
           </div>
-          <div className={`${glass} rounded-[2rem] p-6`}>
-            <p className="text-xs font-black uppercase tracking-widest text-[#635BFF] mb-3 text-center sm:text-left">VakilCard</p>
-            <ul className="space-y-2 text-[15px] text-slate-800 font-semibold">
-              {["Always current.", "Always shareable.", "Always verified.", "Accepts payments.", "Shows your chamber.", "Works on every smartphone."].map((t) => (
-                <li key={t} className="flex gap-2 justify-center sm:justify-start text-left hyphens-none"><Check className="h-4 w-4 text-emerald-600 flex-none mt-1" />{t}</li>
-              ))}
-            </ul>
-            <p className="text-sm font-black text-slate-900 mt-4 text-center sm:text-left">One tap. Forever.</p>
-          </div>
-        </div>
-      </Section>
 
-      {/* perfect for */}
-      <Section className="!py-6">
-        <H2>Perfect for</H2>
-        <div className="flex flex-wrap justify-center gap-2 mt-5">
-          {PERFECT_FOR.map((p) => (
-            <span key={p} className="rounded-full bg-white/80 border border-slate-200/60 px-4 py-2 text-sm font-semibold text-slate-700 inline-flex items-center gap-1.5">
-              <Check className="h-3.5 w-3.5 text-emerald-600" />{p}
-            </span>
-          ))}
+          {/* ── More from Vakilpedia — left rail on xl, under the page below ── */}
+          <aside className={`order-5 lg:order-none lg:col-start-1 lg:row-start-3 xl:row-start-1 xl:row-span-2 lg:self-stretch ${WIDE_TEXT}`} aria-label="More from Vakilpedia">
+            <div className="hidden xl:block sticky top-28 max-h-[calc(100vh-8rem)] overflow-y-auto rounded-[2rem]" style={{ scrollbarWidth: "thin" }}>
+              <EcosystemRail origin={WWW} exclude={["VakilCard"]} />
+            </div>
+            <div className="xl:hidden">
+              <EcosystemRail origin={WWW} exclude={["VakilCard"]} compactGrid />
+            </div>
+          </aside>
         </div>
-      </Section>
-
-      {/* trust */}
-      <Section className="!py-6">
-        <div className="text-center">
-          <p className="text-sm font-black text-slate-900 inline-flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-[#635BFF]" />Powered by Vakilpedia</p>
-          <p className="text-sm text-slate-500 mt-2 max-w-md mx-auto text-center hyphens-none">
-            Built exclusively for India's legal professionals. Privacy-first. Verified through WhatsApp. Free forever. Your mobile number stays private unless you choose to display it.
-          </p>
-        </div>
-      </Section>
-
-      {/* signup card — in-flow on mobile/tablet; desktop uses the sticky rail */}
-      <Section className="lg:hidden !pt-4" narrow>{renderVerifyCard(formRef)}</Section>
-
-      {/* faq */}
-      <Section className="!pt-2">
-        <H2>Questions</H2>
-        <div className="grid sm:grid-cols-2 gap-3 mt-5 items-start">
-          {FAQS.map(([q, a]) => (
-            <details key={q} className={`${glass} rounded-2xl px-5 py-4 group`}>
-              <summary className="flex items-center justify-between cursor-pointer list-none font-bold text-slate-800 text-[15px]">
-                {q}
-                <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform flex-none ml-3" />
-              </summary>
-              <p className="text-sm text-slate-500 mt-2.5 text-left hyphens-none">{a}</p>
-            </details>
-          ))}
-        </div>
-      </Section>
-
-      {/* closing CTA */}
-      <Section>
-        <div className="text-center py-4">
-          <h2 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">
-            Your next client is already <span className="font-instrument-italic font-normal">searching online.</span>
-          </h2>
-          <p className="text-slate-600 font-semibold mt-3 text-center">Make sure they find you.</p>
-          <p className="text-sm text-slate-500 mt-3 max-w-sm mx-auto text-center hyphens-none">
-            Your practice deserves more than a paper visiting card. Verify your WhatsApp. Build your profile. Share one trusted link forever.
-          </p>
-          <button onClick={() => { track("cta_click"); scrollToForm(); }} className="mt-6 rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-10 py-4 font-bold inline-flex items-center gap-2">
-            <MessageCircle className="h-5 w-5" /> Create My Free VakilCard
-          </button>
-          <p className="text-xs text-slate-500 mt-8 text-center">Powered by Vakilpedia · Free forever</p>
-        </div>
-      </Section>
       </div>
-
-      {/* desktop: signup card floats on the right, always in sight */}
-      <aside className="hidden lg:block w-[380px] 2xl:w-[420px] flex-none">
-        <div className="sticky top-8 py-10">
-          {renderVerifyCard(railRef)}
-          <p className="text-center text-xs text-slate-500 mt-5">Powered by Vakilpedia · Free forever</p>
-        </div>
-      </aside>
-      </div>
-    </div>
+    </main>,
+    { label: "Sign In", onClick: openLogin }
   );
 }

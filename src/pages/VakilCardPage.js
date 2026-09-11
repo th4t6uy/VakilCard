@@ -32,7 +32,8 @@ import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
 import LiveCardPreview from "../components/LiveCardPreview";
 import UpgradeSheet from "../components/UpgradeSheet";
 import SignupPage, { PasswordInput, StrengthBar } from "./vakilcard/SignupPage";
-import BrandWordmark from "../components/BrandWordmark";
+import SiteNav from "../components/SiteNav";
+import SiteFooter from "../components/SiteFooter";
 import EcosystemRail from "../components/EcosystemRail";
 import SEOHead from "../components/SEOHead";
 
@@ -1012,9 +1013,15 @@ export default function VakilCardPage() {
 
   /* ---------- render ---------- */
 
+  // The marketing site's frame — same backdrop, nav and footer as www and as
+  // the signed-out landing (SignupPage). No nav CTA: the owner is signed in,
+  // and "Sign out" lives in the dashboard header below.
   const shell = (children) => (
-    <div className="min-h-screen" style={{ background: "linear-gradient(120deg, rgba(205,239,251,.35), rgba(253,238,203,.35)), #fff" }}>
-      <div className="vp-container py-10 sm:py-14">{children}</div>
+    <div className="min-h-screen bg-transparent font-inter-tight">
+      <div className="bg-animated" aria-hidden="true"><div className="bg-glow-amber" /></div>
+      <SiteNav cta={null} />
+      <div className="vp-container relative z-10 pt-28 sm:pt-32 lg:pt-36 pb-14">{children}</div>
+      <SiteFooter />
     </div>
   );
 
@@ -1081,14 +1088,6 @@ export default function VakilCardPage() {
         canonicalUrl="https://vakilcard.vakilpedia.com/"
         imageUrl="https://www.vakilpedia.com/logo.png"
       />
-      {/* Vakilpedia product lockup — this is a Vakilpedia product page, not
-          a standalone app. Mirrors Home.js's navbar logo treatment. */}
-      <a href="/" className="flex items-center gap-2.5 mb-6 no-underline w-fit">
-        <img src="/logo.png" alt="Vakilpedia" className="h-7 sm:h-8 w-auto object-contain" />
-        <BrandWordmark className="font-black text-slate-900 tracking-tighter text-lg sm:text-xl" />
-        <span className="rounded-full bg-slate-900 text-white text-[10px] font-black uppercase tracking-widest px-2.5 py-1 ml-1">VakilCard</span>
-      </a>
-
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <img src="/vakilcard-pwa-192.png" alt="" className="hidden sm:block h-9 w-9 rounded-xl object-cover shadow-sm flex-none" />
@@ -1525,12 +1524,12 @@ export default function VakilCardPage() {
         </div>
 
         {/* live card — always in sight while managing */}
-        <div className="hidden lg:block sticky top-8 mt-6 lg:mt-0">
+        <div className="hidden lg:block sticky top-28 mt-6 lg:mt-0">
           <LiveCardPreview form={form} theme={theme === "light" ? "light" : "dark"} />
         </div>
 
         {/* third column: the Vakilpedia ecosystem, product discovery */}
-        <div className="hidden xl:block sticky top-8">
+        <div className="hidden xl:block sticky top-28">
           <EcosystemRail origin={CARD_ORIGIN} />
         </div>
       </div>

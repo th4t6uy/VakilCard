@@ -91,7 +91,7 @@ export default function EcosystemRail({
           <span className="absolute top-4 right-4 bg-[#635BFF] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
             {FEATURED.badge}
           </span>
-          <div className="w-12 h-12 rounded-2xl overflow-hidden bg-white shadow-sm grid place-items-center mb-3">
+          <div className="w-12 h-12 rounded-[22.37%] overflow-hidden bg-white shadow-sm grid place-items-center mb-3">
             <img src={FEATURED.icon} alt="CaseLinx" width={48} height={48} className="w-full h-full object-cover" />
           </div>
           <p className="text-lg font-black text-slate-900 tracking-tight leading-none m-0">{FEATURED.name}</p>
@@ -116,7 +116,7 @@ export default function EcosystemRail({
               onClick={() => onNavigate && onNavigate(name, href)}
               className="flex items-center gap-3 rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all p-3 no-underline"
             >
-              <div className="w-10 h-10 rounded-xl overflow-hidden bg-slate-50 shadow-sm grid place-items-center flex-none">
+              <div className="w-10 h-10 rounded-[22.37%] overflow-hidden bg-slate-50 shadow-sm grid place-items-center flex-none">
                 <img src={icon} alt="" width={40} height={40} loading="lazy" className="w-full h-full object-cover" />
               </div>
               <div className="min-w-0">
