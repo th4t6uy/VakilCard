@@ -140,6 +140,12 @@ async function createAccountViaCaseLinx(phoneE164, code, ip) {
     if (data.status === "completed" || data.status === "signed_in") {
       return { consumed: true, accountId: data.accountId || null };
     }
+    if (data.status === "pending_approval") {
+      // 2026-09-11: the code was verified and consumed, the Vakilpedia account exists (or was just
+      // created) but is awaiting the founder's approval. Caller decides: existing card owners are
+      // let in; brand-new people are told they are awaiting approval.
+      return { consumed: true, accountId: data.accountId || null, pending: true };
+    }
     if (data.status === "account_creation_required") {
       // Verified and consumed on CaseLinx's side; no account was made (flag/allowlist gate).
       return { consumed: true, accountId: null };
@@ -548,6 +554,23 @@ module.exports = async function handler(req, res) {
       } else {
         r = await verification.verify({ phone: body.phone, code: body.code, ip });
         if (!r.ok) return json(res, r.error === "locked" ? 429 : 400, r);
+      }
+
+      if (bridged.pending) {
+        // Signup approval gate (2026-09-11). A phone that already owns a VakilCard identity is an
+        // existing card owner whose main account is pending review — let them in exactly as before.
+        // A brand-new person stops here: their account exists and waits in the approval queue.
+        const alreadyHasCard = await db(
+          `account_phone_identities?phone_e164=eq.${encodeURIComponent(r.phoneE164)}&select=account_id`
+        );
+        if (!alreadyHasCard.length) {
+          return json(res, 403, {
+            ok: false,
+            error: "awaiting_approval",
+            message:
+              "Your Vakilpedia account has been created and is awaiting approval. We'll let you know on WhatsApp as soon as it's ready.",
+          });
+        }
       }
 
       const ensured = await ensureAccountForPhone(r.phoneE164, ip, bridged.accountId);

@@ -318,6 +318,47 @@ test("CaseLinx bridge: post-match statuses (needs_review etc.) must not reject a
   }
 });
 
+test("approval gate: CaseLinx pending_approval stops a NEW person, lets an existing card owner in (2026-09-11)", async () => {
+  // Since 2026-09-10 every new Vakilpedia account is created pending. CaseLinx now answers
+  // pending_approval instead of failing half-way. A brand-new phone must get a clear
+  // awaiting_approval answer and NO card; a phone that already owns a VakilCard identity
+  // (an existing card owner whose main account is still under review) signs in as before.
+  const origFetch = global.fetch;
+  try {
+    // 1. brand-new person
+    reset();
+    const { logs } = await captureConsole(() => verification.sendVerification({ phone: PHONE }));
+    const code = extractCode(logs);
+    latestSession().status = "consumed";
+    const newAccountId = "11111111-2222-4333-8444-555555555555";
+    global.fetch = async () => ({ ok: true, json: async () => ({ status: "pending_approval", accountId: newAccountId }) });
+    let out;
+    await captureConsole(async () => { out = await callAuth({ action: "verify", phone: PHONE, code }); });
+    assert.equal(out.status, 403);
+    assert.equal(out.data.error, "awaiting_approval");
+    assert.ok(!out.data.access_token, "no session for a pending new person");
+    assert.equal((store.vakilcard_profiles || []).length, 0, "no card is created while pending");
+
+    // 2. existing card owner (phone already mapped to a VakilCard identity)
+    reset();
+    const ownerId = "99999999-8888-4777-8666-555555555555";
+    store.vakilpedia_accounts = [{ id: ownerId, status: "active" }];
+    store.account_phone_identities = [{ id: "p1", account_id: ownerId, phone_e164: PHONE }];
+    store.vakilcard_profiles = [{ id: "c1", account_id: ownerId, username: "owner", is_published: true }];
+    const r2 = await captureConsole(() => verification.sendVerification({ phone: PHONE }));
+    const code2 = extractCode(r2.logs);
+    latestSession().status = "consumed";
+    global.fetch = async () => ({ ok: true, json: async () => ({ status: "pending_approval", accountId: ownerId }) });
+    let out2;
+    await captureConsole(async () => { out2 = await callAuth({ action: "verify", phone: PHONE, code: code2 }); });
+    assert.equal(out2.status, 200, "existing card owner is let in");
+    assert.equal(out2.data.account_id, ownerId);
+    assert.ok(out2.data.access_token);
+  } finally {
+    global.fetch = origFetch;
+  }
+});
+
 test("draft cards are not public (profile SSR + vcf)", async () => {
   const profilePath = path.resolve(__dirname, "../api/vakilcard/profile.js");
   const vcfPath = path.resolve(__dirname, "../api/vakilcard/vcf.js");
