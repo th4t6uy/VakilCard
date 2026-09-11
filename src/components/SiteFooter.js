@@ -78,7 +78,7 @@ export default function SiteFooter() {
           <div className="text-center md:text-left">
             <h4 className="text-xl font-bold mb-8 text-amber-500 uppercase">Contact Us</h4>
             <p className="text-amber-500/70 text-sm leading-loose">
-              Gujral Law Chambers<br />
+              Vakilpedia<br />
               21, Delite Palladium<br />
               South Civil Lines<br />
               Jabalpur, MP 482001, INDIA<br />
@@ -87,7 +87,7 @@ export default function SiteFooter() {
           </div>
         </div>
         <div className="border-t border-amber-900/30 mt-16 pt-8 text-center text-amber-500/50 text-xs font-medium">
-          © {new Date().getFullYear()} <BrandWordmark /> Legal Technologies. All rights reserved.
+          © {new Date().getFullYear()} DatarOne Private Limited (CIN U62099MP2026PTC086878). <BrandWordmark /> is a business name and trade mark used by DatarOne Private Limited under licence. All rights reserved.
         </div>
       </div>
     </footer>
