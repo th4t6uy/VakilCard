@@ -1,6 +1,6 @@
 import React, { Suspense, lazy, useEffect, useState } from "react";
 import "./App.css";
-import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
+import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
 import SuiteInvite from "./components/SuiteInvite";
 
@@ -98,8 +98,17 @@ function App() {
               known, and redirects a mismatched username to the owner's
               own dashboard. */}
           <Route path="/:username/dashboard" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
-          {/* legacy signup URL redirects forever */}
-          <Route path="/signup" element={<Navigate to="/" replace />} />
+          {/* /signup is the PUBLIC front door into VakilCard's own WhatsApp-OTP
+              signup, and it renders that flow whatever the session state.
+              It used to redirect to "/" forever; that stopped being safe on
+              2026-09-12, when the root started sending signed-out visitors to
+              the marketing page at www.vakilpedia.com/vakilcard. Every
+              "Create your VakilCard" button on that page points here, and if
+              this still redirected to "/" the visitor would be sent back to
+              www and bounce between the two with no way to sign up at all.
+              Same component as "/", so a signed-in owner who lands here still
+              gets their dashboard. */}
+          <Route path="/signup" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
           <Route path="/setup" element={<Suspense fallback={<Loading />}><VakilCardSetup /></Suspense>} />
           {/* Founder-only — api/vakilcard/admin.js is the real gate, this
               route just lazy-loads the dashboard shell. */}

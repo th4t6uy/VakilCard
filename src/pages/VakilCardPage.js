@@ -1025,6 +1025,37 @@ export default function VakilCardPage() {
     </div>
   );
 
+  // Signed out AT THE ROOT → the marketing page on www.
+  //
+  // Founder, 2026-09-12 (site-wide audit): "vakilcard's marketing page needs
+  // to be url vakilpedia.com/vakilcard; currently its
+  // vakilcard.vakilpedia.com. All subdomain pages are the actual app working
+  // pages accessible after sign up."
+  //
+  // Same split SignLinx made on 2026-09-11 (Apps/Signlinx src/app/page.tsx):
+  // the subdomain is the app, www carries the public page. Everything the
+  // landing said now lives at www.vakilpedia.com/vakilcard, where Google
+  // indexes it as a Vakilpedia page, the cross-sell and sign-up rails sit
+  // beside it like every other app page, and the nav tile can point at it.
+  //
+  // 🔴 SCOPE IS THE BARE ROOT, AND ONLY THE ROOT. /signup renders the signup
+  // experience below, whatever the session — that is the address www's
+  // "Create your VakilCard" button uses, and it has to be, because a button
+  // aimed at "/" would land here, be redirected back to www, and loop. The
+  // same applies to anyone mid-flow: /setup, /:username/dashboard and /admin
+  // are untouched, and a visitor carrying ?auth=google (the marketing site's
+  // Google hint) is left alone, because they are in the middle of signing in,
+  // not browsing.
+  //
+  // Development is untouched too: `npm start` must never bounce a developer
+  // to production www.
+  const atRoot = typeof window !== "undefined" && window.location.pathname === "/";
+  const inSignInFlow = autoGoogleSignIn;
+  if (!authed && atRoot && !inSignInFlow && process.env.NODE_ENV === "production") {
+    window.location.replace(`${CARD_ORIGIN}/vakilcard`);
+    return null;
+  }
+
   // Signed out → single entry point: the full landing + OTP experience.
   // SignupPage itself routes post-verification (new → onboarding,
   // existing → back here as the dashboard).
