@@ -31,7 +31,7 @@ export const LAUNCHER_ITEMS = [
   { id: "caselinx", name: "CaseLinx", tagline: "The Litigation OS", icon: "/app-icons/caselinx.webp", href: "https://caselinx.vakilpedia.com", flag: "BETA" },
   { id: "signlinx", name: "SignLinx", tagline: "Signatures, on a link", icon: "/app-icons/signlinx.webp", href: "https://signlinx.vakilpedia.com", flag: "BETA" },
   { id: "vakilcard", name: "VakilCard", tagline: "Your digital chamber", icon: "/app-icons/vakilcard.webp", href: "https://vakilcard.vakilpedia.com" },
-  { id: "courtque", name: "CourtQue", tagline: "Court alerts on WhatsApp", icon: "/app-icons/courtque.webp", href: "/courtque" },
+  { id: "courtque", name: "CourtQue", tagline: "Court alerts on WhatsApp", icon: "/app-icons/courtque.webp", href: "https://courtque.vakilpedia.com" },
   { id: "barelex", name: "BareLEX", tagline: "Bare acts, searchable", icon: "/app-icons/barelex.webp", href: "https://barelex.vakilpedia.com", flag: "BETA" },
   { id: "evidencehash", name: "EvidenceHash", tagline: "Prove a file is unchanged", icon: "/app-icons/evidencehash.webp", href: "/evidence-hash-sha256" },
   { id: "affidavitmaker", name: "Affidavit Maker", tagline: "Court-ready affidavits, free", icon: "/app-icons/affidavitmaker.webp", href: "https://affidavit.vakilpedia.com" },
