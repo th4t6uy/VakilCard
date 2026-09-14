@@ -5,11 +5,19 @@
     <meta name="robots" content="noindex, follow" />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <meta name="theme-color" content="#000000" />
+    <meta name="theme-color" content="#141f3a" />
     <meta name="description" content="VakilCard — the digital chamber card and canonical Vakilpedia onboarding gateway with WhatsApp phone verification." />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-    <link rel="apple-touch-icon" href="%PUBLIC_URL%/vakilcard-pwa-192.png" />
+    <!-- ONE icon convention across the estate, at /icons/. The path is new on
+         purpose: browsers key cached favicons by URL and ignore cache headers
+         for them, so reusing an old path leaves every tab that ever loaded the
+         old mark still showing it. This app had no favicon link at all. -->
+    <link rel="icon" href="%PUBLIC_URL%/icons/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="%PUBLIC_URL%/icons/icon-32.png" />
+    <link rel="icon" type="image/png" sizes="192x192" href="%PUBLIC_URL%/icons/icon-192.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="%PUBLIC_URL%/icons/apple-touch-icon.png" />
+    <meta name="apple-mobile-web-app-title" content="VakilCard" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>VakilCard</title>
   </head>

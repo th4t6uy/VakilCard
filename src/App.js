@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
 import SuiteInvite from "./components/SuiteInvite";
+import AddToHomeScreen from './components/AddToHomeScreen';
 
 // Bridge tokens minted just-in-time by the NFC claim flow (api/vakilcard/nfc.js's
 // claimPage) into this SPA's own session store. The claim page is a standalone
@@ -115,6 +116,7 @@ function App() {
           <Route path="/admin" element={<Suspense fallback={<Loading />}><VakilCardAdmin /></Suspense>} />
         </Routes>
       </BrowserRouter>
+      <AddToHomeScreen appName="VakilCard" />
     </div>
   );
 }
