@@ -47,6 +47,26 @@ function useSuiteSessionBridge() {
   useEffect(() => {
     if (hasPhoneSession()) return;
     if ((window.location.hash || "").indexOf("at=") !== -1) return;
+
+    // 2026-09-15 outage fix: this bridge used to reload unconditionally
+    // every time it found a Suite session, with no memory of having tried
+    // before. For any visitor whose freshly-set tokens don't survive the
+    // reload (session never confirmed authed on the next mount), that ran
+    // forever — reload, hasPhoneSession() false again, fetch, reload — and
+    // the page never finished loading. One attempt per tab, tracked in
+    // sessionStorage (cleared on the next real tab open, so a later visit
+    // still gets exactly one silent-bridge try): if it already tried and
+    // the session still isn't there, fall through to the normal signed-out
+    // page instead of spinning. See vakilpedia_vakilcard_auth_bridge_reload_loop
+    // memory for the investigation.
+    let alreadyTried = false;
+    try {
+      alreadyTried = sessionStorage.getItem("vc_suite_bridge_tried") === "1";
+    } catch {
+      /* sessionStorage unavailable (private mode, etc.) — behave as before */
+    }
+    if (alreadyTried) return;
+
     fetch("/api/vakilcard/auth", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -57,6 +77,11 @@ function useSuiteSessionBridge() {
       .then((data) => {
         if (data && data.found && data.access_token && data.refresh_token) {
           setTokens(data);
+          try {
+            sessionStorage.setItem("vc_suite_bridge_tried", "1");
+          } catch {
+            /* best-effort guard only */
+          }
           // Everything already mounted assumed signed-out; reload once so the
           // whole app picks up the new session exactly like a normal
           // already-signed-in page load would.
