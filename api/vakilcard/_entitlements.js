@@ -2,15 +2,33 @@
 // Every premium endpoint calls into this module; the frontend only ever
 // mirrors decisions made here. Never trust the client.
 //
-// Plans: FREE (default) | PRO (₹199/yr founder-locked, ₹299/yr regular).
+// Plans: FREE (default) | PRO (founder-locked ₹199/yr, regular ₹299/yr — the
+// PRICES live in supracore.billing_plans, keys vakilcard_pro_founder /
+// vakilcard_pro, read through _billing.js getPricing()).
 // Pro is entitled ONLY while plan=PRO, status=ACTIVE and not past expiry —
 // EXPIRED/CANCELLED (and lapsed timestamps) behave exactly like FREE.
+//
+// Since 2026-09-10 these columns are a PROJECTION of the platform's
+// product_entitlements row for product 'vakilcard' (trigger
+// vakilcard_mirror_entitlement, SupraCore migration 20260910000200): the
+// platform settles every charge and grants the entitlement; the trigger keeps
+// vakilcard_profiles in step so nothing below had to change.
 
-const PRICING = {
+/**
+ * COLD-START FALLBACK ONLY — these are NOT the prices. The catalogue
+ * (supracore.billing_plans) is, and the platform prices every mandate from it.
+ * This object exists so a GET /subscription during a catalogue outage renders
+ * the numbers VakilCard has always shown instead of a blank sheet, and so the
+ * entitlement unit tests need no database. Same pattern as CaseLinx's
+ * LEGACY_CREDIT_COSTS (src/lib/creditCosts.ts). Changing a number here changes
+ * nothing that is charged. Callers that need live values use
+ * _billing.js getPricing() and pass the result to entitlementsFor().
+ */
+const PRICING = Object.freeze({
   founder_inr: 199,
   regular_inr: 299,
   period_days: 365,
-};
+});
 
 /** Pro feature catalogue — extend here; gates everywhere update with it. */
 const PRO_FEATURES = [
@@ -110,11 +128,16 @@ function isProActive(profile) {
   return true;
 }
 
-/** Entitlement summary shipped to the owner's own clients (GET /me). */
-function entitlementsFor(profile) {
+/**
+ * Entitlement summary shipped to the owner's own clients (GET /me).
+ * `pricing` is the live catalogue snapshot from _billing.js getPricing();
+ * omitted, the cold-start fallback is attached (the shape is identical).
+ */
+function entitlementsFor(profile, pricing) {
   const pro = isProActive(profile);
   const features = {};
   for (const f of PRO_FEATURES) features[f] = pro;
+  const p = pricing || PRICING;
   return {
     plan: pro ? "PRO" : "FREE",
     pro,
@@ -122,7 +145,7 @@ function entitlementsFor(profile) {
     expires_at: (profile && profile.subscription_expires_at) || null,
     founder_pricing: !!(profile && profile.founder_pricing),
     features,
-    pricing: PRICING,
+    pricing: { founder_inr: p.founder_inr, regular_inr: p.regular_inr, period_days: p.period_days },
   };
 }
 

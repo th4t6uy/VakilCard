@@ -171,7 +171,12 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
   const [pricing, setPricing] = useState({ founder_inr: 199, regular_inr: 299 });
   const [founderAvailable, setFounderAvailable] = useState(true);
   const [busy, setBusy] = useState(false);
-  const [done, setDone] = useState(null); // null | "activated" | "pending"
+  // null | "activated" | "pending" | "exists" | "error"
+  //   exists — the platform already holds a live Pro mandate for this account
+  //            (2026-09-10: checkout runs on the platform rail, which refuses
+  //            to stack a second mandate for the same product);
+  //   error  — the platform rail could not be reached; nothing was charged.
+  const [done, setDone] = useState(null);
   // Coupon state — a valid discount code (e.g. FOUNDER33) reprices the first
   // year before any payment starts. Validation is entirely server-side.
   const [couponInput, setCouponInput] = useState("");
@@ -288,8 +293,15 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
       }
       setBusy(false);
     } catch (e) {
-      if (e && e.code === "coupon_offer_not_configured") {
+      const code = e && e.code;
+      if (code === "coupon_offer_not_configured") {
         setCouponError("This code isn't ready yet — please try again shortly.");
+      } else if (code === "mandate_exists") {
+        setDone("exists");
+      } else if (code === "checkout_unavailable" || code === "verify_unavailable" || code === "provider_unreachable") {
+        setDone("error");
+      } else if (COUPON_ERRORS[code]) {
+        setCouponError(COUPON_ERRORS[code]);
       } else {
         setDone("pending");
       }
@@ -343,6 +355,16 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
           <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center">
             <p className="font-black text-emerald-800">You're Pro now 🎉</p>
             <button className="mt-3 w-full rounded-full bg-slate-900 text-white px-6 py-3.5 font-bold" onClick={onClose}>Continue</button>
+          </div>
+        ) : done === "exists" ? (
+          <div className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-center">
+            <p className="text-sm font-bold text-sky-900 hyphens-none">A Pro subscription is already set up on this account. If you just approved the UPI mandate, it activates the moment the first payment clears.</p>
+            <button className="mt-3 w-full rounded-full bg-white border border-slate-200 px-6 py-3 font-bold text-slate-700" onClick={onClose}>Okay</button>
+          </div>
+        ) : done === "error" ? (
+          <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 text-center">
+            <p className="text-sm font-bold text-rose-900 hyphens-none">Couldn't reach checkout just now — nothing was charged. Please try again in a moment.</p>
+            <button className="mt-3 w-full rounded-full bg-white border border-slate-200 px-6 py-3 font-bold text-slate-700" onClick={() => setDone(null)}>Try again</button>
           </div>
         ) : done === "pending" ? (
           <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-center">

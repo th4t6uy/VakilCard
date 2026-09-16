@@ -1,40 +1,56 @@
-// VakilCard Pro subscription lifecycle.
+// VakilCard Pro subscription lifecycle — on the PLATFORM payment rail.
 //   GET  /api/vakilcard/subscription             → plan, status, pricing, payments_live
 //   POST { action: "coupon_preview", code }      → discount preview (authed)
-//   POST { action: "checkout", coupon_code? }    → Razorpay yearly subscription
-//        (UPI Autopay mandate) — returns { subscription_id, key_id, … } for the
-//        in-app Razorpay Checkout modal. Falls back to the legacy "payments
-//        launching" pending response when Razorpay is not configured.
+//   POST { action: "checkout", coupon_code? }    → yearly UPI Autopay mandate,
+//        created by the platform (account.vakilpedia.com/api/billing/service/
+//        mandate) — returns { subscription_id, key_id, … } for the in-app
+//        Razorpay Checkout modal. Falls back to the legacy "payments launching"
+//        pending response when the platform rail is not configured or the
+//        payment gate (PAYMENTS_ENABLED) is closed.
 //   POST { action: "verify_payment", … }         → signature-verified activation
-//        after the Checkout modal succeeds (authed).
-//   POST { action: "cancel" }                    → cancel auto-renewal (authed)
-//   POST { action: "activate", secret, … }       → ACTIVATE (billing webhook
-//        / admin only — guarded by VAKILCARD_BILLING_SECRET, never callable
-//        from the browser). Provider-agnostic escape hatch.
-//   POST with x-razorpay-signature header        → Razorpay WEBHOOK (renewals,
-//        cancellations). Folded into this function because the deployment is
-//        at Vercel's 12-serverless-function ceiling (see booking.js). The
-//        webhook never trusts its payload: it re-fetches the subscription
-//        from Razorpay's API by id before acting.
+//        after the Checkout modal succeeds (authed). The platform verifies the
+//        signature, re-fetches the subscription and the payment from the
+//        gateway, settles the charge ONCE (keyed on the pay_... id) and grants
+//        the entitlement; a database trigger mirrors it onto vakilcard_profiles.
+//   POST { action: "cancel" }                    → cancel auto-renewal (authed).
+//        Cancels the mandate AT THE GATEWAY through the platform (the previous
+//        implementation only flipped the local status and left the bank
+//        mandate running), then the trigger mirrors CANCELLED here.
+//   POST { action: "activate", secret, … }       → ACTIVATE (admin escape hatch
+//        — guarded by VAKILCARD_BILLING_SECRET, never callable from the
+//        browser). Provider-agnostic; unchanged.
+//   POST with x-razorpay-signature header        → the LEGACY webhook URL.
+//        Razorpay's single account-level webhook now points at the platform
+//        door (account.vakilpedia.com/api/webhooks/razorpay). Until that is
+//        proven, anything still arriving here is FORWARDED to the platform
+//        (`sync`): only the subscription/payment ids are passed on, and the
+//        platform re-reads the truth from the gateway — nothing in the payload
+//        is trusted, which is exactly what this webhook always did. Set
+//        VAKILCARD_WEBHOOK_FORWARD=off to retire the forward once nothing
+//        arrives here any more. Folded into this function because the
+//        deployment is at Vercel's 12-serverless-function ceiling (see
+//        booking.js).
 //
 // Coupons: kind='discount' supracore coupons (e.g. FOUNDER33, 30% off) apply
-// to the FIRST YEAR only — the Razorpay mandate is created at the full plan
-// price and a dashboard-created Razorpay Offer (RAZORPAY_OFFER_<CODE> env)
-// discounts the first cycle. supracore_coupon_redeem is called only AFTER
+// to the FIRST YEAR only — the mandate is created at the full plan price and a
+// dashboard-created Razorpay Offer (supracore.coupons.provider_offer_id)
+// discounts the first cycle. Redemption is recorded by the platform only AFTER
 // verified payment, so redemption counts reflect paid conversions.
 //
-// Pricing: Founder ₹199/yr (locked while the subscription stays active),
-// Regular ₹299/yr. Founder window is controlled by VAKILCARD_FOUNDER_OPEN
-// ("0" closes it; open by default during beta). Coupon checkouts always
-// price off the REGULAR rate — a coupon bypasses the founder window.
+// Pricing: Founder ₹199/yr (locked while the subscription stays active — a
+// yearly mandate on the founder plan does that by construction), Regular
+// ₹299/yr. Both are rows in supracore.billing_plans; NOTHING in this repo
+// hard-codes a price. The founder window is the founder row being on sale
+// (active = true); VAKILCARD_FOUNDER_OPEN=0 still closes it for compatibility.
+// Coupon checkouts always price off the REGULAR plan — a coupon bypasses the
+// founder window.
 const { db, resolveAccount } = require("./_lib");
-const { PRICING, entitlementsFor } = require("./_entitlements");
+const { entitlementsFor } = require("./_entitlements");
 const { audit } = require("./_verify");
-const rzp = require("./_razorpay");
+const billing = require("./_billing");
 
 const BILLING_SECRET = process.env.VAKILCARD_BILLING_SECRET || "";
-const FOUNDER_OPEN = process.env.VAKILCARD_FOUNDER_OPEN !== "0";
-const PRODUCT_ID = "vakilcard";
+const PRODUCT_ID = billing.PRODUCT_ID;
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -44,7 +60,7 @@ function json(res, status, data) {
 }
 
 const PROFILE_SEL =
-  "id,username,subscription_plan,subscription_status,subscription_expires_at,founder_pricing";
+  "id,username,full_name,subscription_plan,subscription_status,subscription_expires_at,founder_pricing";
 
 async function ownProfile(accountId) {
   const rows = await db(`vakilcard_profiles?account_id=eq.${accountId}&select=${PROFILE_SEL}`);
@@ -71,7 +87,7 @@ function round2(n) {
  * Only kind='discount' coupons apply at checkout — grant coupons have their
  * own redemption paths (see auth.js redeem_courtque_beta for the pattern).
  */
-async function priceCoupon(code) {
+async function priceCoupon(code, pricing) {
   let result;
   try {
     const rpc = await db("rpc/supracore_coupon_preview", {
@@ -89,7 +105,7 @@ async function priceCoupon(code) {
   if (result.productId !== PRODUCT_ID) return { ok: false, error: "wrong_product" };
   if (result.kind !== "discount") return { ok: false, error: "not_applicable_at_checkout" };
 
-  const base = PRICING.regular_inr;
+  const base = pricing.regular_inr;
   const value = Number(result.discountValue);
   let final;
   if (result.discountType === "percent") final = round2(base * (1 - value / 100));
@@ -98,33 +114,21 @@ async function priceCoupon(code) {
   return { ok: true, coupon: result, base_inr: base, final_inr: final };
 }
 
-/* ---- activation core (shared by verify_payment, webhook, secret path) ---- */
+/* ---- admin activation core (secret path only) ---- */
 
 /**
- * Idempotency guard: has this provider payment already activated/renewed?
- * Protects against the verify_payment ⇄ webhook race double-extending expiry.
+ * Grant/extend PRO for one period WITHOUT a payment — the admin escape hatch.
+ * Renewals extend from the current expiry; fresh activations start from now.
+ * Paid activations no longer come through here: the platform settles them and
+ * the vakilcard_mirror_entitlement trigger writes these same columns.
  */
-async function alreadyProcessed(providerRef) {
-  if (!providerRef) return false;
-  const rows = await db(
-    `vakilcard_subscription_events?provider=eq.razorpay&provider_ref=eq.${encodeURIComponent(
-      providerRef
-    )}&event_type=in.(ACTIVATED,RENEWED)&select=id&limit=1`
-  );
-  return rows.length > 0;
-}
-
-/**
- * Grant/extend PRO for one period. Renewals extend from the current expiry;
- * fresh activations start from now. Returns the new expiry ISO string.
- */
-async function activatePro({ profile, accountId, founder, priceInr, provider, providerRef, meta }) {
+async function activatePro({ profile, accountId, founder, priceInr, periodDays, provider, providerRef, meta }) {
   const renewal = profile.subscription_plan === "PRO" && profile.subscription_status === "ACTIVE";
   const base =
     renewal && profile.subscription_expires_at && new Date(profile.subscription_expires_at) > new Date()
       ? new Date(profile.subscription_expires_at)
       : new Date();
-  const expires = new Date(base.getTime() + PRICING.period_days * 864e5).toISOString();
+  const expires = new Date(base.getTime() + periodDays * 864e5).toISOString();
 
   await db(`vakilcard_profiles?id=eq.${profile.id}`, {
     method: "PATCH",
@@ -154,106 +158,24 @@ async function activatePro({ profile, accountId, founder, priceInr, provider, pr
   return expires;
 }
 
-/** Best-effort supracore redemption record — never blocks an activation. */
-async function recordCouponRedemption(accountId, code) {
+/* ---- legacy webhook URL → platform ---- */
+
+async function handleWebhook(res, body) {
+  if (!billing.webhookForwardEnabled()) {
+    // Deliberately a non-2xx: if anything still lands here after the forward
+    // was retired, Razorpay keeps retrying and the failure is visible in its
+    // dashboard instead of a payment vanishing into a 200.
+    return json(res, 410, { error: "webhook_moved", to: "account.vakilpedia.com/api/webhooks/razorpay" });
+  }
   try {
-    await db("rpc/supracore_coupon_redeem", {
-      method: "POST",
-      body: { p_account_id: accountId, p_code: String(code), p_actor_id: accountId },
-    });
+    const out = await billing.forwardWebhook(body);
+    if (!out.forwarded) return json(res, 200, { ok: true, ignored: true, reason: out.reason });
+    return json(res, 200, { ok: true, forwarded: true, detail: out.result && out.result.detail });
   } catch (e) {
-    console.error("[vakilcard/subscription] coupon redeem record failed:", e && (e.message || e));
+    console.error("[vakilcard/subscription] webhook forward failed:", e && (e.message || e));
+    // 502 so Razorpay retries — the platform is the authority and is idempotent.
+    return json(res, 502, { error: "platform_unreachable" });
   }
-}
-
-/* ---- Razorpay webhook (renewals / cancellations) ---- */
-
-async function handleWebhook(req, res, body, rawBody) {
-  const signature = req.headers["x-razorpay-signature"];
-  // Signature over the raw body when we have it. When the platform has
-  // already consumed/parsed the stream the raw bytes are gone — the payload
-  // is then treated as UNTRUSTED either way: we only ever act on state
-  // re-fetched from Razorpay's API by id.
-  const signatureOk = rawBody ? rzp.verifyWebhookSignature(rawBody, signature) : false;
-
-  const event = body && body.event;
-  const subEntity =
-    body && body.payload && body.payload.subscription && body.payload.subscription.entity;
-  const payEntity = body && body.payload && body.payload.payment && body.payload.payment.entity;
-  const subId = subEntity && subEntity.id;
-  if (!event || !subId) return json(res, 200, { ok: true, ignored: true });
-
-  // Authoritative state — never the webhook payload.
-  let sub;
-  try {
-    sub = await rzp.fetchSubscription(subId);
-  } catch (e) {
-    console.error("[vakilcard/subscription] webhook subscription fetch failed:", e && e.message);
-    return json(res, 502, { error: "provider_unreachable" });
-  }
-  const notes = (sub && sub.notes) || {};
-  const accountId = notes.account_id;
-  if (!accountId || notes.product !== PRODUCT_ID)
-    return json(res, 200, { ok: true, ignored: true, reason: "not_vakilcard" });
-  const profile = await ownProfile(accountId);
-  if (!profile) return json(res, 200, { ok: true, ignored: true, reason: "no_profile" });
-
-  if (event === "subscription.charged" && ["active", "completed"].includes(sub.status)) {
-    const paymentId = payEntity && payEntity.id;
-    if (await alreadyProcessed(paymentId)) {
-      return json(res, 200, { ok: true, idempotent: true });
-    }
-    let amountInr = null;
-    if (paymentId) {
-      try {
-        const payment = await rzp.fetchPayment(paymentId);
-        amountInr = payment && payment.amount != null ? payment.amount / 100 : null;
-      } catch {
-        /* amount is informational; activation proceeds */
-      }
-    }
-    const expires = await activatePro({
-      profile,
-      accountId,
-      founder: notes.founder === "1",
-      priceInr: amountInr != null ? amountInr : PRICING.regular_inr,
-      provider: "razorpay",
-      providerRef: paymentId || subId,
-      meta: {
-        via: "webhook",
-        event,
-        subscription_id: subId,
-        coupon: notes.coupon || null,
-        signature_verified: signatureOk,
-      },
-    });
-    // First charge may land via webhook before the browser's verify_payment —
-    // record the coupon redemption here too (redeem is idempotent per account).
-    if (notes.coupon) await recordCouponRedemption(accountId, notes.coupon);
-    return json(res, 200, { ok: true, expires_at: expires });
-  }
-
-  if (event === "subscription.cancelled" || event === "subscription.halted") {
-    if (profile.subscription_plan === "PRO" && profile.subscription_status === "ACTIVE") {
-      await db(`vakilcard_profiles?id=eq.${profile.id}`, {
-        method: "PATCH",
-        body: { subscription_status: "CANCELLED" },
-        prefer: "return=minimal",
-      });
-      await logEvent({
-        account_id: accountId,
-        profile_id: profile.id,
-        event_type: "CANCELLED",
-        plan: "PRO",
-        founder_pricing: !!profile.founder_pricing,
-        provider: "razorpay",
-        provider_ref: subId,
-      });
-    }
-    return json(res, 200, { ok: true });
-  }
-
-  return json(res, 200, { ok: true, ignored: true, event });
 }
 
 /* ---- handler ---- */
@@ -261,14 +183,13 @@ async function handleWebhook(req, res, body, rawBody) {
 module.exports = async function handler(req, res) {
   try {
     let body = {};
-    let rawBody = null;
     if (req.method === "POST") {
       if (req.body && typeof req.body === "object") {
-        body = req.body; // platform pre-parsed the stream; raw bytes unavailable
+        body = req.body;
       } else {
         const chunks = [];
         for await (const c of req) chunks.push(c);
-        rawBody = Buffer.concat(chunks).toString("utf8");
+        const rawBody = Buffer.concat(chunks).toString("utf8");
         try {
           body = rawBody ? JSON.parse(rawBody) : {};
         } catch {
@@ -277,14 +198,15 @@ module.exports = async function handler(req, res) {
       }
     }
 
-    /* ---- Razorpay webhook: provider-authed via signature, NOT session-authed ---- */
+    /* ---- legacy Razorpay webhook URL: forwarded to the platform, NOT session-authed ---- */
     if (req.method === "POST" && req.headers["x-razorpay-signature"]) {
-      return handleWebhook(req, res, body, rawBody);
+      return handleWebhook(res, body);
     }
 
     const action = String(body.action || "");
+    const pricing = await billing.getPricing();
 
-    /* ---- billing webhook / admin activation: secret-authed, NOT session-authed ---- */
+    /* ---- admin activation: secret-authed, NOT session-authed ---- */
     if (req.method === "POST" && action === "activate") {
       if (!BILLING_SECRET || String(body.secret || "") !== BILLING_SECRET)
         return json(res, 401, { error: "unauthorized" });
@@ -294,12 +216,13 @@ module.exports = async function handler(req, res) {
       if (!profile) return json(res, 404, { error: "no_profile" });
 
       // Founder price locks for the lifetime of an unbroken subscription.
-      const founder = profile.founder_pricing || (FOUNDER_OPEN && body.founder !== false);
+      const founder = profile.founder_pricing || (pricing.founder_available && body.founder !== false);
       const expires = await activatePro({
         profile,
         accountId,
         founder,
-        priceInr: founder ? PRICING.founder_inr : PRICING.regular_inr,
+        priceInr: founder ? pricing.founder_inr : pricing.regular_inr,
+        periodDays: pricing.period_days,
         provider: body.provider || null,
         providerRef: body.provider_ref || null,
       });
@@ -314,16 +237,16 @@ module.exports = async function handler(req, res) {
 
     if (req.method === "GET") {
       return json(res, 200, {
-        ...entitlementsFor(profile),
-        founder_available: FOUNDER_OPEN,
-        payments_live: rzp.configured() && rzp.paymentsAllowed(),
+        ...entitlementsFor(profile, pricing),
+        founder_available: pricing.founder_available,
+        payments_live: billing.configured() && billing.paymentsAllowed(),
       });
     }
 
     if (req.method !== "POST") return json(res, 405, { error: "method_not_allowed" });
 
     if (action === "coupon_preview") {
-      const priced = await priceCoupon(body.code);
+      const priced = await priceCoupon(body.code, pricing);
       if (!priced.ok) return json(res, 200, { ok: false, error: priced.error });
       return json(res, 200, {
         ok: true,
@@ -339,70 +262,63 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === "checkout") {
-      const couponCode = String(body.coupon_code || "").trim();
+      const couponCode = String(body.coupon_code || "").trim().toUpperCase();
 
-      /* Razorpay not configured → legacy "payments launching" intent. */
-      // Payments are also treated as unavailable while the incorporation gate
-      // is closed (PAYMENTS_ENABLED). Reuses the existing, already-tested
-      // "payments launching" path rather than inventing a second dead end.
-      if (!rzp.configured() || !rzp.paymentsAllowed()) {
-        const founder = FOUNDER_OPEN;
+      /* Platform rail not configured, or the payment gate is closed →
+         legacy "payments launching" intent. Reuses the existing, already-tested
+         path rather than inventing a second dead end. */
+      const pending = async () => {
+        const founder = pricing.founder_available;
         await logEvent({
           account_id: who.accountId,
           profile_id: profile.id,
           event_type: "CHECKOUT_CREATED",
           plan: "PRO",
-          price_inr: founder ? PRICING.founder_inr : PRICING.regular_inr,
+          price_inr: founder ? pricing.founder_inr : pricing.regular_inr,
           founder_pricing: founder,
         });
         return json(res, 200, {
           ok: true,
           pending: true,
-          price_inr: founder ? PRICING.founder_inr : PRICING.regular_inr,
+          price_inr: founder ? pricing.founder_inr : pricing.regular_inr,
           founder_pricing: founder,
-          checkout_url: null, // provider integration pending
+          checkout_url: null,
         });
-      }
+      };
+      if (!billing.configured() || !billing.paymentsAllowed()) return pending();
 
-      let baseInr;
-      let firstYearInr;
-      let founder = false;
-      let offerId = null;
+      // A coupon prices off the REGULAR plan (bypasses the founder window);
+      // otherwise the founder plan while the window is open.
+      const founder = !couponCode && pricing.founder_available;
+      const planKey = founder ? pricing.founder_plan_key : pricing.regular_plan_key;
 
-      if (couponCode) {
-        const priced = await priceCoupon(couponCode);
-        if (!priced.ok) return json(res, 400, { error: priced.error });
-        offerId = rzp.offerIdForCoupon(priced.coupon.code);
-        if (!offerId) {
-          // The dashboard Offer that funds the first-cycle discount is not
-          // configured — surface a precise error instead of silently charging
-          // full price against an advertised discount.
-          console.error(
-            `[vakilcard/subscription] coupon ${priced.coupon.code} valid but RAZORPAY_OFFER_* env missing`
-          );
+      let out;
+      try {
+        out = await billing.platformCall("checkout", {
+          accountId: who.accountId,
+          planKey,
+          couponCode: couponCode || null,
+          email: null,
+          name: profile.full_name || null,
+          createdFrom: "vakilcard",
+        });
+      } catch (e) {
+        const code = (e && e.code) || "checkout_failed";
+        if (code === "payments_disabled") return pending();
+        if (code === "coupon_offer_not_configured") {
+          console.error(`[vakilcard/subscription] coupon ${couponCode} valid but provider_offer_id missing`);
           return json(res, 409, { error: "coupon_offer_not_configured" });
         }
-        baseInr = priced.base_inr; // mandate + renewals at the regular price
-        firstYearInr = priced.final_inr;
-      } else {
-        founder = FOUNDER_OPEN;
-        baseInr = founder ? PRICING.founder_inr : PRICING.regular_inr;
-        firstYearInr = baseInr;
+        if (code === "mandate_exists") return json(res, 409, { error: "mandate_exists" });
+        if (["invalid_code", "expired", "exhausted", "wrong_product", "not_applicable_at_checkout",
+             "invalid_discount", "coupon_unavailable"].includes(code) || code.startsWith("coupon_"))
+          return json(res, 400, { error: code });
+        console.error("[vakilcard/subscription] platform checkout failed:", code, e && e.detail);
+        return json(res, 502, { error: "checkout_unavailable" });
       }
 
-      const planAmountPaise = Math.round(baseInr * 100);
-      const plan = await rzp.ensureYearlyPlan(planAmountPaise, "VakilCard Pro (Yearly)");
-      const sub = await rzp.createSubscription({
-        planId: plan.id,
-        offerId,
-        notes: {
-          product: PRODUCT_ID,
-          account_id: who.accountId,
-          profile_id: profile.id,
-          coupon: couponCode ? couponCode.toUpperCase() : "",
-          founder: founder ? "1" : "0",
-        },
-      });
+      const firstYearInr = out.firstChargePaise / 100;
+      const baseInr = out.amountPaise / 100;
 
       await logEvent({
         account_id: who.accountId,
@@ -412,18 +328,18 @@ module.exports = async function handler(req, res) {
         price_inr: firstYearInr,
         founder_pricing: founder,
         provider: "razorpay",
-        provider_ref: sub.id,
-        meta: { coupon: couponCode ? couponCode.toUpperCase() : null, plan_inr: baseInr },
+        provider_ref: out.subscriptionId,
+        meta: { coupon: out.couponApplied || null, plan_inr: baseInr, plan_key: out.planKey, via: "platform" },
       });
 
       return json(res, 200, {
         ok: true,
         pending: false,
-        subscription_id: sub.id,
-        key_id: rzp.keyId(),
+        subscription_id: out.subscriptionId,
+        key_id: out.keyId,
         first_charge_inr: firstYearInr,
         renewal_inr: baseInr,
-        coupon_applied: couponCode ? couponCode.toUpperCase() : null,
+        coupon_applied: out.couponApplied || null,
         founder_pricing: founder,
         currency: "INR",
       });
@@ -435,70 +351,83 @@ module.exports = async function handler(req, res) {
       const signature = String(body.razorpay_signature || "");
       if (!paymentId || !subscriptionId || !signature)
         return json(res, 400, { error: "missing_payment_fields" });
-      if (!rzp.verifySubscriptionCheckout({ paymentId, subscriptionId, signature }))
-        return json(res, 400, { error: "invalid_signature" });
 
-      // Bind the subscription to THIS account — a leaked signature from some
-      // other user's browser must not activate anyone else.
-      let sub;
+      // Never gated: this completes a payment that has already been made.
+      let out;
       try {
-        sub = await rzp.fetchSubscription(subscriptionId);
+        out = await billing.platformCall("verify", {
+          accountId: who.accountId,
+          paymentId,
+          subscriptionId,
+          signature,
+        });
       } catch (e) {
-        console.error("[vakilcard/subscription] verify fetch failed:", e && e.message);
-        return json(res, 502, { error: "provider_unreachable" });
-      }
-      const notes = (sub && sub.notes) || {};
-      if (notes.account_id !== who.accountId)
-        return json(res, 403, { error: "subscription_account_mismatch" });
-
-      if (await alreadyProcessed(paymentId)) {
-        const fresh = await ownProfile(who.accountId);
-        return json(res, 200, { ...entitlementsFor(fresh), ok: true, idempotent: true });
+        const code = (e && e.code) || "verify_failed";
+        if (code === "invalid_signature" || code === "missing_payment_fields" || code === "payment_failed")
+          return json(res, 400, { error: code });
+        if (code === "subscription_account_mismatch") return json(res, 403, { error: code });
+        if (code === "provider_unreachable") return json(res, 502, { error: code });
+        console.error("[vakilcard/subscription] platform verify failed:", code, e && e.detail);
+        return json(res, 502, { error: "verify_unavailable" });
       }
 
-      let amountInr = null;
-      try {
-        const payment = await rzp.fetchPayment(paymentId);
-        if (payment && payment.status === "failed")
-          return json(res, 400, { error: "payment_failed" });
-        amountInr = payment && payment.amount != null ? payment.amount / 100 : null;
-      } catch {
-        /* amount informational; signature already proves the charge */
+      // The platform settled the charge and the trigger mirrored the profile.
+      if (!out.idempotent) {
+        await audit("subscription_activated", {
+          accountId: who.accountId,
+          meta: { profile_id: profile.id, expires: out.periodEnd || null, provider_ref: paymentId, via: "platform" },
+        });
       }
-
-      const expires = await activatePro({
-        profile,
-        accountId: who.accountId,
-        founder: notes.founder === "1",
-        priceInr: amountInr != null ? amountInr : PRICING.regular_inr,
-        provider: "razorpay",
-        providerRef: paymentId,
-        meta: { via: "checkout", subscription_id: subscriptionId, coupon: notes.coupon || null },
-      });
-      if (notes.coupon) await recordCouponRedemption(who.accountId, notes.coupon);
-
       // Spread FIRST — expires_at from this activation must win even if the
       // profile re-read races a replica lag.
       const fresh = await ownProfile(who.accountId);
-      return json(res, 200, { ...entitlementsFor(fresh), ok: true, expires_at: expires });
+      return json(res, 200, {
+        ...entitlementsFor(fresh, pricing),
+        ok: true,
+        expires_at: out.periodEnd || (fresh && fresh.subscription_expires_at) || null,
+        ...(out.idempotent ? { idempotent: true } : {}),
+      });
     }
 
     if (action === "cancel") {
       if (profile.subscription_plan !== "PRO")
         return json(res, 400, { error: "not_subscribed" });
-      await db(`vakilcard_profiles?id=eq.${profile.id}`, {
-        method: "PATCH",
-        body: { subscription_status: "CANCELLED" },
-        prefer: "return=minimal",
+
+      // Cancel the mandate AT THE GATEWAY through the platform (never gated).
+      // The platform mirrors the gateway's answer onto billing_mandates and the
+      // triggers flip this profile to CANCELLED. A Pro with no mandate at all
+      // (admin-activated, or pre-platform) is cancelled locally, as before.
+      let viaPlatform = false;
+      if (billing.configured()) {
+        try {
+          await billing.platformCall("cancel", { accountId: who.accountId, productId: PRODUCT_ID });
+          viaPlatform = true;
+        } catch (e) {
+          const code = (e && e.code) || "cancel_failed";
+          if (code !== "no_mandate") {
+            console.error("[vakilcard/subscription] platform cancel failed:", code, e && e.detail);
+            return json(res, 502, { error: "cancel_unavailable" });
+          }
+        }
+      }
+      if (!viaPlatform) {
+        await db(`vakilcard_profiles?id=eq.${profile.id}`, {
+          method: "PATCH",
+          body: { subscription_status: "CANCELLED" },
+          prefer: "return=minimal",
+        });
+        await logEvent({
+          account_id: who.accountId,
+          profile_id: profile.id,
+          event_type: "CANCELLED",
+          plan: "PRO",
+          founder_pricing: !!profile.founder_pricing,
+        });
+      }
+      await audit("subscription_cancelled", {
+        accountId: who.accountId,
+        meta: { profile_id: profile.id, via: viaPlatform ? "platform" : "local" },
       });
-      await logEvent({
-        account_id: who.accountId,
-        profile_id: profile.id,
-        event_type: "CANCELLED",
-        plan: "PRO",
-        founder_pricing: !!profile.founder_pricing,
-      });
-      await audit("subscription_cancelled", { accountId: who.accountId, meta: { profile_id: profile.id } });
       return json(res, 200, { ok: true });
     }
 

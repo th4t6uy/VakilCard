@@ -19,7 +19,7 @@
 // _entitlements.js reads — never a parallel/fake "admin override" field —
 // so entitlement checks everywhere else pick these changes up for free.
 const { db, readJsonBody, resolveAccount } = require("./_lib");
-const { PRICING } = require("./_entitlements");
+const { getPricing } = require("./_billing");
 const { audit } = require("./_verify");
 
 // Bootstraps to the founder's own number so this works without extra Vercel
@@ -380,7 +380,7 @@ module.exports = async function handler(req, res) {
     if (!target) return json(res, 404, { error: "not_found" });
 
     if (action === "upgrade" || action === "grant_trial") {
-      const days = action === "grant_trial" ? Math.max(1, parseInt(body.days, 10) || 14) : PRICING.period_days;
+      const days = action === "grant_trial" ? Math.max(1, parseInt(body.days, 10) || 14) : (await getPricing()).period_days;
       const renewal = target.subscription_plan === "PRO" && target.subscription_status === "ACTIVE";
       const base =
         renewal && target.subscription_expires_at && new Date(target.subscription_expires_at) > new Date()
