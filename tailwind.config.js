@@ -3,7 +3,7 @@
 // VakilCard's pages use these same design tokens (CSS vars are defined in
 // src/index.css, also carried over).
 module.exports = {
-    darkMode: ["class"],
+    darkMode: ["selector", '[data-theme="dark"]'],
     content: [
     "./src/**/*.{js,jsx,ts,tsx}",
     "./public/index.html"

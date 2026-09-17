@@ -20,6 +20,29 @@
     <meta name="apple-mobile-web-app-title" content="VakilCard" />
     <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
     <title>VakilCard</title>
+    <!-- Blocking theme-init, matching every other Vakilpedia app
+         (CaseLinx/CourtQue/SignLinx/Affidavit Maker/Account, 2026-09-16).
+         Runs before this page paints, so there is never a flash of the
+         wrong theme. Day/night is only the DEFAULT before the visitor's
+         first explicit toggle -- once vp-theme-explicit is set, this never
+         overrides their choice again. -->
+    <script>
+    (function () {
+      try {
+        var saved = localStorage.getItem("vp-theme");
+        var explicit = localStorage.getItem("vp-theme-explicit");
+        if (explicit === "1" && (saved === "light" || saved === "dark")) {
+          document.documentElement.setAttribute("data-theme", saved);
+          return;
+        }
+        var hour = new Date().getHours();
+        var isNight = hour >= 18 || hour < 6;
+        document.documentElement.setAttribute("data-theme", isNight ? "dark" : "light");
+      } catch (e) {
+        document.documentElement.setAttribute("data-theme", "light");
+      }
+    })();
+    </script>
   </head>
   <body>
     <noscript>You need to enable JavaScript to run this app.</noscript>

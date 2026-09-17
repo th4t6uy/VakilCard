@@ -48,13 +48,13 @@ const PW_ERRORS = {
 const pwMsg = (e) => PW_ERRORS[e && e.code] || "Couldn't update your password. Please try again.";
 
 const CARD_ORIGIN = "https://www.vakilpedia.com";
-const btn = "rounded-full bg-white border border-slate-200 hover:border-slate-300 px-4 py-2 text-sm font-bold text-slate-700 inline-flex items-center gap-1.5 transition-colors";
-const panel = "bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[2rem] p-6 sm:p-8";
+const btn = "rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 transition-colors";
+const panel = "bg-white/70 dark:bg-[#1c1c1e] dark:bg-[#1c1c1e] dark:backdrop-blur-none backdrop-blur-xl border border-slate-200/70 dark:border-white/10 dark:border-white/10 shadow-sm dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_16px_40px_-20px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] rounded-[2rem] p-6 sm:p-8";
 // Compact variant for tiles that don't need full panel padding (Share,
 // Theme) — same visual language, smaller footprint, less scroll.
-const panelSm = "bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[1.5rem] p-4 sm:p-5";
+const panelSm = "bg-white/70 dark:bg-[#1c1c1e] dark:bg-[#1c1c1e] dark:backdrop-blur-none backdrop-blur-xl border border-slate-200/70 dark:border-white/10 dark:border-white/10 shadow-sm dark:shadow-[0_1px_2px_rgba(0,0,0,0.4),0_16px_40px_-20px_rgba(0,0,0,0.6),inset_0_1px_0_rgba(255,255,255,0.05)] rounded-[1.5rem] p-4 sm:p-5";
 // Compact button variant to match panelSm — used in the shrunk Share panel.
-const btnSm = "rounded-full bg-white border border-slate-200 hover:border-slate-300 px-3 py-1.5 text-xs font-bold text-slate-700 inline-flex items-center gap-1 transition-colors";
+const btnSm = "rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1 transition-colors";
 
 // Short labels by design — these render in a 4-across grid inside a
 // half-width panel, so anything longer wraps/hyphenates badly at common
@@ -130,7 +130,7 @@ function ProToolsStrip({ tools, onLocked }) {
   return (
     <div className="rounded-[1.75rem] border border-[#635BFF]/20 bg-gradient-to-r from-[#635BFF]/6 to-transparent p-4 mb-6">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-sm font-black text-slate-900">Unlock with Pro</p>
+        <p className="text-sm font-black text-slate-900 dark:text-white">Unlock with Pro</p>
         <button type="button" onClick={() => onLocked("pro")} className="text-xs font-bold text-[#635BFF]">See all →</button>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
@@ -141,10 +141,10 @@ function ProToolsStrip({ tools, onLocked }) {
               key={tool.key}
               type="button"
               onClick={() => onLocked(tool.key)}
-              className="flex-none snap-start rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 transition-colors px-3.5 py-2.5 flex items-center gap-2 min-w-[168px]"
+              className="flex-none snap-start rounded-2xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-[#635BFF]/50 transition-colors px-3.5 py-2.5 flex items-center gap-2 min-w-[168px]"
             >
               <span className="h-8 w-8 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
-              <p className="text-xs font-bold text-slate-800 text-left hyphens-none leading-tight">{tool.title}</p>
+              <p className="text-xs font-bold text-slate-800 dark:text-slate-200 text-left hyphens-none leading-tight">{tool.title}</p>
             </button>
           );
         })}
@@ -177,20 +177,20 @@ function GoogleConnectHero({ pro }) {
         <div className="flex items-center gap-3">
           <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF]" /></span>
           <div>
-            <p className="text-sm font-black text-slate-900">Connect Google Calendar</p>
+            <p className="text-sm font-black text-slate-900 dark:text-white">Connect Google Calendar</p>
             {/* 2026-08-29: this said "Vakilpedia sees when you are busy — never
                 what the appointments are." That stopped being true the moment
                 the scope became calendar.events (see GCAL_SCOPE in
                 api/vakilcard/booking.js). What Google GRANTS and what VakilCard
                 USES are now different things, and both are stated. Do not
                 collapse them back into one reassuring sentence. */}
-            <p className="text-xs text-slate-500 mt-0.5 hyphens-none">Clients can only book times you are actually free. Google will ask you to allow viewing and editing calendar events — VakilCard uses it only to read when you are busy.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 hyphens-none">Clients can only book times you are actually free. Google will ask you to allow viewing and editing calendar events — VakilCard uses it only to read when you are busy.</p>
           </div>
         </div>
         <button
           type="button"
           onClick={async () => { window.location.href = await googleConnectUrl(); }}
-          className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
+          className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
         >
           <MapPin className="h-4 w-4" />Connect now
         </button>
@@ -228,7 +228,7 @@ function GoogleStatusChip({ pro }) {
   const dotColor = connected ? "bg-emerald-500" : "bg-rose-500";
   return (
     <span
-      className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 text-slate-600 text-[11px] font-bold px-2.5 py-1"
+      className="inline-flex items-center gap-1.5 rounded-full bg-slate-100 dark:bg-white/5 text-slate-600 dark:text-slate-400 text-[11px] font-bold px-2.5 py-1"
       title={label}
       aria-label={label}
     >
@@ -412,15 +412,15 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
 
   return (
     <div className={panel}>
-      <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Booking &amp; Reviews</h2>
+      <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white mb-4">Booking &amp; Reviews</h2>
 
-      <p className="text-sm font-bold text-slate-800 mb-2">Weekly availability</p>
+      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">Weekly availability</p>
       {loading ? (
-        <p className="text-sm text-slate-500">Loading…</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
       ) : (
         <div className="space-y-3">
           {groups.map((g) => (
-            <div key={g.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+            <div key={g.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-3">
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {DAY_LABELS.map((d, di) => (
                   <button
@@ -429,7 +429,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                     onClick={() => toggleDay(g.id, di)}
                     aria-pressed={g.days.includes(di)}
                     className={`h-9 w-9 rounded-full text-xs font-black transition-colors ${
-                      g.days.includes(di) ? "bg-slate-900 text-white" : "bg-slate-100 text-slate-500 hover:bg-slate-200"
+                      g.days.includes(di) ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900" : "bg-slate-100 dark:bg-white/5 text-slate-500 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-white/10"
                     }`}
                   >
                     {d[0]}
@@ -437,10 +437,10 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 text-base px-2 py-1.5" />
-                <span className="text-slate-400 text-sm">to</span>
-                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 text-base px-2 py-1.5" />
-                <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 text-sm px-2 py-1.5">
+                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 text-base px-2 py-1.5" />
+                <span className="text-slate-400 dark:text-slate-500 text-sm">to</span>
+                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 text-base px-2 py-1.5" />
+                <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 text-sm px-2 py-1.5">
                   {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
                 </select>
                 <button type="button" onClick={() => removeGroup(g.id)} className="ml-auto text-rose-600" aria-label="Remove this availability row"><X className="h-4 w-4" /></button>
@@ -450,26 +450,26 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
           ))}
           <div className="flex flex-wrap gap-2 pt-1">
             <button type="button" onClick={addGroup} className={btn}><Plus className="h-4 w-4" />Add availability</button>
-            <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+            <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
               {savingWindows ? "Saving…" : "Save availability"}
             </button>
           </div>
         </div>
       )}
-      <p className="text-xs text-slate-500 mt-2 hyphens-none">Live on your card today — no calendar check on Free, so avoid double-listing the same hours elsewhere. Tap the day circles to pick which days a time range applies to (e.g. Mon–Fri in one row).</p>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 hyphens-none">Live on your card today — no calendar check on Free, so avoid double-listing the same hours elsewhere. Tap the day circles to pick which days a time range applies to (e.g. Mon–Fri in one row).</p>
 
-      <div className="mt-6 pt-5 border-t border-slate-200">
+      <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
         <div className="flex items-center justify-between">
-          <p className="text-sm font-bold text-slate-800">Google Calendar</p>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Google Calendar</p>
           {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
           <>
-            <p className="text-xs text-slate-500 mt-1 hyphens-none">Sync your calendar so clients can only book times you are actually free — no double-bookings.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Sync your calendar so clients can only book times you are actually free — no double-bookings.</p>
             <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to connect Google Calendar →</button>
           </>
         ) : !cfg || !cfg.calendar_platform_configured ? (
-          <p className="text-xs text-slate-500 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
         ) : (
           <>
             {googleNotice && googleNotice.msg && (
@@ -479,14 +479,14 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
             )}
             <div className="mt-2 space-y-1.5">
               <div className="flex items-center gap-2 flex-wrap text-sm">
-                <span className="text-xs font-bold text-slate-500 w-20 flex-none">Calendar</span>
+                <span className="text-xs font-bold text-slate-500 dark:text-slate-400 w-20 flex-none">Calendar</span>
                 {cfg.calendar_connected ? (
                   <span className="text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected</span>
                 ) : (
-                  <span className="text-slate-400">Not connected</span>
+                  <span className="text-slate-400 dark:text-slate-500">Not connected</span>
                 )}
                 {cfg.calendar_connected && (
-                  <button type="button" onClick={disconnectCalendar} className="text-xs font-bold text-slate-500 underline">Disconnect</button>
+                  <button type="button" onClick={disconnectCalendar} className="text-xs font-bold text-slate-500 dark:text-slate-400 underline">Disconnect</button>
                 )}
               </div>
               {/* The Business row is gone: connecting a Business Profile by OAuth
@@ -497,14 +497,14 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
 
             {!cfg.calendar_connected && (
               <>
-                <p className="text-xs text-slate-500 mt-2 mb-1 hyphens-none">
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-1 hyphens-none">
                   Connect your Google Calendar so clients can only book times you are actually free. Google’s consent screen asks for permission to view and edit events on your calendars — that is the access Google grants. VakilCard reads only your busy times to block slots, and does not read what your appointments are.
                 </p>
                 <button type="button" onClick={connectGoogle} className={btn + " mt-1"}><Sparkles className="h-4 w-4" />Connect Google Calendar</button>
               </>
             )}
 
-            <button type="button" onClick={connectCalendarAlt} className="text-xs font-bold text-slate-500 underline mt-3 block">
+            <button type="button" onClick={connectCalendarAlt} className="text-xs font-bold text-slate-500 dark:text-slate-400 underline mt-3 block">
               Calendar on a different Google account? Connect it separately →
             </button>
           </>
@@ -523,23 +523,23 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
           that lives below, on the owner's own screen, where the person who can
           actually upgrade is standing -- never on the public card, where the
           only person holding it is their client. */}
-      <div className="mt-6 pt-5 border-t border-slate-200">
-        <p className="text-sm font-bold text-slate-800">Google Business listing</p>
+      <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Google Business listing</p>
 
         {place ? (
-          <div className="mt-2 rounded-2xl border border-slate-200 bg-slate-50/70 p-3.5">
+          <div className="mt-2 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 p-3.5">
             <div className="flex items-start gap-3">
-              <span className="grid place-items-center h-9 w-9 rounded-xl bg-white border border-slate-200 flex-none">
+              <span className="grid place-items-center h-9 w-9 rounded-xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 flex-none">
                 <MapPin className="h-4 w-4 text-[#635BFF]" />
               </span>
               <div className="min-w-0 flex-1">
-                <p className="text-sm font-bold text-slate-900 truncate">{place.name}</p>
-                {place.address && <p className="text-xs text-slate-500 truncate">{place.address}</p>}
+                <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{place.name}</p>
+                {place.address && <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{place.address}</p>}
                 {typeof place.rating === "number" && (
-                  <p className="text-xs text-slate-600 mt-1 inline-flex items-center gap-1">
+                  <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 inline-flex items-center gap-1">
                     <Star className="h-3.5 w-3.5 text-amber-500" />
                     <span className="font-bold">{place.rating}</span>
-                    {place.reviewCount ? <span className="text-slate-400">({place.reviewCount})</span> : null}
+                    {place.reviewCount ? <span className="text-slate-400 dark:text-slate-500">({place.reviewCount})</span> : null}
                   </p>
                 )}
               </div>
@@ -547,7 +547,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                 type="button"
                 onClick={unlinkPlace}
                 disabled={linking}
-                className="text-xs font-bold text-slate-500 underline flex-none disabled:opacity-40"
+                className="text-xs font-bold text-slate-500 dark:text-slate-400 underline flex-none disabled:opacity-40"
               >
                 {linking ? "…" : "Change"}
               </button>
@@ -555,7 +555,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
           </div>
         ) : (
           <>
-            <p className="text-xs text-slate-500 mt-1 mb-2 hyphens-none">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-2 hyphens-none">
               Type your chamber name and pick it from the list. Your listing, rating and reviews appear on your card.
             </p>
             <input
@@ -564,9 +564,9 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g. Sharma Law Chambers, Jabalpur"
               aria-label="Search your Google Business listing"
-              className="w-full rounded-xl border border-slate-200 text-base px-3 py-2"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 text-base px-3 py-2"
             />
-            {searching && <p className="text-xs text-slate-400 mt-1.5">Searching Google…</p>}
+            {searching && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Searching Google…</p>}
             {!!hits.length && (
               <ul className="mt-2 space-y-1.5 list-none p-0 m-0">
                 {hits.map((h) => (
@@ -575,10 +575,10 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                       type="button"
                       onClick={() => pickPlace(h)}
                       disabled={linking}
-                      className="w-full text-left rounded-xl border border-slate-200 bg-white hover:border-[#635BFF]/50 disabled:opacity-40 transition-colors px-3.5 py-2.5"
+                      className="w-full text-left rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] hover:border-[#635BFF]/50 disabled:opacity-40 transition-colors px-3.5 py-2.5"
                     >
-                      <span className="block text-sm font-bold text-slate-900 truncate">{h.name}</span>
-                      {h.address && <span className="block text-xs text-slate-500 truncate">{h.address}</span>}
+                      <span className="block text-sm font-bold text-slate-900 dark:text-white truncate">{h.name}</span>
+                      {h.address && <span className="block text-xs text-slate-500 dark:text-slate-400 truncate">{h.address}</span>}
                     </button>
                   </li>
                 ))}
@@ -593,14 +593,14 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
           <Star className="h-4 w-4 text-[#635BFF] mt-0.5 flex-none" />
           <div className="min-w-0">
             {pro ? (
-              <p className="text-xs text-slate-600 m-0 hyphens-none">
-                <span className="font-bold text-slate-900">Leave a Review is live.</span>{" "}
+              <p className="text-xs text-slate-600 dark:text-slate-400 m-0 hyphens-none">
+                <span className="font-bold text-slate-900 dark:text-white">Leave a Review is live.</span>{" "}
                 Clients tap once on your card and land straight in your Google review form.
               </p>
             ) : (
               <>
-                <p className="text-xs text-slate-600 m-0 hyphens-none">
-                  <span className="font-bold text-slate-900">Leave a Review is a Pro feature.</span>{" "}
+                <p className="text-xs text-slate-600 dark:text-slate-400 m-0 hyphens-none">
+                  <span className="font-bold text-slate-900 dark:text-white">Leave a Review is a Pro feature.</span>{" "}
                   Your listing still shows on your card — Free sends clients to Google to find the review box themselves.
                 </p>
                 <button
@@ -616,26 +616,26 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
         </div>
       </div>
 
-      <div className="mt-6 pt-5 border-t border-slate-200">
-        <p className="text-sm font-bold text-slate-800 mb-2">Appointment requests</p>
+      <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">Appointment requests</p>
         {loading ? (
-          <p className="text-sm text-slate-500">Loading…</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
         ) : !cfg || !cfg.requests || !cfg.requests.length ? (
-          <p className="text-sm text-slate-500">No requests yet.</p>
+          <p className="text-sm text-slate-500 dark:text-slate-400">No requests yet.</p>
         ) : (
           <div className="space-y-2">
             {cfg.requests.map((r) => (
-              <div key={r.id} className="rounded-2xl border border-slate-200 bg-white p-3">
+              <div key={r.id} className="rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-3">
                 <div className="flex items-center justify-between gap-2">
-                  <p className="text-sm font-bold text-slate-900">{r.client_name} <span className="text-slate-400 font-normal">· {r.client_phone}</span></p>
+                  <p className="text-sm font-bold text-slate-900 dark:text-white">{r.client_name} <span className="text-slate-400 dark:text-slate-500 font-normal">· {r.client_phone}</span></p>
                   <span className={`rounded-full text-[10px] font-black uppercase px-2 py-0.5 flex-none ${
                     r.status === "confirmed" ? "bg-emerald-100 text-emerald-700" :
                     r.status === "declined" ? "bg-rose-100 text-rose-700" :
-                    r.status === "completed" ? "bg-slate-200 text-slate-600" : "bg-amber-100 text-amber-700"
+                    r.status === "completed" ? "bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-400" : "bg-amber-100 text-amber-700"
                   }`}>{r.status}</span>
                 </div>
-                <p className="text-xs text-slate-500 mt-1">{r.starts_at ? new Date(r.starts_at).toLocaleString("en-IN") : r.requested_slot}</p>
-                {r.purpose && <p className="text-xs text-slate-500 mt-1 hyphens-none">{r.purpose}</p>}
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{r.starts_at ? new Date(r.starts_at).toLocaleString("en-IN") : r.requested_slot}</p>
+                {r.purpose && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">{r.purpose}</p>}
                 {r.is_pro_booking && r.payment_status !== "not_required" && (
                   <p className={`text-xs mt-1 font-bold ${r.payment_status === "confirmed" ? "text-emerald-700" : "text-amber-700"}`}>
                     Payment: {r.payment_status.replace("_", " ")}{r.amount_inr ? ` (₹${r.amount_inr})` : ""}
@@ -655,13 +655,13 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                       {!r.is_pro_booking || ["not_required", "confirmed"].includes(r.payment_status) ? (
                         <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
                       ) : (
-                        <span className="text-xs font-bold text-slate-400">Confirm after payment</span>
+                        <span className="text-xs font-bold text-slate-400 dark:text-slate-500">Confirm after payment</span>
                       )}
                       <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "declined"))} className="text-xs font-bold text-rose-700 underline">Decline</button>
                     </>
                   )}
                   {r.status === "confirmed" && (
-                    <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "completed"))} className="text-xs font-bold text-slate-600 underline">Mark completed</button>
+                    <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "completed"))} className="text-xs font-bold text-slate-600 dark:text-slate-400 underline">Mark completed</button>
                   )}
                 </div>
               </div>
@@ -1079,14 +1079,14 @@ export default function VakilCardPage() {
     return shell(
       loadError ? (
         <div className="text-center py-24">
-          <p className="text-slate-600">Couldn't load your VakilCard.</p>
-          <button className="mt-4 rounded-full bg-slate-900 text-white px-6 py-3 font-bold" onClick={load}>Retry</button>
+          <p className="text-slate-600 dark:text-slate-400">Couldn't load your VakilCard.</p>
+          <button className="mt-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-6 py-3 font-bold" onClick={load}>Retry</button>
         </div>
       ) : (
         <div className="space-y-4 animate-pulse py-6">
-          <div className="h-10 bg-white/70 rounded-2xl w-1/2" />
-          <div className="h-48 bg-white/70 rounded-[2.5rem]" />
-          <div className="h-32 bg-white/70 rounded-[2rem]" />
+          <div className="h-10 bg-white/70 dark:bg-[#1c1c1e] rounded-2xl w-1/2" />
+          <div className="h-48 bg-white/70 dark:bg-[#1c1c1e] rounded-[2.5rem]" />
+          <div className="h-32 bg-white/70 dark:bg-[#1c1c1e] rounded-[2rem]" />
         </div>
       )
     );
@@ -1096,9 +1096,9 @@ export default function VakilCardPage() {
   if (!profile) {
     return shell(
       <div className="text-center py-16">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900">No VakilCard yet</h1>
-        <p className="text-slate-600 mt-3">Create one in under three minutes — verified on WhatsApp.</p>
-        <button onClick={doLogout} className="mt-6 rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-8 py-4 font-bold transition-colors">
+        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">No VakilCard yet</h1>
+        <p className="text-slate-600 dark:text-slate-400 mt-3">Create one in under three minutes — verified on WhatsApp.</p>
+        <button onClick={doLogout} className="mt-6 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-8 py-4 font-bold transition-colors">
           Start with your WhatsApp number
         </button>
       </div>
@@ -1122,9 +1122,9 @@ export default function VakilCardPage() {
       <div className="flex items-center justify-between mb-8">
         <div className="flex items-center gap-3">
           <img src="/vakilcard-pwa-192.png" alt="" className="hidden sm:block h-9 w-9 rounded-xl object-cover shadow-sm flex-none" />
-          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900">My VakilCard</h1>
+          <h1 className="text-3xl sm:text-4xl font-black tracking-tight text-slate-900 dark:text-white">My VakilCard</h1>
           {/* current plan — always visible */}
-          <span className={`rounded-full text-[11px] font-black uppercase tracking-wider px-3 py-1 ${pro ? "bg-[#635BFF] text-white" : "bg-slate-200 text-slate-600"}`}>
+          <span className={`rounded-full text-[11px] font-black uppercase tracking-wider px-3 py-1 ${pro ? "bg-[#635BFF] text-white" : "bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-400"}`}>
             {pro ? "Pro" : "Free"}
           </span>
           <GoogleStatusChip pro={pro} />
@@ -1150,22 +1150,22 @@ export default function VakilCardPage() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-1.5">
                   <span className={`inline-block h-2.5 w-2.5 rounded-full ${published ? "bg-emerald-500" : "bg-amber-400"}`} />
-                  <p className="text-sm font-bold text-slate-500">{published ? "Live" : "Draft — not public yet"}</p>
+                  <p className="text-sm font-bold text-slate-500 dark:text-slate-400">{published ? "Live" : "Draft — not public yet"}</p>
                 </div>
                 <a href={published ? url : undefined} target="_blank" rel="noopener noreferrer"
-                   className={`text-lg sm:text-xl font-black break-words inline-flex flex-wrap items-center gap-1.5 leading-tight ${published ? "text-[#635BFF] hover:underline" : "text-slate-400 cursor-default"}`}>
+                   className={`text-lg sm:text-xl font-black break-words inline-flex flex-wrap items-center gap-1.5 leading-tight ${published ? "text-[#635BFF] hover:underline" : "text-slate-400 dark:text-slate-500 cursor-default"}`}>
                   <span>vakilpedia.com/<wbr />{profile.username}</span>{published && <ExternalLink className="h-4 w-4 flex-none" />}
                 </a>
                 <div className="mt-4">
-                  <div className="flex justify-between text-xs font-bold text-slate-500 mb-1">
+                  <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
                     <span>Card completion</span><span className="text-[#635BFF]">{pct}%</span>
                   </div>
-                  <div className="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                  <div className="h-1.5 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-[#635BFF] rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-5">
-                  <button onClick={publish} disabled={publishing} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50">
+                  <button onClick={publish} disabled={publishing} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50">
                     {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
                     {published ? "Publish changes" : "Publish"}
                   </button>
@@ -1175,9 +1175,9 @@ export default function VakilCardPage() {
                 </div>
               </div>
               {qrUrl ? (
-                <img src={qrUrl} alt={`QR code for ${url}`} className="h-32 w-32 rounded-2xl border border-slate-200 bg-white p-1 self-center" />
+                <img src={qrUrl} alt={`QR code for ${url}`} className="h-32 w-32 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-1 self-center" />
               ) : (
-                <div className="h-32 w-32 rounded-2xl border border-slate-200 bg-white flex items-center justify-center self-center"><QrCode className="h-8 w-8 text-slate-300" /></div>
+                <div className="h-32 w-32 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] flex items-center justify-center self-center"><QrCode className="h-8 w-8 text-slate-300 dark:text-slate-600" /></div>
               )}
             </div>
           </div>
@@ -1191,10 +1191,10 @@ export default function VakilCardPage() {
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-black text-slate-900">VakilCard Pro — ₹199/year founder price</p>
-                  <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">Custom username · Native Pay · Website · Booking · Analytics · No branding</p>
+                  <p className="text-sm font-black text-slate-900 dark:text-white">VakilCard Pro — ₹199/year founder price</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-left hyphens-none">Custom username · Native Pay · Website · Booking · Analytics · No branding</p>
                 </div>
-                <span className="rounded-full bg-slate-900 text-white text-xs font-bold px-4 py-2 flex-none">Upgrade</span>
+                <span className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold px-4 py-2 flex-none">Upgrade</span>
               </div>
             </button>
           )}
@@ -1202,62 +1202,62 @@ export default function VakilCardPage() {
           {/* analytics + account side-by-side on xl */}
           <div className="grid gap-6 xl:grid-cols-2">
           <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Analytics</h2>
+            <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white mb-4">Analytics</h2>
             {!pro ? (
               <div className="text-center py-2">
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 select-none" aria-hidden="true" style={{ filter: "blur(6px)", opacity: 0.5 }}>
                   {EVENT_LABELS.map(([k, label]) => (
                     <div key={k} className="text-center">
-                      <p className="text-2xl font-black text-slate-900">··</p>
-                      <p className="text-[11px] font-bold text-slate-500 hyphens-none leading-tight">{label}</p>
+                      <p className="text-2xl font-black text-slate-900 dark:text-white">··</p>
+                      <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hyphens-none leading-tight">{label}</p>
                     </div>
                   ))}
                 </div>
                 <button
                   onClick={() => setUpgradeFeature("analytics")}
-                  className="mt-4 rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-6 py-2.5 text-sm font-bold"
+                  className="mt-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-6 py-2.5 text-sm font-bold"
                 >
                   Unlock analytics with Pro
                 </button>
-                <p className="text-xs text-slate-500 mt-2 hyphens-none">Views, QR scans, calls, WhatsApp, payments and bookings.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 hyphens-none">Views, QR scans, calls, WhatsApp, payments and bookings.</p>
               </div>
             ) : counts ? (
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
                 {EVENT_LABELS.map(([k, label]) => (
                   <div key={k} className="text-center">
-                    <p className="text-2xl font-black text-slate-900">{counts[k] || 0}</p>
-                    <p className="text-[11px] font-bold text-slate-500 hyphens-none leading-tight">{label}</p>
+                    <p className="text-2xl font-black text-slate-900 dark:text-white">{counts[k] || 0}</p>
+                    <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 hyphens-none leading-tight">{label}</p>
                   </div>
                 ))}
               </div>
             ) : (
-              <p className="text-sm text-slate-500">{published ? "Loading…" : "Analytics start once your card is published."}</p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{published ? "Loading…" : "Analytics start once your card is published."}</p>
             )}
           </div>
 
           {/* account */}
           <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Account</h2>
-            <p className="text-sm text-slate-600 text-left hyphens-none mb-2">
-              {profile.phone ? <>Signed in as <b className="text-slate-900">{profile.phone}</b> · verified on WhatsApp.</> : "Signed in with Google."}
+            <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white mb-4">Account</h2>
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-left hyphens-none mb-2">
+              {profile.phone ? <>Signed in as <b className="text-slate-900 dark:text-white">{profile.phone}</b> · verified on WhatsApp.</> : "Signed in with Google."}
             </p>
-            <p className="text-sm text-slate-600 text-left hyphens-none mb-4">
-              Plan: <b className="text-slate-900">{pro ? "VakilCard Pro" : "Free"}</b>
+            <p className="text-sm text-slate-600 dark:text-slate-400 text-left hyphens-none mb-4">
+              Plan: <b className="text-slate-900 dark:text-white">{pro ? "VakilCard Pro" : "Free"}</b>
               {pro && ent && ent.expires_at ? <> · renews {new Date(ent.expires_at).toLocaleDateString("en-IN")}</> : null}
               {pro && ent && ent.founder_pricing ? <> · Founder price locked (₹{ent.pricing ? ent.pricing.founder_inr : 199}/yr)</> : null}
               {!pro && <> · <button className="text-[#635BFF] font-bold" onClick={() => setUpgradeFeature("pro")}>Upgrade</button></>}
             </p>
             <div className="flex flex-wrap gap-2">
               <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
-              <button onClick={remove} className="rounded-full bg-white border border-rose-200 hover:border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 inline-flex items-center gap-1.5"><Trash2 className="h-4 w-4" />Delete card</button>
+              <button onClick={remove} className="rounded-full bg-white dark:bg-[#1c1c1e] border border-rose-200 hover:border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 inline-flex items-center gap-1.5"><Trash2 className="h-4 w-4" />Delete card</button>
             </div>
 
             {/* Add-phone nudge — only for Google-only accounts. Optional,
                 skippable, unlocks WhatsApp booking alerts once added. */}
             {!profile.phone && (
-              <div className="mt-5 pt-5 border-t border-slate-200">
+              <div className="mt-5 pt-5 border-t border-slate-200 dark:border-white/10">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-black text-slate-900">Add your phone number</h3>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Add your phone number</h3>
                   {!phoneOpen && (
                     <button type="button" onClick={() => { setPhoneOpen(true); setPhoneErr(""); }} className="text-sm font-bold text-[#635BFF]">
                       Add number
@@ -1265,7 +1265,7 @@ export default function VakilCardPage() {
                   )}
                 </div>
                 {!phoneOpen && (
-                  <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-left hyphens-none">
                     Optional — get a WhatsApp alert whenever someone books an appointment with you.
                   </p>
                 )}
@@ -1278,37 +1278,37 @@ export default function VakilCardPage() {
                           value={phoneInput}
                           onChange={(e) => setPhoneInput(e.target.value)}
                           placeholder="+91 98765 43210"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-base focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-base focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
                         {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
                         <div className="flex gap-2">
-                          <button onClick={sendPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                          <button onClick={sendPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
                             {phoneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
                             Send code
                           </button>
-                          <button type="button" onClick={() => setPhoneOpen(false)} className="rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700">Cancel</button>
+                          <button type="button" onClick={() => setPhoneOpen(false)} className="rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300">Cancel</button>
                         </div>
                       </>
                     ) : (
                       <>
-                        <p className="text-xs text-slate-500 hyphens-none">Enter the 6-digit code sent to {phoneInput} on WhatsApp.</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 hyphens-none">Enter the 6-digit code sent to {phoneInput} on WhatsApp.</p>
                         <input
                           type="text"
                           inputMode="numeric"
                           value={phoneCode}
                           onChange={(e) => setPhoneCode(e.target.value)}
                           placeholder="123456"
-                          className="w-full rounded-2xl border border-slate-200 px-4 py-2.5 text-base tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-base tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
                         {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
                         <div className="flex gap-2">
-                          <button onClick={verifyPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                          <button onClick={verifyPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
                             {phoneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                             Verify
                           </button>
-                          <button type="button" onClick={() => { setPhoneOpen(false); setPhoneStep("enter"); }} className="rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700">Cancel</button>
+                          <button type="button" onClick={() => { setPhoneOpen(false); setPhoneStep("enter"); }} className="rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300">Cancel</button>
                         </div>
                       </>
                     )}
@@ -1320,9 +1320,9 @@ export default function VakilCardPage() {
             {/* password — phone stays primary identity; password is the
                 free, instant login credential (OTP costs money per send) */}
             {profile.phone && hasPassword !== null && (
-              <div className="mt-5 pt-5 border-t border-slate-200">
+              <div className="mt-5 pt-5 border-t border-slate-200 dark:border-white/10">
                 <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-black text-slate-900">Password</h3>
+                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Password</h3>
                   {!pwOpen && (
                     <button
                       type="button"
@@ -1334,7 +1334,7 @@ export default function VakilCardPage() {
                   )}
                 </div>
                 {!pwOpen && (
-                  <p className="text-xs text-slate-500 mt-1 text-left hyphens-none">
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-left hyphens-none">
                     {hasPassword
                       ? "Sign in instantly with your phone number and password."
                       : "Add a password to skip WhatsApp codes next time you sign in."}
@@ -1377,7 +1377,7 @@ export default function VakilCardPage() {
                       <button
                         onClick={submitChangePassword}
                         disabled={pwSaving}
-                        className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                        className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
                       >
                         {pwSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                         Save
@@ -1385,7 +1385,7 @@ export default function VakilCardPage() {
                       <button
                         type="button"
                         onClick={() => { setPwOpen(false); setCurPw(""); setNewPw1(""); setNewPw2(""); setPwErr(""); }}
-                        className="rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700"
+                        className="rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300"
                       >
                         Cancel
                       </button>
@@ -1400,7 +1400,7 @@ export default function VakilCardPage() {
 
           {/* edit sections — each opens directly, never replays onboarding */}
           <div className={panel}>
-            <h2 className="text-xl font-black tracking-tight text-slate-900 mb-4">Edit your card</h2>
+            <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white mb-4">Edit your card</h2>
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {EDIT_SECTIONS.map(([key, label, Icon, subtitle]) => {
                 const sub = subtitle ? subtitle(form) : null;
@@ -1408,21 +1408,21 @@ export default function VakilCardPage() {
                   <button
                     key={key}
                     onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
-                    className="rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
+                    className="rounded-2xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
                   >
                     <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
                     <span className="min-w-0 flex-1">
-                      <p className="text-sm font-bold text-slate-800 hyphens-none">{label}</p>
-                      {sub && <p className="text-xs text-slate-500 mt-0.5 truncate hyphens-none">{sub}</p>}
+                      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 hyphens-none">{label}</p>
+                      {sub && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate hyphens-none">{sub}</p>}
                     </span>
                   </button>
                 );
               })}
               <button
                 onClick={() => navigate("/setup")}
-                className="rounded-2xl bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
+                className="rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
               >
-                <span className="h-9 w-9 rounded-xl bg-white/15 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>
+                <span className="h-9 w-9 rounded-xl bg-white/15 dark:bg-white/10 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>
                 <p className="text-sm font-bold hyphens-none">Guided walkthrough</p>
               </button>
             </div>
@@ -1450,7 +1450,7 @@ export default function VakilCardPage() {
           {/* share + theme side-by-side on xl — compact tiles, halves page scroll */}
           <div className="grid gap-4 xl:grid-cols-2">
           <div className={panelSm}>
-            <h2 className="text-base font-black tracking-tight text-slate-900 mb-2.5">Share</h2>
+            <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white mb-2.5">Share</h2>
             <div className="flex flex-wrap gap-1.5">
               <button onClick={copy} className={btnSm}>{copied ? <Check className="h-3.5 w-3.5 text-emerald-700" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy link"}</button>
               <button onClick={share} className={btnSm}><Share2 className="h-3.5 w-3.5" />Share</button>
@@ -1462,24 +1462,24 @@ export default function VakilCardPage() {
               <button onClick={() => setShowA2HS((s) => !s)} className={btnSm}><Smartphone className="h-3.5 w-3.5" />Add to Home Screen</button>
             </div>
             {showA2HS && (
-              <div className="mt-3 text-xs text-slate-600 space-y-2 text-left hyphens-none">
+              <div className="mt-3 text-xs text-slate-600 dark:text-slate-400 space-y-2 text-left hyphens-none">
                 {installPrompt && (
                   <button onClick={doInstall} className="w-full rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black px-3 py-2 flex items-center justify-center gap-2 transition-colors text-xs">
                     <Smartphone className="h-3.5 w-3.5" /> Add to Home Screen — one tap
                   </button>
                 )}
-                <p><b className="text-slate-900">iPhone:</b> Safari → Share → "Add to Home Screen".</p>
-                {!installPrompt && <p><b className="text-slate-900">Android:</b> Chrome → ⋮ menu → "Add to Home screen".</p>}
+                <p><b className="text-slate-900 dark:text-white">iPhone:</b> Safari → Share → "Add to Home Screen".</p>
+                {!installPrompt && <p><b className="text-slate-900 dark:text-white">Android:</b> Chrome → ⋮ menu → "Add to Home screen".</p>}
               </div>
             )}
-            <p className="text-[11px] text-slate-500 mt-2.5 text-left hyphens-none">
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2.5 text-left hyphens-none">
               Print the QR on your letterhead or chamber board — anyone who scans it lands on your card.
             </p>
           </div>
 
           {/* theme */}
           <div className={panelSm}>
-            <h2 className="text-base font-black tracking-tight text-slate-900 mb-2.5">Theme</h2>
+            <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white mb-2.5">Theme</h2>
             <div className="flex flex-wrap gap-1.5">
               {["system", "dark", "light"].map((t) => (
                 <button
@@ -1487,24 +1487,24 @@ export default function VakilCardPage() {
                   onClick={() => setTheme(t)}
                   disabled={savingTheme}
                   className={`rounded-full px-3 py-1.5 text-xs font-bold border transition-colors capitalize ${
-                    theme === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                    theme === t ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white" : "bg-white dark:bg-[#1c1c1e] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
                   }`}
                 >
                   {t === "system" ? "Match device" : t}
                 </button>
               ))}
             </div>
-            <p className="text-[11px] text-slate-500 mt-2 text-left hyphens-none">How your public card appears to clients.</p>
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">How your public card appears to clients.</p>
 
             {/* premium card themes — Pro, real (default/midnight/ivory) */}
             <div className="mt-3">
               <div className="flex items-center justify-between mb-1.5">
-                <p className="text-xs font-black text-slate-900">Card theme</p>
+                <p className="text-xs font-black text-slate-900 dark:text-white">Card theme</p>
                 {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
               </div>
               {!pro ? (
-                <button type="button" onClick={() => setUpgradeFeature("premium_themes")} className="w-full rounded-xl border border-slate-200 bg-white hover:border-[#635BFF]/50 transition-colors p-3 text-left">
-                  <p className="text-[11px] text-slate-500 hyphens-none">Exclusive card looks for your public VakilCard.</p>
+                <button type="button" onClick={() => setUpgradeFeature("premium_themes")} className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] hover:border-[#635BFF]/50 transition-colors p-3 text-left">
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 hyphens-none">Exclusive card looks for your public VakilCard.</p>
                 </button>
               ) : (
                 <div className="flex flex-wrap gap-1.5">
@@ -1514,7 +1514,7 @@ export default function VakilCardPage() {
                       onClick={() => setCardTheme(t)}
                       disabled={savingCardTheme}
                       className={`rounded-full px-3 py-1.5 text-xs font-bold border transition-colors capitalize ${
-                        (profile.card_theme || "default") === t ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+                        (profile.card_theme || "default") === t ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white" : "bg-white dark:bg-[#1c1c1e] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
                       }`}
                     >
                       {t}
@@ -1526,9 +1526,9 @@ export default function VakilCardPage() {
 
             {/* branding — Pro, real toggle (defaults to hidden-for-Pro
                 unless the owner explicitly overrides it) */}
-            <div className="mt-4 pt-4 border-t border-slate-200">
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
               <div className="flex items-center justify-between">
-                <p className="text-sm font-black text-slate-900">Vakilpedia branding</p>
+                <p className="text-sm font-black text-slate-900 dark:text-white">Vakilpedia branding</p>
                 {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
               </div>
               {!pro ? (
@@ -1539,7 +1539,7 @@ export default function VakilCardPage() {
                   onClick={() => setHideBranding(!(profile.hide_branding !== false))}
                   disabled={savingBranding}
                   className={`mt-2 rounded-full px-4 py-2 text-sm font-bold border transition-colors ${
-                    profile.hide_branding !== false ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200"
+                    profile.hide_branding !== false ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 border-slate-900 dark:border-white" : "bg-white dark:bg-[#1c1c1e] text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10"
                   }`}
                 >
                   {profile.hide_branding !== false ? "Branding removed" : "Show branding"}

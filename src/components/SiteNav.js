@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
-import { Menu, X, ChevronDown, ArrowRight } from "lucide-react";
+import { Menu, X, ChevronDown, ArrowRight, Sun, Moon } from "lucide-react";
 import BrandWordmark from "./BrandWordmark";
+import { useTheme } from "../lib/useTheme";
 import { LAUNCHER_ITEMS, WWW, wwwHref } from "../config/ecosystem";
 
 /**
@@ -98,6 +99,30 @@ function CtaButton({ cta, className, onAfter }) {
   );
 }
 
+// Light/dark switch -- same estate-wide pattern as every other Vakilpedia
+// app's nav (CaseLinx/CourtQue/SignLinx/Affidavit Maker/Account). Desktop
+// only, same as everywhere else -- none of them put it in the mobile menu.
+function ThemeToggle({ compact }) {
+  const { theme, toggle } = useTheme();
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+      className={`flex items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all ${
+        compact ? "h-8 w-8" : "h-9 w-9"
+      }`}
+    >
+      {theme === "dark" ? (
+        <Sun className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+      ) : (
+        <Moon className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" />
+      )}
+    </button>
+  );
+}
+
 export default function SiteNav({ cta = null }) {
   const [scrolled, setScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
@@ -136,8 +161,8 @@ export default function SiteNav({ cta = null }) {
         <div
           className={`flex items-center justify-between rounded-full border backdrop-blur-2xl transition-all duration-500 ${
             scrolled
-              ? "bg-white/92 border-slate-200/80 shadow-lg shadow-slate-200/50 px-3 py-2.5 sm:px-4"
-              : "bg-white/72 border-white/70 shadow-xl shadow-slate-200/40 px-4 py-3 sm:px-5 sm:py-4"
+              ? "bg-white/92 dark:bg-[#0f172a]/75 border-slate-200/80 dark:border-white/10 shadow-lg shadow-slate-200/50 dark:shadow-none px-3 py-2.5 sm:px-4"
+              : "bg-white/72 dark:bg-[#0f172a]/55 border-white/70 dark:border-white/10 shadow-xl shadow-slate-200/40 dark:shadow-none px-4 py-3 sm:px-5 sm:py-4"
           }`}
         >
           <a href={WWW} className="flex items-center gap-3 rounded-full no-underline transition-all duration-500 min-w-0" data-testid="vakilpedia-logo">
@@ -150,8 +175,8 @@ export default function SiteNav({ cta = null }) {
               className={`w-auto object-contain transition-all duration-500 ${scrolled ? "h-9 sm:h-10" : "h-10 sm:h-12"}`}
             />
             <div className="min-w-0">
-              <BrandWordmark className={`font-black text-slate-900 tracking-tighter transition-all duration-500 ${scrolled ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"}`} />
-              <div className={`hidden sm:block overflow-hidden text-slate-500 font-semibold transition-all duration-500 ${scrolled ? "max-h-0 opacity-0 text-[10px]" : "max-h-5 opacity-100 text-[11px]"}`}>
+              <BrandWordmark className={`font-black text-slate-900 dark:text-white tracking-tighter transition-all duration-500 ${scrolled ? "text-lg sm:text-xl" : "text-xl sm:text-2xl"}`} />
+              <div className={`hidden sm:block overflow-hidden text-slate-500 dark:text-slate-400 font-semibold transition-all duration-500 ${scrolled ? "max-h-0 opacity-0 text-[10px]" : "max-h-5 opacity-100 text-[11px]"}`}>
                 Legal tech ecosystem.
               </div>
             </div>
@@ -167,7 +192,7 @@ export default function SiteNav({ cta = null }) {
                 aria-haspopup="true"
                 data-testid="apps-launcher-trigger"
                 className={`flex items-center gap-1.5 rounded-full font-bold transition-all ${
-                  appsOpen ? "text-slate-900 bg-white/90" : "text-slate-600 hover:text-slate-900 hover:bg-white/90"
+                  appsOpen ? "text-slate-900 dark:text-white bg-white/90 dark:bg-white/10" : "text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/90 dark:hover:bg-white/10"
                 } ${scrolled ? "px-4 py-2 text-xs xl:px-5" : "px-5 py-2.5 text-sm xl:px-6"}`}
               >
                 Apps
@@ -176,10 +201,10 @@ export default function SiteNav({ cta = null }) {
 
               {appsOpen && (
                 <div
-                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-[34rem] xl:w-[38rem] rounded-[1.75rem] border border-white/70 bg-white/95 backdrop-blur-2xl shadow-2xl shadow-slate-300/40 p-4"
+                  className="absolute left-1/2 -translate-x-1/2 top-full mt-3 w-[34rem] xl:w-[38rem] rounded-[1.75rem] border border-white/70 dark:border-white/10 bg-white/95 dark:bg-[#1c1c1e]/95 backdrop-blur-2xl shadow-2xl shadow-slate-300/40 dark:shadow-none p-4"
                   data-testid="apps-launcher-panel"
                 >
-                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1 pb-2.5">The Vakilpedia ecosystem</div>
+                  <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1 pb-2.5">The Vakilpedia ecosystem</div>
                   <div className="grid grid-cols-2 gap-1.5">
                     {LAUNCHER_ITEMS.map((item) => (
                       <LauncherTile key={item.id} item={item} onNavigate={() => setAppsOpen(false)} />
@@ -188,7 +213,7 @@ export default function SiteNav({ cta = null }) {
                   <a
                     href={wwwHref("/apps")}
                     onClick={() => setAppsOpen(false)}
-                    className="mt-3 flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/80 hover:bg-white py-2.5 text-[12px] font-black text-slate-700 hover:text-[#635BFF] no-underline transition-colors"
+                    className="mt-3 flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 py-2.5 text-[12px] font-black text-slate-700 dark:text-slate-300 hover:text-[#635BFF] no-underline transition-colors"
                   >
                     See all apps <ArrowRight className="w-3.5 h-3.5" />
                   </a>
@@ -200,29 +225,30 @@ export default function SiteNav({ cta = null }) {
               <a
                 key={link.label}
                 href={wwwHref(link.href)}
-                className={`rounded-full text-slate-600 hover:text-slate-900 hover:bg-white/90 transition-all font-bold no-underline ${
+                className={`rounded-full text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white hover:bg-white/90 dark:hover:bg-white/10 transition-all font-bold no-underline ${
                   scrolled ? "px-4 py-2 text-xs xl:px-5" : "px-5 py-2.5 text-sm xl:px-6"
                 }`}
               >
                 {link.label}
               </a>
             ))}
-            {cta && (
-              <div className="relative flex items-center gap-2 ml-1 pl-2 border-l border-slate-200/70">
+            <div className="relative flex items-center gap-2 ml-1 pl-2 border-l border-slate-200/70 dark:border-white/10">
+              <ThemeToggle compact={scrolled} />
+              {cta && (
                 <CtaButton
                   cta={cta}
                   className={`rounded-full font-bold no-underline transition-all duration-200 whitespace-nowrap bg-slate-900 text-white hover:bg-[#635BFF] ${pill}`}
                 />
-              </div>
-            )}
+              )}
+            </div>
           </div>
 
           {/* Same breakpoint as the desktop links (lg), so the halves meet. */}
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className={`lg:hidden rounded-full border text-slate-900 transition-all duration-500 ${
-              scrolled ? "p-2.5 bg-white/95 border-slate-200/80 shadow-sm" : "p-3 bg-white/85 border-white/70 shadow-md"
+            className={`lg:hidden rounded-full border text-slate-900 dark:text-white transition-all duration-500 ${
+              scrolled ? "p-2.5 bg-white/95 dark:bg-[#0f172a]/75 border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none" : "p-3 bg-white/85 dark:bg-[#0f172a]/55 border-white/70 dark:border-white/10 shadow-md dark:shadow-none"
             }`}
             aria-label="Toggle menu"
             aria-expanded={mobileMenuOpen}
@@ -236,9 +262,9 @@ export default function SiteNav({ cta = null }) {
             mobileMenuOpen ? "max-h-[60rem] opacity-100 mt-3" : "max-h-0 opacity-0 mt-0 pointer-events-none"
           }`}
         >
-          <div className="rounded-[2rem] border border-slate-200/70 bg-white/95 backdrop-blur-2xl shadow-2xl px-5 py-5 max-h-[80vh] overflow-y-auto">
+          <div className="rounded-[2rem] border border-slate-200/70 dark:border-white/10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-2xl shadow-2xl px-5 py-5 max-h-[80vh] overflow-y-auto">
             {cta && (
-              <div className="flex flex-col gap-3 mb-3 pb-3 border-b border-slate-100">
+              <div className="flex flex-col gap-3 mb-3 pb-3 border-b border-slate-100 dark:border-white/10">
                 <CtaButton
                   cta={cta}
                   onAfter={() => setMobileMenuOpen(false)}
@@ -248,8 +274,8 @@ export default function SiteNav({ cta = null }) {
             )}
 
             {/* Same launcher, as a grid rather than a dropdown. */}
-            <div className="mb-3 pb-3 border-b border-slate-100">
-              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 px-1 pb-2">The Vakilpedia ecosystem</div>
+            <div className="mb-3 pb-3 border-b border-slate-100 dark:border-white/10">
+              <div className="text-[10px] font-black uppercase tracking-widest text-slate-400 dark:text-slate-500 px-1 pb-2">The Vakilpedia ecosystem</div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
                 {LAUNCHER_ITEMS.map((item) => (
                   <LauncherTile key={item.id} item={item} compact onNavigate={() => setMobileMenuOpen(false)} />
@@ -258,7 +284,7 @@ export default function SiteNav({ cta = null }) {
               <a
                 href={wwwHref("/apps")}
                 onClick={() => setMobileMenuOpen(false)}
-                className="mt-2 flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 bg-slate-50/80 py-3 text-[12px] font-black text-slate-700 no-underline"
+                className="mt-2 flex items-center justify-center gap-1.5 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/80 dark:bg-white/5 py-3 text-[12px] font-black text-slate-700 dark:text-slate-300 no-underline"
               >
                 See all apps <ArrowRight className="w-3.5 h-3.5" />
               </a>
@@ -270,7 +296,7 @@ export default function SiteNav({ cta = null }) {
                   key={link.label}
                   href={wwwHref(link.href)}
                   onClick={() => setMobileMenuOpen(false)}
-                  className="w-full py-4 text-center rounded-2xl bg-slate-50 border border-slate-100 text-slate-700 font-bold hover:bg-white transition-all no-underline"
+                  className="w-full py-4 text-center rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold hover:bg-white dark:hover:bg-white/10 transition-all no-underline"
                 >
                   {link.label}
                 </a>
