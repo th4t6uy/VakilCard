@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
 import SuiteInvite from "./components/SuiteInvite";
+import ThemeSync from "./components/ThemeSync";
 import AddToHomeScreen from './components/AddToHomeScreen';
 
 // Bridge tokens minted just-in-time by the NFC claim flow (api/vakilcard/nfc.js's
@@ -114,6 +115,7 @@ function App() {
   const suiteInvite = useSuiteSessionBridge();
   return (
     <div className="App">
+      <ThemeSync />
       {suiteInvite && <SuiteInvite invite={suiteInvite} />}
       <BrowserRouter>
         <Routes>

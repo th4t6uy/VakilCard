@@ -14,6 +14,23 @@
   --color-amber_glow: rgba(253, 238, 203, 0.35);
 }
 
+/* Dark theme -- added 2026-09-17, matching the estate standard shipped
+ * 2026-09-16 (CaseLinx/CourtQue/SignLinx/Affidavit Maker/Account/the main
+ * site). Same variable names as the light block above, so every class that
+ * already reads var(--color-bg-white) etc. picks up dark values for free
+ * -- no need to touch every call site, only the ones using raw Tailwind
+ * slate-* utilities instead of these tokens (handled separately). */
+[data-theme="dark"] {
+  --color-bg-white: #0b1120;
+  --color-fg: #f1f5f9;
+  --color-fg-muted: #94a3b8;
+  --color-surface: rgba(30, 41, 59, 0.55);
+  --color-border: rgba(255, 255, 255, 0.08);
+  --color-purple_glow: rgba(129, 140, 248, 0.18);
+  --color-blue_glow: rgba(56, 189, 248, 0.12);
+  --color-amber_glow: rgba(245, 158, 11, 0.16);
+}
+
 body {
     margin: 0;
     font-family: 'Inter Tight', sans-serif;
@@ -267,6 +284,31 @@ i, em, .italic {
   filter: blur(100px);
   animation: float 20s infinite linear alternate-reverse;
   opacity: 0.3;
+}
+
+/* Dark background -- values copied verbatim from the main site's already-
+ * shipped, already-debugged dark .bg-animated (2026-09-16/17: fixes both
+ * the original "muddy grey" mixing of light-mode pastels into a near-black
+ * gradient, and the later visible-seam/banding bug from a 4-stop plateau).
+ * Ported as-is rather than re-deriving it so this page's dark background
+ * looks identical to every other Vakilpedia app's. */
+[data-theme="dark"] .bg-animated {
+  background: linear-gradient(
+    90deg,
+    var(--color-blue_glow) 0%,
+    rgba(56, 189, 248, 0.07) 14%,
+    rgba(56, 189, 248, 0.025) 27%,
+    #0b1120 42%,
+    #0b1120 58%,
+    rgba(245, 158, 11, 0.04) 73%,
+    rgba(245, 158, 11, 0.09) 86%,
+    var(--color-amber_glow) 100%
+  );
+  opacity: 0.9;
+  filter: blur(110px);
+}
+[data-theme="dark"] .bg-glow-amber {
+  opacity: 0.55;
 }
 
 @keyframes float {

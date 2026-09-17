@@ -440,7 +440,7 @@ function DemoPhone({ onCreate }) {
             )}
             {status !== "live" && (
               <div
-                className={`${status === "fallback" ? "" : "absolute inset-0"} bg-white flex flex-col items-center justify-center gap-4 px-6`}
+                className={`${status === "fallback" ? "" : "absolute inset-0"} bg-white dark:bg-[#050508] flex flex-col items-center justify-center gap-4 px-6`}
                 style={status === "fallback" ? { height: Math.round(DS_H * s) } : undefined}
               >
                 <img src="/vakilcard_card.webp" alt="VakilCard preview" className="w-full max-w-[230px] drop-shadow-lg" width="1320" height="791" />

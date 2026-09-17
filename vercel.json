@@ -1,5 +1,6 @@
 {
   "version": 2,
+  "regions": ["bom1"],
   "rewrites": [
     { "source": "/api/vakilcard/track", "destination": "/api/vakilcard/profile" },
     { "source": "/api/:path*", "destination": "/api/:path*" },
