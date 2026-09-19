@@ -9,6 +9,21 @@ import { useEffect, useState, useCallback } from "react";
 const STORAGE_KEY = "vp-theme";
 const EXPLICIT_KEY = "vp-theme-explicit";
 
+// Shared across every *.vakilpedia.com subdomain (2026-09-19): see the
+// identical comment in the estate's other useTheme.ts files. Falls back to
+// a plain same-host cookie on localhost/preview domains, where a
+// ".vakilpedia.com" cookie can't be set.
+function cookieDomainAttr() {
+  return typeof window !== "undefined" && window.location.hostname.endsWith("vakilpedia.com")
+    ? "; domain=.vakilpedia.com"
+    : "";
+}
+
+function writeThemeCookie(name, value) {
+  const oneYear = 60 * 60 * 24 * 365;
+  document.cookie = `${name}=${encodeURIComponent(value)}${cookieDomainAttr()}; path=/; max-age=${oneYear}; SameSite=Lax`;
+}
+
 export function useTheme() {
   // On first render there's a brief window before this effect runs; the
   // blocking script in public/index.html already set the *real* data-theme
@@ -35,6 +50,7 @@ export function useTheme() {
   const setTheme = useCallback((next) => {
     document.documentElement.setAttribute("data-theme", next);
     try { localStorage.setItem(STORAGE_KEY, next); } catch {}
+    try { writeThemeCookie(STORAGE_KEY, next); } catch {}
     setThemeState(next);
   }, []);
 
@@ -44,6 +60,7 @@ export function useTheme() {
     // Record the explicit choice. Once this flag is set, the THEME_INIT
     // script's day/night default must never override it again.
     try { localStorage.setItem(EXPLICIT_KEY, "1"); } catch {}
+    try { writeThemeCookie(EXPLICIT_KEY, "1"); } catch {}
   }, [theme, setTheme]);
 
   return { theme, setTheme, toggle };
