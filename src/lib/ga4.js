@@ -12,6 +12,27 @@
 // picks up react-router navigation automatically — no per-route call needed.
 const GA4_ID = "G-ZN18SN3FZS";
 
+// The full *.vakilpedia.com estate that shares this measurement ID
+// (G-ZN18SN3FZS). Listing it here -- not just in GA4 Admin's "Configure
+// your domains" panel -- makes cross-domain session continuity a property
+// of the code, not a UI setting that can be silently reset or missed on a
+// new subdomain: it stops Enhanced Measurement from firing a spurious
+// "outbound_click" for a same-estate subdomain hop, and stops GA4 from
+// starting a fresh session with a "Referral" source when a visitor crosses
+// from one subdomain to another. Keep this list in sync across every app's
+// ga4 module when a new *.vakilpedia.com subdomain goes live.
+const GA4_LINKER_DOMAINS = [
+  "vakilpedia.com",
+  "www.vakilpedia.com",
+  "account.vakilpedia.com",
+  "vakilcard.vakilpedia.com",
+  "barelex.vakilpedia.com",
+  "affidavit.vakilpedia.com",
+  "admin.vakilpedia.com",
+  "caselinx.vakilpedia.com",
+  "beta.caselinx.vakilpedia.com",
+];
+
 let initialized = false;
 
 function isProductionHost() {
@@ -34,7 +55,9 @@ export function initGa4() {
       window.dataLayer.push(arguments);
     };
   window.gtag("js", new Date());
-  window.gtag("config", GA4_ID);
+  window.gtag("config", GA4_ID, {
+    linker: { domains: GA4_LINKER_DOMAINS },
+  });
 
   const src = `https://www.googletagmanager.com/gtag/js?id=${GA4_ID}`;
   if (!document.querySelector(`script[src="${src}"]`)) {
