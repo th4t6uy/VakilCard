@@ -22,6 +22,16 @@
  *   - come back the day after someone dismissed it. Dismissal is remembered
  *     for 60 days, and installing clears it for good.
  *
+ * 2026-09-20 — redesigned to fix a real collision: this used to render as a
+ * persistent, full-width bar pinned to the bottom of the viewport at
+ * zIndex 2147483000 (one below the highest 32-bit int a browser accepts).
+ * That sat on top of anything else anchored to the bottom of the screen —
+ * confirmed covering SignLinx's "Continue to sign" button on phones, and by
+ * construction it would cover any future bottom action bar in any app too.
+ * It now IDLES as a small round button in the corner, clear of centred
+ * content. It only expands into the full card when the person taps it, and
+ * even then it's a capped-width corner card, never a full-width strip.
+ *
  * Everything is inline-styled on purpose: this same file ships into eight
  * repos on three different CSS toolchains, and a banner that silently loses
  * its styling in one of them is worse than no banner.
@@ -31,6 +41,12 @@ import { useEffect, useState } from 'react';
 
 const KEY = 'vp-a2hs-dismissed';
 const SNOOZE_DAYS = 60;
+// Shared stacking convention for floating chrome (install prompt, toasts,
+// future non-modal banners): stay in the 300–500 band, comfortably above
+// normal content but nowhere near a MAX_INT arms race with anything else
+// on the page. A true modal (the consent overlay, a confirm dialog) should
+// still outrank this.
+const Z_FLOAT = 400;
 
 function snoozed() {
   try {
@@ -73,6 +89,7 @@ function isIosSafari() {
 export function AddToHomeScreen({ appName = 'this app' }) {
   const [evt, setEvt] = useState(null);
   const [ios, setIos] = useState(false);
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     // The service worker is what makes the browser consider the app
@@ -93,6 +110,7 @@ export function AddToHomeScreen({ appName = 'this app' }) {
       remember('installed');
       setEvt(null);
       setIos(false);
+      setOpen(false);
     });
 
     if (isIosSafari()) setIos(true);
@@ -101,10 +119,11 @@ export function AddToHomeScreen({ appName = 'this app' }) {
 
   if (!evt && !ios) return null;
 
-  const dismiss = () => {
+  const snooze = () => {
     remember(String(Date.now()));
     setEvt(null);
     setIos(false);
+    setOpen(false);
   };
 
   const install = async () => {
@@ -113,8 +132,28 @@ export function AddToHomeScreen({ appName = 'this app' }) {
     const { outcome } = await evt.userChoice;
     remember(outcome === 'accepted' ? 'installed' : String(Date.now()));
     setEvt(null);
+    setOpen(false);
   };
 
+  // Idle state: a small round button, clear of any centred bottom action bar
+  // (a sticky "Sign", "Pay" or "Submit" button an app may have on the same
+  // screen). This is the state the banner spends nearly all its time in.
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => setOpen(true)}
+        aria-label={`Add ${appName} to your home screen`}
+        style={pillBtn}
+      >
+        <img src="/icons/icon-192.png" alt="" width={26} height={26} style={pillIcon} />
+      </button>
+    );
+  }
+
+  // Open state: a capped-width card anchored to the same corner, never a
+  // full-width strip — so even while open it can only ever cover the
+  // right-hand edge of a bottom action bar, not the button on it.
   return (
     <div role="dialog" aria-label={`Add ${appName} to your home screen`} style={wrap}>
       <div style={bar}>
@@ -136,7 +175,7 @@ export function AddToHomeScreen({ appName = 'this app' }) {
             Install
           </button>
         )}
-        <button type="button" onClick={dismiss} aria-label="Not now" style={close}>
+        <button type="button" onClick={snooze} aria-label="Not now" style={close}>
           ✕
         </button>
       </div>
@@ -154,16 +193,34 @@ function ShareGlyph() {
   );
 }
 
+const pillBtn = {
+  position: 'fixed',
+  right: 'max(14px, env(safe-area-inset-right))',
+  bottom: 'max(14px, env(safe-area-inset-bottom))',
+  zIndex: Z_FLOAT,
+  width: 48,
+  height: 48,
+  padding: 0,
+  borderRadius: '50%',
+  border: '1px solid rgba(20,31,58,0.10)',
+  background: 'rgba(255,255,255,0.92)',
+  backdropFilter: 'saturate(180%) blur(14px)',
+  WebkitBackdropFilter: 'saturate(180%) blur(14px)',
+  boxShadow: '0 6px 20px rgba(16,24,40,0.20)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+};
+
+const pillIcon = { borderRadius: 7, display: 'block' };
+
 const wrap = {
   position: 'fixed',
-  left: 0,
-  right: 0,
-  // Clear of the iOS home indicator without leaving a gap on anything else.
+  right: 'max(12px, env(safe-area-inset-right))',
   bottom: 'max(12px, env(safe-area-inset-bottom))',
-  zIndex: 2147483000,
-  display: 'flex',
-  justifyContent: 'center',
-  padding: '0 12px',
+  zIndex: Z_FLOAT,
+  maxWidth: 'min(340px, calc(100vw - 24px))',
   pointerEvents: 'none',
 };
 
@@ -172,11 +229,9 @@ const bar = {
   display: 'flex',
   alignItems: 'center',
   gap: 12,
-  width: '100%',
-  maxWidth: 560,
-  padding: '10px 12px',
+  padding: '10px 10px 10px 12px',
   borderRadius: 16,
-  background: 'rgba(255,255,255,0.92)',
+  background: 'rgba(255,255,255,0.94)',
   backdropFilter: 'saturate(180%) blur(14px)',
   WebkitBackdropFilter: 'saturate(180%) blur(14px)',
   border: '1px solid rgba(20,31,58,0.10)',
