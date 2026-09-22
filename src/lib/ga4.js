@@ -31,6 +31,8 @@ const GA4_LINKER_DOMAINS = [
   "admin.vakilpedia.com",
   "caselinx.vakilpedia.com",
   "beta.caselinx.vakilpedia.com",
+  "signlinx.vakilpedia.com",
+  "suite.vakilpedia.com",
 ];
 
 let initialized = false;
