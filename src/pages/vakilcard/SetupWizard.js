@@ -50,16 +50,16 @@ const DESIGNATION_OPTIONS = ["Advocate", "Senior Advocate", "Advocate-on-Record"
 // gaps gap-2, section titles mb-1 + description below.
 
 const inputCls =
-  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3 text-base text-slate-900 placeholder-slate-400 focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 transition-colors";
+  "w-full rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 px-4 py-3 text-base text-slate-900 dark:text-white placeholder-slate-400 focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 transition-colors";
 const inputErrCls =
-  "w-full rounded-2xl border border-rose-300 bg-white px-4 py-3 text-base text-slate-900 placeholder-slate-400 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200 transition-colors";
+  "w-full rounded-2xl border border-rose-300 dark:border-rose-500/30 bg-white dark:bg-white/5 px-4 py-3 text-base text-slate-900 dark:text-white placeholder-slate-400 focus:border-rose-400 focus:outline-none focus:ring-2 focus:ring-rose-200 transition-colors";
 
 const Field = ({ label, hint, error, children }) => (
   <label className="block">
-    <span className="text-sm font-bold text-slate-700">{label}</span>
-    {hint && <span className="block text-xs text-slate-500 mt-0.5 text-left hyphens-none">{hint}</span>}
+    <span className="text-sm font-bold text-slate-700 dark:text-slate-300">{label}</span>
+    {hint && <span className="block text-xs text-slate-500 dark:text-slate-400 mt-0.5 text-left hyphens-none">{hint}</span>}
     <div className="mt-1.5">{children}</div>
-    {error && <span className="block text-xs font-semibold text-rose-700 mt-1.5 text-left hyphens-none">{error}</span>}
+    {error && <span className="block text-xs font-semibold text-rose-700 dark:text-rose-300 mt-1.5 text-left hyphens-none">{error}</span>}
   </label>
 );
 
@@ -68,7 +68,7 @@ const Chip = ({ active, onClick, children }) => (
     type="button"
     onClick={onClick}
     className={`rounded-full px-4 py-2 text-sm font-semibold transition-colors border ${
-      active ? "bg-slate-900 text-white border-slate-900" : "bg-white text-slate-700 border-slate-200 hover:border-slate-300"
+      active ? "bg-slate-900 dark:bg-white dark:text-slate-900 dark:border-white text-white border-slate-900" : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20"
     }`}
   >
     {children}
@@ -76,7 +76,7 @@ const Chip = ({ active, onClick, children }) => (
 );
 
 const Toggle = ({ checked, onChange, children }) => (
-  <label className="flex items-center gap-2.5 text-sm font-semibold text-slate-700 cursor-pointer">
+  <label className="flex items-center gap-2.5 text-sm font-semibold text-slate-700 dark:text-slate-300 cursor-pointer">
     <input type="checkbox" checked={checked} onChange={(e) => onChange(e.target.checked)} className="accent-[#635BFF] h-4 w-4" />
     {children}
   </label>
@@ -84,8 +84,8 @@ const Toggle = ({ checked, onChange, children }) => (
 
 const StepHeader = ({ title, desc }) => (
   <div>
-    <h1 className="text-2xl font-black tracking-tight text-slate-900 mb-1">{title}</h1>
-    {desc && <p className="text-sm text-slate-600 text-left hyphens-none">{desc}</p>}
+    <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white mb-1">{title}</h1>
+    {desc && <p className="text-sm text-slate-600 dark:text-slate-300 text-left hyphens-none">{desc}</p>}
   </div>
 );
 
@@ -457,8 +457,8 @@ export default function SetupWizard() {
     return (
       <Shell>
         <div className="text-center py-20">
-          <p className="text-slate-600">Couldn't load your card.</p>
-          <button className="mt-4 rounded-full bg-slate-900 text-white px-6 py-3 font-bold" onClick={load}>Retry</button>
+          <p className="text-slate-600 dark:text-slate-300">Couldn't load your card.</p>
+          <button className="mt-4 rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3 font-bold" onClick={load}>Retry</button>
         </div>
       </Shell>
     );
@@ -466,9 +466,9 @@ export default function SetupWizard() {
     return (
       <Shell>
         <div className="space-y-4 py-10 animate-pulse">
-          <div className="h-8 bg-white/70 rounded-2xl w-2/3" />
-          <div className="h-40 bg-white/70 rounded-[2rem]" />
-          <div className="h-12 bg-white/70 rounded-full" />
+          <div className="h-8 bg-white/70 dark:bg-white/[0.06] rounded-2xl w-2/3" />
+          <div className="h-40 bg-white/70 dark:bg-white/[0.06] rounded-[2rem]" />
+          <div className="h-12 bg-white/70 dark:bg-white/[0.06] rounded-full" />
         </div>
       </Shell>
     );
@@ -478,7 +478,7 @@ export default function SetupWizard() {
   const stepPct = Math.round(((step + 1) / STEPS.length) * 100);
 
   const stepBody = (
-    <div className="bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[2rem] p-6 sm:p-8 space-y-5">
+    <div className="bg-white/70 dark:bg-white/[0.06] backdrop-blur-xl border border-slate-200/70 dark:border-white/10 shadow-sm rounded-[2rem] p-6 sm:p-8 space-y-5">
       {step === 0 && sectionMode && (
         <>
           <StepHeader title="Your photo" desc="A clear, professional photo builds instant trust. Square-cropped and optimized automatically." />
@@ -486,15 +486,15 @@ export default function SetupWizard() {
             {f.photo_url ? (
               <img src={f.photo_url} alt="Profile" className="h-28 w-28 rounded-full object-cover border-2 border-[#635BFF]" />
             ) : (
-              <div className="h-28 w-28 rounded-full bg-slate-100 flex items-center justify-center"><User className="h-10 w-10 text-slate-400" /></div>
+              <div className="h-28 w-28 rounded-full bg-slate-100 dark:bg-white/[0.05] flex items-center justify-center"><User className="h-10 w-10 text-slate-400" /></div>
             )}
             <div className="flex flex-col gap-2.5">
-              <label className="cursor-pointer rounded-full bg-white border border-slate-200 hover:border-slate-300 px-6 py-3 text-sm font-bold text-slate-700 text-center">
+              <label className="cursor-pointer rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-6 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 text-center">
                 {uploading ? "Optimizing…" : f.photo_url ? "Change photo" : "Upload photo"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files[0], "photo")} />
               </label>
               {f.photo_url && !uploading && (
-                <button type="button" onClick={() => removeImage("photo")} className="text-xs font-bold text-rose-600 inline-flex items-center gap-1 justify-center">
+                <button type="button" onClick={() => removeImage("photo")} className="text-xs font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1 justify-center">
                   <Trash2 className="h-3.5 w-3.5" />Remove
                 </button>
               )}
@@ -510,15 +510,15 @@ export default function SetupWizard() {
             {f.photo_url ? (
               <img src={f.photo_url} alt="Profile" className="h-24 w-24 rounded-full object-cover border-2 border-[#635BFF] flex-none" />
             ) : (
-              <div className="h-24 w-24 rounded-full bg-slate-100 flex items-center justify-center flex-none"><User className="h-9 w-9 text-slate-400" /></div>
+              <div className="h-24 w-24 rounded-full bg-slate-100 dark:bg-white/[0.05] flex items-center justify-center flex-none"><User className="h-9 w-9 text-slate-400" /></div>
             )}
             <div className="flex flex-col gap-2">
-              <label className="cursor-pointer rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700 text-center">
+              <label className="cursor-pointer rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300 text-center">
                 {uploading ? "Optimizing…" : f.photo_url ? "Change photo" : "Upload profile photo"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files[0], "photo")} />
               </label>
               {f.photo_url && !uploading && (
-                <button type="button" onClick={() => removeImage("photo")} className="text-xs font-bold text-rose-600 inline-flex items-center gap-1 justify-center">
+                <button type="button" onClick={() => removeImage("photo")} className="text-xs font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1 justify-center">
                   <Trash2 className="h-3.5 w-3.5" />Remove
                 </button>
               )}
@@ -537,13 +537,14 @@ export default function SetupWizard() {
             <div className="flex items-center gap-4">
               {f.payment.upi_qr_url && (
                 <div className="flex flex-col items-center gap-1.5">
-                  <img src={f.payment.upi_qr_url} alt="UPI QR" className="h-16 w-16 rounded-xl object-contain bg-white border border-slate-200" />
-                  <button type="button" onClick={() => removeImage("upiqr")} className="text-xs font-bold text-rose-600 inline-flex items-center gap-1">
+                  {/* vp-dark-audit-ignore: QR must stay black-on-white to scan, in both themes */}
+                  <img src={f.payment.upi_qr_url} alt="UPI QR" className="h-16 w-16 rounded-xl object-contain bg-white border border-slate-200 dark:border-white/10" />
+                  <button type="button" onClick={() => removeImage("upiqr")} className="text-xs font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1">
                     <Trash2 className="h-3 w-3" />Remove
                   </button>
                 </div>
               )}
-              <label className="cursor-pointer rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700">
+              <label className="cursor-pointer rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300">
                 {uploading ? "Optimizing…" : f.payment.upi_qr_url ? "Replace QR" : "Upload payment QR"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files[0], "upiqr")} />
               </label>
@@ -552,7 +553,7 @@ export default function SetupWizard() {
           {/* Phase-1 actions — Done is ALWAYS visible (sticky on mobile). */}
           <div className="sticky bottom-3 z-10 pt-2 space-y-2.5">
             <button
-              className="w-full rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
+              className="w-full rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50 shadow-lg"
               disabled={saving || uploading}
               onClick={quickDone}
             >
@@ -560,7 +561,7 @@ export default function SetupWizard() {
               Done — publish my card
             </button>
             <button
-              className="w-full rounded-full bg-white border border-slate-200 hover:border-slate-300 px-8 py-3.5 font-bold text-slate-700 transition-colors flex items-center justify-center gap-2"
+              className="w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-8 py-3.5 font-bold text-slate-700 dark:text-slate-300 transition-colors flex items-center justify-center gap-2"
               disabled={saving || uploading}
               onClick={next}
             >
@@ -580,20 +581,20 @@ export default function SetupWizard() {
               <button
                 type="button"
                 onClick={() => setUpgradeFeature("custom_username")}
-                className="w-full flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left"
+                className="w-full flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-4 py-3 text-left"
               >
-                <span className="text-sm text-slate-600 break-all">vakilpedia.com/<b className="text-slate-900">{f.username}</b></span>
-                <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none ml-3">Custom · Pro</span>
+                <span className="text-sm text-slate-600 dark:text-slate-300 break-all">vakilpedia.com/<b className="text-slate-900 dark:text-white">{f.username}</b></span>
+                <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none ml-3">Custom · Pro</span>
               </button>
             </Field>
           ) : (
             <Field label="Your VakilCard link" hint="Change it anytime — old links redirect forever.">
               <div className="flex items-center">
-                <span className="rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 px-3 py-3 text-sm text-slate-500">vakilpedia.com/</span>
+                <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3 text-sm text-slate-500 dark:text-slate-400">vakilpedia.com/</span>
                 <input className={inputCls + " rounded-l-none"} autoCapitalize="none" autoCorrect="off" value={f.username} onChange={(e) => onUsernameInput(e.target.value)} />
               </div>
               {unameStatus !== "ok" && (
-                <p className={`mt-1.5 text-xs font-semibold text-left hyphens-none ${unameStatus === "checking" ? "text-slate-500" : "text-rose-700"}`}>
+                <p className={`mt-1.5 text-xs font-semibold text-left hyphens-none ${unameStatus === "checking" ? "text-slate-500 dark:text-slate-400" : "text-rose-700 dark:text-rose-300"}`}>
                   {unameStatus === "checking" ? "Checking availability…" :
                    unameStatus === "taken" ? "Already taken." :
                    unameStatus === "reserved" ? "Reserved — please pick another." :
@@ -661,10 +662,10 @@ export default function SetupWizard() {
                 <button
                   type="button"
                   onClick={() => setUpgradeFeature("website")}
-                  className="w-full flex items-center justify-between rounded-2xl border border-slate-200 bg-slate-50 px-4 py-3 text-left"
+                  className="w-full flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-4 py-3 text-left"
                 >
-                  <span className="text-sm text-slate-500">Show your website on your card</span>
-                  <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none ml-3">Pro</span>
+                  <span className="text-sm text-slate-500 dark:text-slate-400">Show your website on your card</span>
+                  <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none ml-3">Pro</span>
                 </button>
               </Field>
             ) : (
@@ -723,7 +724,7 @@ export default function SetupWizard() {
               <input className={inputCls} value={f.office.maps_url} onChange={(e) => setNested("office", "maps_url", e.target.value)} placeholder="https://maps.app.goo.gl/…" />
               <button
                 type="button"
-                className="flex-none rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 px-4 py-3 text-sm font-bold text-slate-700 transition-colors"
+                className="flex-none rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-[#635BFF]/50 px-4 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 transition-colors"
                 onClick={() => {
                   const q = f.office.chamber_name || f.office.address || f.full_name || "my chamber";
                   window.open(`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(q)}`, "_blank", "noopener");
@@ -749,13 +750,14 @@ export default function SetupWizard() {
             <div className="flex items-center gap-5">
               {f.payment.upi_qr_url && (
                 <div className="flex flex-col items-center gap-1.5">
-                  <img src={f.payment.upi_qr_url} alt="UPI QR" className="h-20 w-20 rounded-xl object-contain bg-white border border-slate-200" />
-                  <button type="button" onClick={() => removeImage("upiqr")} className="text-xs font-bold text-rose-600 inline-flex items-center gap-1">
+                  {/* vp-dark-audit-ignore: QR must stay black-on-white to scan, in both themes */}
+                  <img src={f.payment.upi_qr_url} alt="UPI QR" className="h-20 w-20 rounded-xl object-contain bg-white border border-slate-200 dark:border-white/10" />
+                  <button type="button" onClick={() => removeImage("upiqr")} className="text-xs font-bold text-rose-600 dark:text-rose-400 inline-flex items-center gap-1">
                     <Trash2 className="h-3 w-3" />Remove
                   </button>
                 </div>
               )}
-              <label className="cursor-pointer rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-2.5 text-sm font-bold text-slate-700">
+              <label className="cursor-pointer rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300">
                 {uploading ? "Optimizing…" : f.payment.upi_qr_url ? "Replace QR" : "Upload UPI QR"}
                 <input type="file" accept="image/*" className="hidden" onChange={(e) => upload(e.target.files[0], "upiqr")} />
               </label>
@@ -790,7 +792,7 @@ export default function SetupWizard() {
               key={step} // reload with freshest save
               title="VakilCard preview"
               src={qaPreviewSrc() || `/api/vakilcard/profile?username=${encodeURIComponent(f.username)}&pt=${encodeURIComponent(previewToken)}`}
-              className="w-full rounded-[1.5rem] border border-slate-200 bg-white"
+              className="w-full rounded-[1.5rem] border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900"
               style={{ height: "70vh" }}
             />
           ) : (
@@ -801,21 +803,21 @@ export default function SetupWizard() {
 
       {step === 8 && (
         <div className="text-center py-4">
-          <Rocket className="h-12 w-12 text-[#635BFF] mx-auto" />
-          <h1 className="text-2xl font-black tracking-tight text-slate-900 mt-4">{published ? "Publish your updates" : "Ready to go live?"}</h1>
-          <p className="text-sm text-slate-600 mt-2 text-center hyphens-none">
-            Your card will be live at <b className="text-slate-900">vakilpedia.com/{f.username}</b> — shareable, searchable, yours.
+          <Rocket className="h-12 w-12 text-[#635BFF] dark:text-[#a5a0ff] mx-auto" />
+          <h1 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white mt-4">{published ? "Publish your updates" : "Ready to go live?"}</h1>
+          <p className="text-sm text-slate-600 dark:text-slate-300 mt-2 text-center hyphens-none">
+            Your card will be live at <b className="text-slate-900 dark:text-white">vakilpedia.com/{f.username}</b> — shareable, searchable, yours.
           </p>
           {blockers.length > 0 && (
-            <div className="mt-5 rounded-2xl border border-rose-200 bg-rose-50/70 p-4 text-left">
-              <p className="text-sm font-black text-rose-800 mb-2">Fix these before publishing:</p>
+            <div className="mt-5 rounded-2xl border border-rose-200 dark:border-rose-500/30 bg-rose-50/70 dark:bg-rose-500/10 p-4 text-left">
+              <p className="text-sm font-black text-rose-800 dark:text-rose-300 mb-2">Fix these before publishing:</p>
               {blockers.map((b) => (
-                <p key={b.field} className="text-sm text-rose-700 text-left hyphens-none">• {b.message}</p>
+                <p key={b.field} className="text-sm text-rose-700 dark:text-rose-300 text-left hyphens-none">• {b.message}</p>
               ))}
             </div>
           )}
           <button
-            className="mt-6 w-full rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+            className="mt-6 w-full rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
             disabled={saving || blockers.length > 0}
             onClick={publish}
           >
@@ -825,7 +827,7 @@ export default function SetupWizard() {
         </div>
       )}
 
-      {error && <p className="text-sm font-semibold text-rose-700 text-left hyphens-none">{error}</p>}
+      {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 text-left hyphens-none">{error}</p>}
     </div>
   );
 
@@ -837,12 +839,12 @@ export default function SetupWizard() {
         <QaBadge />
         <div className="lg:grid lg:grid-cols-[minmax(0,1fr)_360px] xl:grid-cols-[minmax(0,1fr)_420px] lg:gap-8 xl:gap-10 lg:items-start">
           <div>
-            <button className="mb-5 text-sm font-bold text-slate-500 inline-flex items-center gap-1.5" onClick={() => navigate(f.username ? `/${f.username}/dashboard` : "/")}>
+            <button className="mb-5 text-sm font-bold text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5" onClick={() => navigate(f.username ? `/${f.username}/dashboard` : "/")}>
               <ArrowLeft className="h-4 w-4" />Back to dashboard
             </button>
             {stepBody}
             <button
-              className="mt-5 w-full rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+              className="mt-5 w-full rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
               disabled={saving}
               onClick={saveAndClose}
             >
@@ -871,10 +873,10 @@ export default function SetupWizard() {
         <div>
           {/* progress — label and bar share one formula, they can never diverge */}
           <div className="flex items-center justify-between mb-2">
-            <p className="text-sm font-bold text-slate-700">{STEPS[step]} <span className="text-slate-400">· step {step + 1} of {STEPS.length}</span></p>
-            <p className="text-sm font-bold text-[#635BFF]">{stepPct}%</p>
+            <p className="text-sm font-bold text-slate-700 dark:text-slate-300">{STEPS[step]} <span className="text-slate-400">· step {step + 1} of {STEPS.length}</span></p>
+            <p className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff]">{stepPct}%</p>
           </div>
-          <div className="h-1.5 bg-white/70 rounded-full mb-6 overflow-hidden">
+          <div className="h-1.5 bg-white/70 dark:bg-white/[0.06] rounded-full mb-6 overflow-hidden">
             <div className="h-full bg-[#635BFF] rounded-full transition-all duration-500" style={{ width: `${stepPct}%` }} />
           </div>
 
@@ -885,7 +887,7 @@ export default function SetupWizard() {
           {step > 0 && (
             <div className="flex items-center justify-between mt-5">
               <button
-                className="rounded-full bg-white border border-slate-200 hover:border-slate-300 px-5 py-3 text-sm font-bold text-slate-700 inline-flex items-center gap-1.5 disabled:opacity-40"
+                className="rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-3 text-sm font-bold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 disabled:opacity-40"
                 disabled={saving}
                 onClick={() => setStep((s) => s - 1)}
               >
@@ -893,7 +895,7 @@ export default function SetupWizard() {
               </button>
               {step < STEPS.length - 1 && (
                 <button
-                  className="rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-7 py-3 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                  className="rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-7 py-3 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
                   disabled={saving}
                   onClick={next}
                 >
@@ -903,7 +905,7 @@ export default function SetupWizard() {
               )}
             </div>
           )}
-          <button className="w-full text-center text-sm font-bold text-slate-500 mt-4" onClick={saveAndClose}>
+          <button className="w-full text-center text-sm font-bold text-slate-500 dark:text-slate-400 mt-4" onClick={saveAndClose}>
             Save & finish later
           </button>
         </div>
@@ -932,15 +934,15 @@ function UnsavedChangesToast({ dirty, saving, onSaveNow }) {
     <div
       role="status"
       aria-live="polite"
-      className="fixed z-[300] bottom-5 right-5 max-w-[calc(100vw-2.5rem)] sm:max-w-xs rounded-2xl border border-amber-200 bg-white shadow-[0_12px_32px_rgba(0,0,0,0.18)] px-4 py-3.5 flex items-center gap-3"
+      className="fixed z-[300] bottom-5 right-5 max-w-[calc(100vw-2.5rem)] sm:max-w-xs rounded-2xl border border-amber-200 dark:border-amber-500/30 bg-white dark:bg-slate-900 shadow-[0_12px_32px_rgba(0,0,0,0.18)] px-4 py-3.5 flex items-center gap-3"
     >
       <span className="flex-shrink-0 h-2.5 w-2.5 rounded-full bg-amber-400 animate-pulse" aria-hidden="true" />
       <div className="min-w-0 flex-1">
-        <p className="text-sm font-bold text-slate-900">Unsaved changes</p>
-        <p className="text-xs text-slate-500 mt-0.5">These edits aren't saved yet.</p>
+        <p className="text-sm font-bold text-slate-900 dark:text-white">Unsaved changes</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">These edits aren't saved yet.</p>
       </div>
       <button
-        className="flex-shrink-0 rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-3.5 py-2 text-xs font-bold disabled:opacity-50"
+        className="flex-shrink-0 rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-3.5 py-2 text-xs font-bold disabled:opacity-50"
         disabled={saving}
         onClick={onSaveNow}
       >
@@ -961,7 +963,7 @@ function MobilePreview({ form, open, setOpen }) {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="lg:hidden fixed bottom-5 right-4 z-40 rounded-full bg-slate-900 text-white text-sm font-bold px-5 py-3 shadow-xl inline-flex items-center gap-2"
+        className="lg:hidden fixed bottom-5 right-4 z-40 rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white text-sm font-bold px-5 py-3 shadow-xl inline-flex items-center gap-2"
       >
         <Eye className="h-4 w-4" />See my card
       </button>
@@ -985,7 +987,7 @@ function MobilePreview({ form, open, setOpen }) {
 
 function Shell({ children, wide = false }) {
   return (
-    <div className="min-h-screen" style={{ background: "linear-gradient(120deg, rgba(205,239,251,.35), rgba(253,238,203,.35)), #fff" }}>
+    <div className="min-h-screen" style={{ background: "var(--vc-wizard-bg)" }}>
       <div className={wide ? "vp-container py-8 sm:py-12" : "max-w-xl mx-auto px-4 py-8 sm:py-12"}>{children}</div>
     </div>
   );

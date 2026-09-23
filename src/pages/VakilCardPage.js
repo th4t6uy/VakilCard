@@ -131,7 +131,7 @@ function ProToolsStrip({ tools, onLocked }) {
     <div className="rounded-[1.75rem] border border-[#635BFF]/20 bg-gradient-to-r from-[#635BFF]/6 to-transparent p-4 mb-6">
       <div className="flex items-center justify-between mb-3">
         <p className="text-sm font-black text-slate-900 dark:text-white">Unlock with Pro</p>
-        <button type="button" onClick={() => onLocked("pro")} className="text-xs font-bold text-[#635BFF]">See all →</button>
+        <button type="button" onClick={() => onLocked("pro")} className="text-xs font-bold text-[#635BFF] dark:text-[#a5a0ff]">See all →</button>
       </div>
       <div className="flex gap-2 overflow-x-auto pb-1 -mx-1 px-1 snap-x">
         {tools.map((tool) => {
@@ -143,7 +143,7 @@ function ProToolsStrip({ tools, onLocked }) {
               onClick={() => onLocked(tool.key)}
               className="flex-none snap-start rounded-2xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-[#635BFF]/50 transition-colors px-3.5 py-2.5 flex items-center gap-2 min-w-[168px]"
             >
-              <span className="h-8 w-8 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
+              <span className="h-8 w-8 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff]" /></span>
               <p className="text-xs font-bold text-slate-800 dark:text-slate-200 text-left hyphens-none leading-tight">{tool.title}</p>
             </button>
           );
@@ -175,7 +175,7 @@ function GoogleConnectHero({ pro }) {
     <div className="rounded-[1.75rem] border border-[#635BFF]/25 bg-gradient-to-r from-[#635BFF]/8 to-transparent p-5 sm:p-6 mb-6">
       <div className="flex items-center justify-between gap-4 flex-wrap">
         <div className="flex items-center gap-3">
-          <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF]" /></span>
+          <span className="h-11 w-11 rounded-2xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><MapPin className="h-5 w-5 text-[#635BFF] dark:text-[#a5a0ff]" /></span>
           <div>
             <p className="text-sm font-black text-slate-900 dark:text-white">Connect Google Calendar</p>
             {/* 2026-08-29: this said "Vakilpedia sees when you are busy — never
@@ -190,7 +190,7 @@ function GoogleConnectHero({ pro }) {
         <button
           type="button"
           onClick={async () => { window.location.href = await googleConnectUrl(); }}
-          className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
+          className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
         >
           <MapPin className="h-4 w-4" />Connect now
         </button>
@@ -437,20 +437,20 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                 ))}
               </div>
               <div className="flex flex-wrap items-center gap-2">
-                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 text-base px-2 py-1.5" />
+                <input type="time" value={g.start} onChange={(e) => updateGroup(g.id, { start: e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white text-base px-2 py-1.5" />
                 <span className="text-slate-400 dark:text-slate-500 text-sm">to</span>
-                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 text-base px-2 py-1.5" />
-                <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 text-sm px-2 py-1.5">
+                <input type="time" value={g.end} onChange={(e) => updateGroup(g.id, { end: e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white text-base px-2 py-1.5" />
+                <select value={g.slot_minutes} onChange={(e) => updateGroup(g.id, { slot_minutes: +e.target.value })} className="rounded-xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white text-sm px-2 py-1.5">
                   {[15, 30, 45, 60].map((m) => <option key={m} value={m}>{m} min</option>)}
                 </select>
-                <button type="button" onClick={() => removeGroup(g.id)} className="ml-auto text-rose-600" aria-label="Remove this availability row"><X className="h-4 w-4" /></button>
+                <button type="button" onClick={() => removeGroup(g.id)} className="ml-auto text-rose-600 dark:text-rose-400" aria-label="Remove this availability row"><X className="h-4 w-4" /></button>
               </div>
-              {!g.days.length && <p className="text-xs text-amber-600 mt-2">Pick at least one day — this row won't be saved otherwise.</p>}
+              {!g.days.length && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">Pick at least one day — this row won't be saved otherwise.</p>}
             </div>
           ))}
           <div className="flex flex-wrap gap-2 pt-1">
             <button type="button" onClick={addGroup} className={btn}><Plus className="h-4 w-4" />Add availability</button>
-            <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
+            <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
               {savingWindows ? "Saving…" : "Save availability"}
             </button>
           </div>
@@ -461,19 +461,19 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
       <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
         <div className="flex items-center justify-between">
           <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Google Calendar</p>
-          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
         {!pro ? (
           <>
             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Sync your calendar so clients can only book times you are actually free — no double-bookings.</p>
-            <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to connect Google Calendar →</button>
+            <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff] mt-1">Upgrade to connect Google Calendar →</button>
           </>
         ) : !cfg || !cfg.calendar_platform_configured ? (
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
         ) : (
           <>
             {googleNotice && googleNotice.msg && (
-              <div className={`mt-2 rounded-xl px-3 py-2 text-xs leading-relaxed ${googleNotice.severity === "error" ? "bg-rose-50 text-rose-700" : "bg-amber-50 text-amber-800"}`}>
+              <div className={`mt-2 rounded-xl px-3 py-2 text-xs leading-relaxed ${googleNotice.severity === "error" ? "bg-rose-50 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300" : "bg-amber-50 dark:bg-amber-500/10 text-amber-800 dark:text-amber-300"}`}>
                 {GOOGLE_CONNECT_REASONS[googleNotice.msg] || `Google reported: "${googleNotice.msg}". Try reconnecting — if it keeps happening, contact support.`}
               </div>
             )}
@@ -481,7 +481,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
               <div className="flex items-center gap-2 flex-wrap text-sm">
                 <span className="text-xs font-bold text-slate-500 dark:text-slate-400 w-20 flex-none">Calendar</span>
                 {cfg.calendar_connected ? (
-                  <span className="text-emerald-700 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected</span>
+                  <span className="text-emerald-700 dark:text-emerald-300 font-bold inline-flex items-center gap-1"><Check className="h-4 w-4" />Connected</span>
                 ) : (
                   <span className="text-slate-400 dark:text-slate-500">Not connected</span>
                 )}
@@ -530,7 +530,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
           <div className="mt-2 rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50/70 dark:bg-white/5 p-3.5">
             <div className="flex items-start gap-3">
               <span className="grid place-items-center h-9 w-9 rounded-xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 flex-none">
-                <MapPin className="h-4 w-4 text-[#635BFF]" />
+                <MapPin className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff]" />
               </span>
               <div className="min-w-0 flex-1">
                 <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{place.name}</p>
@@ -564,7 +564,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
               onChange={(e) => setQuery(e.target.value)}
               placeholder="e.g. Sharma Law Chambers, Jabalpur"
               aria-label="Search your Google Business listing"
-              className="w-full rounded-xl border border-slate-200 dark:border-white/10 text-base px-3 py-2"
+              className="w-full rounded-xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white text-base px-3 py-2"
             />
             {searching && <p className="text-xs text-slate-400 dark:text-slate-500 mt-1.5">Searching Google…</p>}
             {!!hits.length && (
@@ -586,11 +586,11 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
             )}
           </>
         )}
-        {placeErr && <p className="text-xs text-rose-600 mt-1.5 hyphens-none">{placeErr}</p>}
+        {placeErr && <p className="text-xs text-rose-600 dark:text-rose-400 mt-1.5 hyphens-none">{placeErr}</p>}
 
         {/* The Pro line, stated on the owner's screen where it can be acted on. */}
         <div className="mt-3 flex items-start gap-2 rounded-xl bg-[#635BFF]/6 border border-[#635BFF]/20 px-3 py-2.5">
-          <Star className="h-4 w-4 text-[#635BFF] mt-0.5 flex-none" />
+          <Star className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff] mt-0.5 flex-none" />
           <div className="min-w-0">
             {pro ? (
               <p className="text-xs text-slate-600 dark:text-slate-400 m-0 hyphens-none">
@@ -606,7 +606,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                 <button
                   type="button"
                   onClick={() => onUpgrade("google_review")}
-                  className="text-xs font-bold text-[#635BFF] mt-1"
+                  className="text-xs font-bold text-[#635BFF] dark:text-[#a5a0ff] mt-1"
                 >
                   See what you get →
                 </button>
@@ -629,21 +629,21 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                 <div className="flex items-center justify-between gap-2">
                   <p className="text-sm font-bold text-slate-900 dark:text-white">{r.client_name} <span className="text-slate-400 dark:text-slate-500 font-normal">· {r.client_phone}</span></p>
                   <span className={`rounded-full text-[10px] font-black uppercase px-2 py-0.5 flex-none ${
-                    r.status === "confirmed" ? "bg-emerald-100 text-emerald-700" :
-                    r.status === "declined" ? "bg-rose-100 text-rose-700" :
-                    r.status === "completed" ? "bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-400" : "bg-amber-100 text-amber-700"
+                    r.status === "confirmed" ? "bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300" :
+                    r.status === "declined" ? "bg-rose-100 dark:bg-rose-500/10 text-rose-700 dark:text-rose-300" :
+                    r.status === "completed" ? "bg-slate-200 dark:bg-white/10 text-slate-600 dark:text-slate-400" : "bg-amber-100 dark:bg-amber-500/10 text-amber-700 dark:text-amber-300"
                   }`}>{r.status}</span>
                 </div>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">{r.starts_at ? new Date(r.starts_at).toLocaleString("en-IN") : r.requested_slot}</p>
                 {r.purpose && <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">{r.purpose}</p>}
                 {r.is_pro_booking && r.payment_status !== "not_required" && (
-                  <p className={`text-xs mt-1 font-bold ${r.payment_status === "confirmed" ? "text-emerald-700" : "text-amber-700"}`}>
+                  <p className={`text-xs mt-1 font-bold ${r.payment_status === "confirmed" ? "text-emerald-700 dark:text-emerald-300" : "text-amber-700 dark:text-amber-300"}`}>
                     Payment: {r.payment_status.replace("_", " ")}{r.amount_inr ? ` (₹${r.amount_inr})` : ""}
                   </p>
                 )}
                 <div className="flex flex-wrap gap-3 mt-2">
                   {r.is_pro_booking && ["pending", "claimed_paid"].includes(r.payment_status) && (
-                    <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => manageBooking(r.id, "confirm_payment_received"))} className="text-xs font-bold text-emerald-700 underline">Mark payment received</button>
+                    <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => manageBooking(r.id, "confirm_payment_received"))} className="text-xs font-bold text-emerald-700 dark:text-emerald-300 underline">Mark payment received</button>
                   )}
                   {r.status === "pending" && (
                     <>
@@ -653,11 +653,11 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
                           rule here so the owner sees WHY confirming is blocked
                           instead of a generic "didn't go through" error. */}
                       {!r.is_pro_booking || ["not_required", "confirmed"].includes(r.payment_status) ? (
-                        <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 underline">Confirm</button>
+                        <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "confirmed"))} className="text-xs font-bold text-emerald-700 dark:text-emerald-300 underline">Confirm</button>
                       ) : (
                         <span className="text-xs font-bold text-slate-400 dark:text-slate-500">Confirm after payment</span>
                       )}
-                      <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "declined"))} className="text-xs font-bold text-rose-700 underline">Decline</button>
+                      <button type="button" disabled={busyId === r.id} onClick={() => act(r.id, () => setBookingStatus(r.id, "declined"))} className="text-xs font-bold text-rose-700 dark:text-rose-300 underline">Decline</button>
                     </>
                   )}
                   {r.status === "confirmed" && (
@@ -670,7 +670,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
         )}
       </div>
 
-      {err && <p className="text-sm font-semibold text-rose-700 mt-4">{err}</p>}
+      {err && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-4">{err}</p>}
     </div>
   );
 }
@@ -1098,7 +1098,7 @@ export default function VakilCardPage() {
       <div className="text-center py-16">
         <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">No VakilCard yet</h1>
         <p className="text-slate-600 dark:text-slate-400 mt-3">Create one in under three minutes — verified on WhatsApp.</p>
-        <button onClick={doLogout} className="mt-6 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-8 py-4 font-bold transition-colors">
+        <button onClick={doLogout} className="mt-6 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-8 py-4 font-bold transition-colors">
           Start with your WhatsApp number
         </button>
       </div>
@@ -1153,19 +1153,19 @@ export default function VakilCardPage() {
                   <p className="text-sm font-bold text-slate-500 dark:text-slate-400">{published ? "Live" : "Draft — not public yet"}</p>
                 </div>
                 <a href={published ? url : undefined} target="_blank" rel="noopener noreferrer"
-                   className={`text-lg sm:text-xl font-black break-words inline-flex flex-wrap items-center gap-1.5 leading-tight ${published ? "text-[#635BFF] hover:underline" : "text-slate-400 dark:text-slate-500 cursor-default"}`}>
+                   className={`text-lg sm:text-xl font-black break-words inline-flex flex-wrap items-center gap-1.5 leading-tight ${published ? "text-[#635BFF] dark:text-[#a5a0ff] hover:underline" : "text-slate-400 dark:text-slate-500 cursor-default"}`}>
                   <span>vakilpedia.com/<wbr />{profile.username}</span>{published && <ExternalLink className="h-4 w-4 flex-none" />}
                 </a>
                 <div className="mt-4">
                   <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
-                    <span>Card completion</span><span className="text-[#635BFF]">{pct}%</span>
+                    <span>Card completion</span><span className="text-[#635BFF] dark:text-[#a5a0ff]">{pct}%</span>
                   </div>
                   <div className="h-1.5 bg-slate-100 dark:bg-white/5 rounded-full overflow-hidden">
                     <div className="h-full bg-[#635BFF] rounded-full transition-all duration-500" style={{ width: `${pct}%` }} />
                   </div>
                 </div>
                 <div className="flex flex-wrap gap-2 mt-5">
-                  <button onClick={publish} disabled={publishing} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50">
+                  <button onClick={publish} disabled={publishing} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5 transition-colors disabled:opacity-50">
                     {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Rocket className="h-4 w-4" />}
                     {published ? "Publish changes" : "Publish"}
                   </button>
@@ -1175,7 +1175,8 @@ export default function VakilCardPage() {
                 </div>
               </div>
               {qrUrl ? (
-                <img src={qrUrl} alt={`QR code for ${url}`} className="h-32 w-32 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] p-1 self-center" />
+                /* vp-dark-audit-ignore: QR must stay black-on-white to scan, in both themes */
+                <img src={qrUrl} alt={`QR code for ${url}`} className="h-32 w-32 rounded-2xl border border-slate-200 dark:border-white/10 bg-white p-1 self-center" />
               ) : (
                 <div className="h-32 w-32 rounded-2xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] flex items-center justify-center self-center"><QrCode className="h-8 w-8 text-slate-300 dark:text-slate-600" /></div>
               )}
@@ -1215,7 +1216,7 @@ export default function VakilCardPage() {
                 </div>
                 <button
                   onClick={() => setUpgradeFeature("analytics")}
-                  className="mt-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-6 py-2.5 text-sm font-bold"
+                  className="mt-4 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white transition-colors px-6 py-2.5 text-sm font-bold"
                 >
                   Unlock analytics with Pro
                 </button>
@@ -1245,11 +1246,11 @@ export default function VakilCardPage() {
               Plan: <b className="text-slate-900 dark:text-white">{pro ? "VakilCard Pro" : "Free"}</b>
               {pro && ent && ent.expires_at ? <> · renews {new Date(ent.expires_at).toLocaleDateString("en-IN")}</> : null}
               {pro && ent && ent.founder_pricing ? <> · Founder price locked (₹{ent.pricing ? ent.pricing.founder_inr : 199}/yr)</> : null}
-              {!pro && <> · <button className="text-[#635BFF] font-bold" onClick={() => setUpgradeFeature("pro")}>Upgrade</button></>}
+              {!pro && <> · <button className="text-[#635BFF] dark:text-[#a5a0ff] font-bold" onClick={() => setUpgradeFeature("pro")}>Upgrade</button></>}
             </p>
             <div className="flex flex-wrap gap-2">
               <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
-              <button onClick={remove} className="rounded-full bg-white dark:bg-[#1c1c1e] border border-rose-200 hover:border-rose-300 px-4 py-2 text-sm font-bold text-rose-700 inline-flex items-center gap-1.5"><Trash2 className="h-4 w-4" />Delete card</button>
+              <button onClick={remove} className="rounded-full bg-white dark:bg-[#1c1c1e] border border-rose-200 dark:border-rose-500/30 hover:border-rose-300 dark:hover:border-rose-500/30 px-4 py-2 text-sm font-bold text-rose-700 dark:text-rose-300 inline-flex items-center gap-1.5"><Trash2 className="h-4 w-4" />Delete card</button>
             </div>
 
             {/* Add-phone nudge — only for Google-only accounts. Optional,
@@ -1259,7 +1260,7 @@ export default function VakilCardPage() {
                 <div className="flex items-center justify-between gap-3">
                   <h3 className="text-sm font-black text-slate-900 dark:text-white">Add your phone number</h3>
                   {!phoneOpen && (
-                    <button type="button" onClick={() => { setPhoneOpen(true); setPhoneErr(""); }} className="text-sm font-bold text-[#635BFF]">
+                    <button type="button" onClick={() => { setPhoneOpen(true); setPhoneErr(""); }} className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff]">
                       Add number
                     </button>
                   )}
@@ -1278,12 +1279,12 @@ export default function VakilCardPage() {
                           value={phoneInput}
                           onChange={(e) => setPhoneInput(e.target.value)}
                           placeholder="+91 98765 43210"
-                          className="w-full rounded-2xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-base focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white px-4 py-2.5 text-base focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
-                        {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
+                        {phoneErr && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">{phoneErr}</p>}
                         <div className="flex gap-2">
-                          <button onClick={sendPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                          <button onClick={sendPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
                             {phoneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Phone className="h-4 w-4" />}
                             Send code
                           </button>
@@ -1299,12 +1300,12 @@ export default function VakilCardPage() {
                           value={phoneCode}
                           onChange={(e) => setPhoneCode(e.target.value)}
                           placeholder="123456"
-                          className="w-full rounded-2xl border border-slate-200 dark:border-white/10 px-4 py-2.5 text-base tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
+                          className="w-full rounded-2xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white px-4 py-2.5 text-base tracking-widest focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20"
                           autoFocus
                         />
-                        {phoneErr && <p className="text-sm font-semibold text-rose-700">{phoneErr}</p>}
+                        {phoneErr && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">{phoneErr}</p>}
                         <div className="flex gap-2">
-                          <button onClick={verifyPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
+                          <button onClick={verifyPhoneCode} disabled={phoneBusy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50">
                             {phoneBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />}
                             Verify
                           </button>
@@ -1327,7 +1328,7 @@ export default function VakilCardPage() {
                     <button
                       type="button"
                       onClick={() => { setPwOpen(true); setPwErr(""); setPwDone(false); }}
-                      className="text-sm font-bold text-[#635BFF]"
+                      className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff]"
                     >
                       {hasPassword ? "Change password" : "Set a password"}
                     </button>
@@ -1371,13 +1372,13 @@ export default function VakilCardPage() {
                       ariaLabel="Confirm new password"
                       onEnter={submitChangePassword}
                     />
-                    {pwErr && <p className="text-sm font-semibold text-rose-700">{pwErr}</p>}
-                    {pwDone && <p className="text-sm font-semibold text-emerald-700">Password updated.</p>}
+                    {pwErr && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">{pwErr}</p>}
+                    {pwDone && <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Password updated.</p>}
                     <div className="flex gap-2">
                       <button
                         onClick={submitChangePassword}
                         disabled={pwSaving}
-                        className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
+                        className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
                       >
                         {pwSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
                         Save
@@ -1410,7 +1411,7 @@ export default function VakilCardPage() {
                     onClick={() => navigate(`/setup?s=${key}&from=dashboard`)}
                     className="rounded-2xl bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-[#635BFF]/50 hover:shadow-sm transition-all px-4 py-3 text-left flex items-center gap-3"
                   >
-                    <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF]" /></span>
+                    <span className="h-9 w-9 rounded-xl bg-[#635BFF]/10 flex items-center justify-center flex-none"><Icon className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff]" /></span>
                     <span className="min-w-0 flex-1">
                       <p className="text-sm font-bold text-slate-800 dark:text-slate-200 hyphens-none">{label}</p>
                       {sub && <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate hyphens-none">{sub}</p>}
@@ -1420,7 +1421,7 @@ export default function VakilCardPage() {
               })}
               <button
                 onClick={() => navigate("/setup")}
-                className="rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] transition-colors px-4 py-3 text-left flex items-center gap-3"
+                className="rounded-2xl bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white transition-colors px-4 py-3 text-left flex items-center gap-3"
               >
                 <span className="h-9 w-9 rounded-xl bg-white/15 dark:bg-white/10 flex items-center justify-center flex-none"><Pencil className="h-4 w-4" /></span>
                 <p className="text-sm font-bold hyphens-none">Guided walkthrough</p>
@@ -1452,7 +1453,7 @@ export default function VakilCardPage() {
           <div className={panelSm}>
             <h2 className="text-base font-black tracking-tight text-slate-900 dark:text-white mb-2.5">Share</h2>
             <div className="flex flex-wrap gap-1.5">
-              <button onClick={copy} className={btnSm}>{copied ? <Check className="h-3.5 w-3.5 text-emerald-700" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy link"}</button>
+              <button onClick={copy} className={btnSm}>{copied ? <Check className="h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" /> : <Copy className="h-3.5 w-3.5" />}{copied ? "Copied" : "Copy link"}</button>
               <button onClick={share} className={btnSm}><Share2 className="h-3.5 w-3.5" />Share</button>
               {qrUrl && (
                 <a href={qrUrl} download={`${profile.username}-vakilcard-qr.gif`} onClick={() => track("qr_download", profile.id)} className={btnSm + " no-underline"}>
@@ -1500,7 +1501,7 @@ export default function VakilCardPage() {
             <div className="mt-3">
               <div className="flex items-center justify-between mb-1.5">
                 <p className="text-xs font-black text-slate-900 dark:text-white">Card theme</p>
-                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
               </div>
               {!pro ? (
                 <button type="button" onClick={() => setUpgradeFeature("premium_themes")} className="w-full rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-[#1c1c1e] hover:border-[#635BFF]/50 transition-colors p-3 text-left">
@@ -1529,10 +1530,10 @@ export default function VakilCardPage() {
             <div className="mt-4 pt-4 border-t border-slate-200 dark:border-white/10">
               <div className="flex items-center justify-between">
                 <p className="text-sm font-black text-slate-900 dark:text-white">Vakilpedia branding</p>
-                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+                {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
               </div>
               {!pro ? (
-                <button type="button" onClick={() => setUpgradeFeature("remove_branding")} className="text-sm font-bold text-[#635BFF] mt-1">Upgrade to remove it →</button>
+                <button type="button" onClick={() => setUpgradeFeature("remove_branding")} className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff] mt-1">Upgrade to remove it →</button>
               ) : (
                 <button
                   type="button"

@@ -75,27 +75,27 @@ export default function SuiteInvite({ invite }) {
         style={{
           width: "100%",
           maxWidth: 420,
-          background: "#fff",
+          background: "var(--vc-card-bg)",
           borderRadius: 20,
           padding: "28px 24px",
           boxShadow: "0 24px 60px rgba(15,23,42,0.22)",
           textAlign: "center",
-          color: "#0f172a",
+          color: "var(--vc-ink)",
         }}
       >
-        <p style={{ fontSize: 13, color: "#64748b", margin: 0 }}>
+        <p style={{ fontSize: 13, color: "var(--vc-ink-muted)", margin: 0 }}>
           Signed in to Vakilpedia as {invite.email}
         </p>
         <h2 style={{ fontSize: 22, fontWeight: 600, margin: "10px 0 6px" }}>
           {firstName ? `${firstName}, make your VakilCard` : "Make your VakilCard"}
         </h2>
-        <p style={{ fontSize: 14, color: "#475569", margin: "0 0 20px", lineHeight: 1.5 }}>
+        <p style={{ fontSize: 14, color: "var(--vc-ink-soft)", margin: "0 0 20px", lineHeight: 1.5 }}>
           One link with your chamber, timings, fee, UPI and contact. No new sign-in, no code on
           WhatsApp — we already know it&apos;s you.
         </p>
 
         {error && (
-          <p style={{ fontSize: 13, color: "#dc2626", margin: "0 0 12px" }}>{error}</p>
+          <p style={{ fontSize: 13, color: "var(--vc-danger)", margin: "0 0 12px" }}>{error}</p>
         )}
 
         <button
@@ -107,8 +107,8 @@ export default function SuiteInvite({ invite }) {
             padding: "12px 16px",
             borderRadius: 999,
             border: "none",
-            background: "#0f172a",
-            color: "#fff",
+            background: "var(--vc-btn-bg)",
+            color: "var(--vc-btn-fg)",
             fontSize: 15,
             fontWeight: 500,
             cursor: busy ? "default" : "pointer",
@@ -124,7 +124,7 @@ export default function SuiteInvite({ invite }) {
             marginTop: 10,
             background: "none",
             border: "none",
-            color: "#64748b",
+            color: "var(--vc-ink-muted)",
             fontSize: 13,
             cursor: "pointer",
           }}

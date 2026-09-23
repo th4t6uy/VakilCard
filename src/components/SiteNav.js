@@ -42,7 +42,7 @@ function LauncherTile({ item, onNavigate, compact }) {
     <a
       href={href}
       onClick={() => onNavigate && onNavigate()}
-      className={`group flex items-center gap-3 rounded-2xl border border-white/70 bg-white/70 hover:bg-white hover:border-[#635BFF]/30 hover:shadow-md hover:shadow-slate-200/60 transition-all no-underline ${
+      className={`group flex items-center gap-3 rounded-2xl border border-white/70 dark:border-white/10 bg-white/70 dark:bg-white/[0.06] hover:bg-white dark:hover:bg-white/10 hover:border-[#635BFF]/30 hover:shadow-md hover:shadow-slate-200/60 transition-all no-underline ${
         compact ? "p-2.5" : "p-3"
       }`}
     >
@@ -56,21 +56,21 @@ function LauncherTile({ item, onNavigate, compact }) {
       />
       <span className="min-w-0">
         <span className="flex items-center gap-1.5">
-          <span className="block text-[13px] font-black text-slate-900 leading-tight truncate group-hover:text-[#635BFF] transition-colors">
+          <span className="block text-[13px] font-black text-slate-900 dark:text-white leading-tight truncate group-hover:text-[#635BFF] dark:group-hover:text-[#a5a0ff] transition-colors">
             {item.name}
           </span>
           {item.soon && (
-            <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-wide text-slate-400 border border-slate-200 rounded-full px-1.5 py-px">
+            <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-wide text-slate-400 border border-slate-200 dark:border-white/10 rounded-full px-1.5 py-px">
               Soon
             </span>
           )}
           {item.flag && !item.soon && (
-            <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-wide text-[#635BFF] border border-[#635BFF]/30 rounded-full px-1.5 py-px">
+            <span className="flex-shrink-0 text-[9px] font-black uppercase tracking-wide text-[#635BFF] dark:text-[#a5a0ff] border border-[#635BFF]/30 rounded-full px-1.5 py-px">
               {item.flag}
             </span>
           )}
         </span>
-        <span className="block text-[11px] text-slate-500 leading-snug truncate">{item.tagline}</span>
+        <span className="block text-[11px] text-slate-500 dark:text-slate-400 leading-snug truncate">{item.tagline}</span>
       </span>
     </a>
   );
@@ -100,24 +100,38 @@ function CtaButton({ cta, className, onAfter }) {
 }
 
 // Light/dark switch -- same estate-wide pattern as every other Vakilpedia
-// app's nav (CaseLinx/CourtQue/SignLinx/Affidavit Maker/Account). Desktop
-// only, same as everywhere else -- none of them put it in the mobile menu.
-function ThemeToggle({ compact }) {
-  const { theme, toggle } = useTheme();
+// app's nav (CaseLinx/CourtQue/SignLinx/Affidavit Maker/Account).
+//
+// `theme`/`toggle` come from ONE useTheme() call in SiteNav and are passed
+// down, because useTheme() keeps its own React state per call and only
+// re-syncs from localStorage on mount / cross-tab. Three switches can be on
+// screen at once on a phone (top bar, open menu row, hidden desktop cluster),
+// and separate hook instances would drift out of step after the first tap.
+//
+// `mobile` is the phone/tablet variant that sits beside the hamburger in the
+// top bar (below `lg`, where the desktop cluster is hidden). It copies the
+// hamburger's size and glass so the two read as a pair.
+function ThemeToggle({ compact, mobile, scrolled, theme, toggle }) {
+  const label = theme === "dark" ? "Switch to light mode" : "Switch to dark mode";
+  const size = mobile
+    ? scrolled
+      ? "h-10 w-10 bg-white/95 dark:bg-[#0f172a]/75 border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none"
+      : "h-11 w-11 bg-white/85 dark:bg-[#0f172a]/55 border-white/70 dark:border-white/10 shadow-md dark:shadow-none"
+    : `border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 ${compact ? "h-8 w-8" : "h-9 w-9"}`;
+  const icon = mobile ? "h-5 w-5" : "h-3.5 w-3.5";
   return (
     <button
       type="button"
       onClick={toggle}
-      aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-      className={`flex items-center justify-center rounded-full border border-slate-200 dark:border-white/10 bg-white/80 dark:bg-white/5 hover:bg-white dark:hover:bg-white/10 transition-all ${
-        compact ? "h-8 w-8" : "h-9 w-9"
-      }`}
+      aria-label={label}
+      title={label}
+      data-testid={mobile ? "theme-toggle-mobile" : "theme-toggle"}
+      className={`flex items-center justify-center rounded-full border transition-all ${mobile ? "duration-500 flex-shrink-0" : ""} ${size}`}
     >
       {theme === "dark" ? (
-        <Sun className="h-3.5 w-3.5 text-amber-400" aria-hidden="true" />
+        <Sun className={`${icon} text-amber-400`} aria-hidden="true" />
       ) : (
-        <Moon className="h-3.5 w-3.5 text-indigo-600" aria-hidden="true" />
+        <Moon className={`${icon} text-indigo-600 dark:text-indigo-400`} aria-hidden="true" />
       )}
     </button>
   );
@@ -128,6 +142,7 @@ export default function SiteNav({ cta = null }) {
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [appsOpen, setAppsOpen] = useState(false);
   const appsRef = useRef(null);
+  const { theme, toggle } = useTheme();
 
   useEffect(() => {
     const onScroll = () => setScrolled((window.scrollY || 0) > 12);
@@ -233,7 +248,7 @@ export default function SiteNav({ cta = null }) {
               </a>
             ))}
             <div className="relative flex items-center gap-2 ml-1 pl-2 border-l border-slate-200/70 dark:border-white/10">
-              <ThemeToggle compact={scrolled} />
+              <ThemeToggle compact={scrolled} theme={theme} toggle={toggle} />
               {cta && (
                 <CtaButton
                   cta={cta}
@@ -243,11 +258,15 @@ export default function SiteNav({ cta = null }) {
             </div>
           </div>
 
-          {/* Same breakpoint as the desktop links (lg), so the halves meet. */}
+          {/* Same breakpoint as the desktop links (lg), so the halves meet.
+              Below lg the desktop cluster (and its theme switch) is hidden, so
+              the switch sits here, beside the menu button, always visible. */}
+          <div className="lg:hidden flex items-center gap-2 flex-shrink-0">
+          <ThemeToggle mobile scrolled={scrolled} theme={theme} toggle={toggle} />
           <button
             type="button"
             onClick={() => setMobileMenuOpen(!mobileMenuOpen)}
-            className={`lg:hidden rounded-full border text-slate-900 dark:text-white transition-all duration-500 ${
+            className={`rounded-full border text-slate-900 dark:text-white transition-all duration-500 ${
               scrolled ? "p-2.5 bg-white/95 dark:bg-[#0f172a]/75 border-slate-200/80 dark:border-white/10 shadow-sm dark:shadow-none" : "p-3 bg-white/85 dark:bg-[#0f172a]/55 border-white/70 dark:border-white/10 shadow-md dark:shadow-none"
             }`}
             aria-label="Toggle menu"
@@ -255,6 +274,7 @@ export default function SiteNav({ cta = null }) {
           >
             {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
+          </div>
         </div>
 
         <div
@@ -268,7 +288,7 @@ export default function SiteNav({ cta = null }) {
                 <CtaButton
                   cta={cta}
                   onAfter={() => setMobileMenuOpen(false)}
-                  className="w-full py-4 text-center rounded-2xl font-bold no-underline transition-colors bg-slate-900 text-white hover:bg-[#635BFF]"
+                  className="w-full py-4 text-center rounded-2xl font-bold no-underline transition-colors bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF]"
                 />
               </div>
             )}
@@ -301,6 +321,23 @@ export default function SiteNav({ cta = null }) {
                   {link.label}
                 </a>
               ))}
+              {/* Same switch as the top bar, as a labelled row (the top-bar
+                  button is icon-only). Stays open so the change is visible. */}
+              <button
+                type="button"
+                onClick={toggle}
+                aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+                data-testid="theme-toggle-menu-row"
+                className="w-full py-4 flex items-center justify-center gap-2 rounded-2xl bg-slate-50 dark:bg-white/5 border border-slate-100 dark:border-white/10 text-slate-700 dark:text-slate-300 font-bold hover:bg-white dark:hover:bg-white/10 transition-all"
+              >
+                {theme === "dark" ? (
+                  <Sun className="h-4 w-4 text-amber-400" aria-hidden="true" />
+                ) : (
+                  <Moon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" aria-hidden="true" />
+                )}
+                {theme === "dark" ? "Light mode" : "Dark mode"}
+              </button>
             </div>
           </div>
         </div>

@@ -210,6 +210,7 @@ export function QaBadge() {
   return (
     <div
       style={{ position: "fixed", bottom: 12, left: 12, zIndex: 9999 }}
+      /* vp-dark-audit-ignore: solid amber-400 badge; dark ink on amber is right in both themes */
       className="rounded-full bg-amber-400 text-amber-950 text-[11px] font-black px-3.5 py-1.5 shadow-lg tracking-wide"
     >
       QA MODE · Using Mock Backend

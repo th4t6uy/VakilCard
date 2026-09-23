@@ -4,6 +4,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
 import SuiteInvite from "./components/SuiteInvite";
 import ThemeSync from "./components/ThemeSync";
+import ThemeCornerToggle from "./components/ThemeCornerToggle";
 import AddToHomeScreen from './components/AddToHomeScreen';
 
 // Bridge tokens minted just-in-time by the NFC claim flow (api/vakilcard/nfc.js's
@@ -107,7 +108,7 @@ const VakilCardSetup = lazy(() => import("./pages/vakilcard/SetupWizard"));
 const VakilCardAdmin = lazy(() => import("./pages/vakilcard/AdminPage"));
 
 function Loading() {
-  return <div style={{ padding: 40, textAlign: "center", color: "#64748b" }}>Loading…</div>;
+  return <div style={{ padding: 40, textAlign: "center", color: "var(--vc-ink-muted)" }}>Loading…</div>;
 }
 
 function App() {
@@ -137,10 +138,14 @@ function App() {
               Same component as "/", so a signed-in owner who lands here still
               gets their dashboard. */}
           <Route path="/signup" element={<Suspense fallback={<Loading />}><VakilCardPage /></Suspense>} />
-          <Route path="/setup" element={<Suspense fallback={<Loading />}><VakilCardSetup /></Suspense>} />
+          {/* /setup and /admin render no SiteNav, so they get the standalone corner
+              switch (mounted here so it covers every state of both pages,
+              including loading / error / "not authorized"). Every other route
+              already carries the switch inside SiteNav. */}
+          <Route path="/setup" element={<><ThemeCornerToggle /><Suspense fallback={<Loading />}><VakilCardSetup /></Suspense></>} />
           {/* Founder-only — api/vakilcard/admin.js is the real gate, this
               route just lazy-loads the dashboard shell. */}
-          <Route path="/admin" element={<Suspense fallback={<Loading />}><VakilCardAdmin /></Suspense>} />
+          <Route path="/admin" element={<><ThemeCornerToggle /><Suspense fallback={<Loading />}><VakilCardAdmin /></Suspense></>} />
         </Routes>
       </BrowserRouter>
       <AddToHomeScreen appName="VakilCard" />

@@ -60,3 +60,17 @@
 ::-webkit-scrollbar-thumb:hover {
     background: #555;
 }
+
+/* Dark-mode scrollbar (this file loads after index.css, so it restates the
+   thumb/track for dark rather than letting the greys above win). */
+[data-theme="dark"] ::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+    background: #475569;
+}
+
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
+}

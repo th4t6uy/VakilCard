@@ -14,6 +14,28 @@
   --color-amber_glow: rgba(253, 238, 203, 0.35);
 }
 
+/* Inline-style colours for the few popups that are styled with style={{}}
+ * objects (SuiteInvite, AddToHomeScreen, the route-loading text). A style
+ * prop cannot carry a dark: variant, so they read these variables instead.
+ * Light values are the exact colours those components always had. */
+:root {
+  --vc-accent: #635BFF;
+  --vc-wizard-bg: linear-gradient(120deg, rgba(205,239,251,.35), rgba(253,238,203,.35)), #fff;
+  --vc-card-bg: #ffffff;
+  --vc-ink: #0f172a;
+  --vc-ink-soft: #475569;
+  --vc-ink-muted: #64748b;
+  --vc-danger: #dc2626;
+  --vc-btn-bg: #0f172a;
+  --vc-btn-fg: #ffffff;
+  --vc-pill-bg: rgba(255, 255, 255, 0.92);
+  --vc-bar-bg: rgba(255, 255, 255, 0.94);
+  --vc-hairline: rgba(20, 31, 58, 0.10);
+  --vc-a2hs-ink: #141f3a;
+  --vc-a2hs-btn-bg: #141f3a;
+  --vc-a2hs-btn-fg: #ffffff;
+}
+
 /* Dark theme -- added 2026-09-17, matching the estate standard shipped
  * 2026-09-16 (CaseLinx/CourtQue/SignLinx/Affidavit Maker/Account/the main
  * site). Same variable names as the light block above, so every class that
@@ -29,6 +51,35 @@
   --color-purple_glow: rgba(129, 140, 248, 0.18);
   --color-blue_glow: rgba(56, 189, 248, 0.12);
   --color-amber_glow: rgba(245, 158, 11, 0.16);
+
+  /* Native controls (select dropdown lists, date/time pickers, scrollbars,
+   * autofill) draw dark when the page is dark. Without this a select's option
+   * list opens as white text on a white popup. */
+  color-scheme: dark;
+
+  --vc-accent: #a5a0ff;
+  --vc-wizard-bg: linear-gradient(120deg, rgba(56,189,248,.10), rgba(245,158,11,.10)), #0b1120;
+  --vc-card-bg: #111a2e;
+  --vc-ink: #f1f5f9;
+  --vc-ink-soft: #cbd5e1;
+  --vc-ink-muted: #94a3b8;
+  --vc-danger: #f87171;
+  --vc-btn-bg: #ffffff;
+  --vc-btn-fg: #0f172a;
+  --vc-pill-bg: rgba(30, 41, 59, 0.92);
+  --vc-bar-bg: rgba(15, 23, 42, 0.94);
+  --vc-hairline: rgba(255, 255, 255, 0.12);
+  --vc-a2hs-ink: #f1f5f9;
+  --vc-a2hs-btn-bg: #ffffff;
+  --vc-a2hs-btn-fg: #0f172a;
+}
+
+/* body's own colour is set below with a plain rule, which beats Tailwind's
+ * base-layer text colour -- so it has to be flipped here or every un-classed
+ * piece of text (inputs, table cells, plain paragraphs) stays dark navy on the
+ * dark page. */
+[data-theme="dark"] body {
+  color: var(--color-fg);
 }
 
 body {
@@ -122,6 +173,11 @@ i, em, .italic {
   * {
     border-color: var(--color-gray-200, currentcolor);
   }
+  /* Un-coloured borders (a bare `border` class) fall back to light grey above,
+     which glares on the dark page. Utilities still win over this rule. */
+  [data-theme="dark"] * {
+    border-color: rgba(255, 255, 255, 0.1);
+  }
   body {
     @apply text-slate-900 bg-white antialiased;
     font-family: 'Inter Tight', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Open Sans', 'Helvetica Neue', sans-serif;
@@ -149,6 +205,15 @@ i, em, .italic {
   }
   .custom-scrollbar::-webkit-scrollbar-thumb:hover {
     background: #999;
+  }
+  [data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-track {
+    background: rgba(255, 255, 255, 0.06);
+  }
+  [data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #475569;
+  }
+  [data-theme="dark"] .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #64748b;
   }
 
   /* Mobile Spacing and Width Optimization - Removing intrusive centering */
@@ -378,6 +443,12 @@ textarea:invalid:not(:placeholder-shown) {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: #94a3b8;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb {
+  background: #475569;
+}
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+  background: #64748b;
 }
 
 /* Brand hero accent — EB Garamond Italic for highlight phrases inside

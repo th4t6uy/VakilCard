@@ -90,7 +90,7 @@ export default function LiveCardPreview({ form, theme = "dark", className = "" }
     <div className={className}>
       <div
         ref={shellRef}
-        className="relative overflow-hidden rounded-[2rem] border border-slate-200/70 shadow-lg"
+        className="relative overflow-hidden rounded-[2rem] border border-slate-200/70 dark:border-white/10 shadow-lg"
         style={{ background: "#050508", height: Math.round(DS_H * scale) }}
       >
         <iframe

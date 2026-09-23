@@ -363,6 +363,124 @@ function buildLinks(p, pro = false) {
 }
 
 /**
+ * Visitor theme persistence (2026-09-23, "saved light/dark switch on every
+ * page"). The card is cached PUBLICLY (s-maxage), so the server can never read
+ * the visitor's cookie -- everything below runs in the browser, and the HTML
+ * that ships is identical for every visitor.
+ *
+ * Why this needs more than "set data-theme early": the design-system card
+ * (public/ds/ui_kits/vakilcard/VakilCardApp.js, generated from design_system/,
+ * not editable here) owns the theme in React state that ALWAYS starts as
+ * 'dark', and a useEffect writes that state to <html data-theme> on mount --
+ * after mount.js has applied boot.theme. So a saved (or ?theme=light) value
+ * set on <html> is overwritten to dark the moment the card mounts, and the
+ * card's toggle icon/state would disagree with the page. We therefore
+ *   1. THEME_HEAD_SCRIPT (blocking, in <head>, before first paint): resolve
+ *      the wanted theme and put it on <html>. Order of precedence: the
+ *      ?theme= URL param, then the saved choice (only when vp-theme-explicit
+ *      is "1" -- cookie first, then localStorage, exactly like every other
+ *      app's THEME_INIT), else nothing (default stays dark).
+ *   2. themeBootScript (right after window.__VAKILCARD_BOOT__, before
+ *      mount.js): put the wanted theme into boot.theme so mount.js applies it,
+ *      then when the card's own toggle button appears, click it once so the
+ *      component's state matches (same tick as the mount commit, before
+ *      paint), and finally watch <html data-theme> with a MutationObserver:
+ *      any change after that point is the visitor pressing the card's toggle,
+ *      and is persisted with the same keys/cookie attributes as
+ *      CourtQue/web/src/lib/useTheme.ts.
+ * Key names, values and cookie attributes must stay in sync with that file.
+ */
+const THEME_HEAD_SCRIPT = (themeParam) => `<script>
+(function () {
+  window.__VC_THEME = null;
+  try {
+    function ls(k) { try { return localStorage.getItem(k); } catch (e) { return null; } }
+    function ck(n) {
+      try {
+        var m = document.cookie.match(new RegExp("(?:^|; )" + n + "=([^;]*)"));
+        return m ? decodeURIComponent(m[1]) : null;
+      } catch (e) { return null; }
+    }
+    var want = ${JSON.stringify(themeParam)};
+    if (!want) {
+      var saved = ck("vp-theme") || ls("vp-theme");
+      var explicit = ck("vp-theme-explicit") || ls("vp-theme-explicit");
+      if (explicit === "1" && (saved === "light" || saved === "dark")) want = saved;
+    }
+    if (want === "light" || want === "dark") {
+      window.__VC_THEME = want;
+      document.documentElement.setAttribute("data-theme", want);
+    }
+  } catch (e) {}
+})();
+</script>`;
+
+const THEME_BOOT_SCRIPT = `<script>
+(function () {
+  var doc = document.documentElement;
+  var want = window.__VC_THEME;
+  var boot = window.__VAKILCARD_BOOT__;
+  // mount.js applies boot.theme on load; without this it would put the
+  // server's (always-dark, unless ?theme=light) value back over the saved one.
+  if (want && boot) boot.theme = want;
+  if (typeof MutationObserver === "undefined") return;
+
+  var ONE_YEAR = 60 * 60 * 24 * 365;
+  // Same rule as cookieDomainAttr() in CourtQue/web/src/lib/useTheme.ts.
+  function cookieDomainAttr() {
+    return /vakilpedia\\.com$/.test(window.location.hostname) ? "; domain=.vakilpedia.com" : "";
+  }
+  function writeCookie(name, value) {
+    document.cookie = name + "=" + encodeURIComponent(value) + cookieDomainAttr() + "; path=/; max-age=" + ONE_YEAR + "; SameSite=Lax";
+  }
+  function persist(theme) {
+    try { localStorage.setItem("vp-theme", theme); } catch (e) {}
+    try { writeCookie("vp-theme", theme); } catch (e) {}
+    try { localStorage.setItem("vp-theme-explicit", "1"); } catch (e) {}
+    try { writeCookie("vp-theme-explicit", "1"); } catch (e) {}
+  }
+
+  // 'live'     -> every change of <html data-theme> is the visitor's toggle.
+  // 'waiting'  -> want is light but the card has not mounted yet (its initial
+  //               state is dark and it will write that to <html> on mount);
+  //               'settling' is the same once we have clicked its toggle.
+  var phase = want === "light" ? "waiting" : "live";
+  var last = doc.getAttribute("data-theme");
+
+  new MutationObserver(function () {
+    var cur = doc.getAttribute("data-theme");
+    if (cur !== "light" && cur !== "dark") return;
+    if (phase === "waiting") return;
+    if (phase === "settling") {
+      if (cur === want) { phase = "live"; last = cur; }
+      return;
+    }
+    if (cur === last) return;
+    last = cur;
+    persist(cur);
+  }).observe(doc, { attributes: true, attributeFilter: ["data-theme"] });
+
+  if (phase !== "waiting") return;
+  var root = document.getElementById("root");
+  if (!root) return;
+  var stop = null;
+  function sync() {
+    var btn = root.querySelector('button[aria-label="Toggle theme"]');
+    if (!btn) return false;
+    phase = "settling";
+    btn.click();
+    if (doc.getAttribute("data-theme") === want) { phase = "live"; last = want; }
+    return true;
+  }
+  var finder = new MutationObserver(function () {
+    if (sync()) { finder.disconnect(); clearTimeout(stop); }
+  });
+  finder.observe(root, { childList: true, subtree: true });
+  stop = setTimeout(function () { finder.disconnect(); }, 15000);
+})();
+</script>`;
+
+/**
  * SSR shell around the Design System card.
  * mode: "live" (public card) | "preview" (owner draft preview) | "demo"
  * (marketing showcase — the DS's own demo profile, no DB round-trip).
@@ -370,6 +488,9 @@ function buildLinks(p, pro = false) {
 function renderPage(p, themeOverride, mode = "live") {
   const demo = mode === "demo";
   const theme = themeOverride === "light" ? "light" : "dark"; // DS is dark-first
+  // The URL param, when it is a real theme name, beats any saved visitor
+  // choice (see THEME_HEAD_SCRIPT). Anything else means "no param".
+  const themeParam = themeOverride === "light" || themeOverride === "dark" ? themeOverride : null;
   const url = demo ? DASHBOARD_SITE : `${SITE}/${p.username}`;
   const title = demo
     ? "VakilCard — Interactive Demo | Vakilpedia"
@@ -488,6 +609,7 @@ ${p.photo_url ? `<meta property="og:image" content="${esc(p.photo_url)}">` : `<m
      narrower viewports would otherwise squeeze and clip the design. -->
 <meta name="viewport" content="width=412">
 <base href="/ds/ui_kits/vakilcard/">
+${THEME_HEAD_SCRIPT(themeParam)}
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(desc)}">
 ${seoHead}
@@ -598,6 +720,7 @@ html, body { overflow: hidden; height: 100%; touch-action: manipulation; }
 ${hideBranding ? "" : `<a href="${DASHBOARD_SITE}" id="vc-branding" style="position:fixed;left:50%;transform:translateX(-50%);bottom:8px;z-index:97;display:inline-flex;align-items:center;gap:6px;padding:5px 14px;border-radius:999px;background:rgba(10,10,16,.72);backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px);border:1px solid rgba(255,255,255,.12);color:rgba(255,255,255,.75);font:700 10.5px system-ui,sans-serif;letter-spacing:.04em;text-decoration:none">${esc(tierLabel)}</a>`}
 </div></div>
 <script>window.__VAKILCARD_BOOT__ = ${JSON.stringify(boot).replace(/</g, "\\u003c")};</script>
+${THEME_BOOT_SCRIPT}
 <script src="/ds/react.production.min.js"></script>
 <script src="/ds/react-dom.production.min.js"></script>
 <script src="/ds/_ds_bundle.js"></script>

@@ -37,12 +37,12 @@ import { isQaPhone, startQaSession, QaBadge } from "../../lib/vakilcardQa";
 export const GOOGLE_AUTH_ENABLED = true;
 
 const inputCls =
-  "w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base text-slate-900 placeholder-slate-400 focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 transition-colors";
+  "w-full rounded-2xl border border-slate-200 dark:border-white/15 bg-white dark:bg-white/5 px-4 py-3.5 text-base text-slate-900 dark:text-white placeholder-slate-400 focus:border-[#635BFF] focus:outline-none focus:ring-2 focus:ring-[#635BFF]/20 transition-colors";
 const primaryBtn =
-  "w-full rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:bg-slate-100 disabled:text-slate-400";
+  "w-full rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:bg-slate-100 dark:disabled:bg-white/[0.05] disabled:text-slate-400 dark:disabled:text-slate-500";
 const secondaryBtn =
-  "w-full rounded-full bg-white border border-slate-200 hover:border-slate-300 px-8 py-3.5 font-bold text-slate-700 transition-colors";
-const glass = "bg-white/80 backdrop-blur-xl border border-slate-200/60 shadow-sm";
+  "w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-8 py-3.5 font-bold text-slate-700 dark:text-slate-300 transition-colors";
+const glass = "bg-white/80 dark:bg-white/[0.06] backdrop-blur-xl border border-slate-200/60 dark:border-white/10 shadow-sm";
 
 const ERRORS = {
   invalid_phone: "That doesn't look like a valid mobile number.",
@@ -92,7 +92,7 @@ export function PasswordInput({ value, onChange, placeholder = "Password", autoC
       <button
         type="button"
         tabIndex={-1}
-        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
         onClick={() => setShow((s) => !s)}
         aria-label={show ? "Hide password" : "Show password"}
       >
@@ -111,9 +111,9 @@ export function passwordStrength(pw) {
   if (/[a-z]/.test(s) && /[A-Z]/.test(s)) score++;
   if (/\d/.test(s)) score++;
   if (/[^a-zA-Z0-9]/.test(s)) score++;
-  if (score <= 1) return { label: "Weak", tone: "bg-rose-400", width: "w-1/4", text: "text-rose-600" };
-  if (score <= 3) return { label: "Okay", tone: "bg-amber-400", width: "w-2/4", text: "text-amber-600" };
-  return { label: "Strong", tone: "bg-emerald-500", width: "w-full", text: "text-emerald-600" };
+  if (score <= 1) return { label: "Weak", tone: "bg-rose-400", width: "w-1/4", text: "text-rose-600 dark:text-rose-400" };
+  if (score <= 3) return { label: "Okay", tone: "bg-amber-400", width: "w-2/4", text: "text-amber-600 dark:text-amber-400" };
+  return { label: "Strong", tone: "bg-emerald-500", width: "w-full", text: "text-emerald-600 dark:text-emerald-400" };
 }
 
 export function StrengthBar({ password }) {
@@ -121,7 +121,7 @@ export function StrengthBar({ password }) {
   if (!s) return null;
   return (
     <div className="mt-2 flex items-center gap-2">
-      <div className="h-1.5 flex-1 bg-slate-100 rounded-full overflow-hidden">
+      <div className="h-1.5 flex-1 bg-slate-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
         <div className={`h-full rounded-full transition-all duration-300 ${s.tone} ${s.width}`} />
       </div>
       <span className={`text-[11px] font-bold ${s.text}`}>{s.label}</span>
@@ -149,23 +149,23 @@ function SectionHead({ id, eyebrow, children, sub }) {
   return (
     <div>
       <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 m-0">{eyebrow}</p>
-      <h2 id={id} className="text-2xl sm:text-3xl font-black text-slate-900 tracking-[-0.03em] mt-2 mb-0">
+      <h2 id={id} className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-[-0.03em] mt-2 mb-0">
         {children}
       </h2>
-      {sub && <p className="text-slate-600 mt-3 max-w-2xl leading-relaxed mb-0">{sub}</p>}
+      {sub && <p className="text-slate-600 dark:text-slate-300 mt-3 max-w-2xl leading-relaxed mb-0">{sub}</p>}
     </div>
   );
 }
 
 function FeatureTile({ icon: Icon, title, body }) {
   return (
-    <div className="flex items-start gap-4 bg-white border border-slate-200 rounded-3xl p-5 h-full">
+    <div className="flex items-start gap-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 h-full">
       <span className="grid place-items-center w-12 h-12 rounded-2xl flex-none" style={{ backgroundColor: `${ACCENT}12` }} aria-hidden="true">
-        <Icon className="w-6 h-6" style={{ color: ACCENT }} />
+        <Icon className="w-6 h-6" style={{ color: "var(--vc-accent)" }} />
       </span>
       <div className="min-w-0 flex-1">
-        <h3 className="text-base sm:text-lg font-black tracking-tight text-slate-900 m-0">{title}</h3>
-        <p className="mt-1.5 text-[0.92rem] text-slate-600 leading-relaxed font-medium mb-0">{body}</p>
+        <h3 className="text-base sm:text-lg font-black tracking-tight text-slate-900 dark:text-white m-0">{title}</h3>
+        <p className="mt-1.5 text-[0.92rem] text-slate-600 dark:text-slate-300 leading-relaxed font-medium mb-0">{body}</p>
       </div>
     </div>
   );
@@ -190,9 +190,9 @@ const INCLUDED = [
 ];
 
 const MiniAction = ({ icon: Icon, label }) => (
-  <div className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white border border-slate-200 py-3.5 min-w-0">
-    <Icon className="h-5 w-5 text-slate-700" />
-    <span className="text-[10px] font-bold text-slate-600 truncate max-w-full px-0.5">{label}</span>
+  <div className="flex flex-col items-center justify-center gap-1.5 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 py-3.5 min-w-0">
+    <Icon className="h-5 w-5 text-slate-700 dark:text-slate-300" />
+    <span className="text-[10px] font-bold text-slate-600 dark:text-slate-300 truncate max-w-full px-0.5">{label}</span>
   </div>
 );
 
@@ -445,7 +445,7 @@ function DemoPhone({ onCreate }) {
               >
                 <img src="/vakilcard_card.webp" alt="VakilCard preview" className="w-full max-w-[230px] drop-shadow-lg" width="1320" height="791" />
                 {status === "fallback" && (
-                  <a href="/demo" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] font-bold text-sm">
+                  <a href="/demo" target="_blank" rel="noopener noreferrer" className="text-[#635BFF] dark:text-[#a5a0ff] font-bold text-sm">
                     See the live demo →
                   </a>
                 )}
@@ -800,11 +800,11 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   };
 
   const unameMsg = {
-    checking: ["text-slate-500", "Checking availability…"],
-    ok: ["text-emerald-700", `Available — vakilpedia.com/${uname.toLowerCase().trim()}`],
-    taken: ["text-rose-700", "Already taken."],
-    reserved: ["text-rose-700", "Reserved — please pick another."],
-    invalid: ["text-rose-700", "3–30 chars: letters, numbers, dots, hyphens, underscores. Not only numbers."],
+    checking: ["text-slate-500 dark:text-slate-400", "Checking availability…"],
+    ok: ["text-emerald-700 dark:text-emerald-300", `Available — vakilpedia.com/${uname.toLowerCase().trim()}`],
+    taken: ["text-rose-700 dark:text-rose-300", "Already taken."],
+    reserved: ["text-rose-700 dark:text-rose-300", "Reserved — please pick another."],
+    invalid: ["text-rose-700 dark:text-rose-300", "3–30 chars: letters, numbers, dots, hyphens, underscores. Not only numbers."],
   }[unameStatus];
 
   /* ------- verification card (shared between inline + focused views) ------- */
@@ -813,16 +813,16 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
     <div ref={refEl} className={`${glass} rounded-[2.5rem] p-6 sm:p-8 lg:p-7`}>
       {step === "phone" && (
         <>
-          <h3 className="text-2xl font-black tracking-tight text-slate-900">
+          <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             {manage ? "Manage your VakilCard" : "Ready to claim your VakilCard?"}
           </h3>
-          <p className="text-slate-500 mt-2 text-left hyphens-none">
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">
             {manage
               ? "Enter the WhatsApp number your card is registered with — we'll verify it and open your dashboard."
               : "Join the lawyers building their professional identity online. Enter your WhatsApp number to get started."}
           </p>
           <div className="mt-5 flex items-center">
-            <span className="rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 px-3 py-3.5 text-base text-slate-500">+91</span>
+            <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3.5 text-base text-slate-500 dark:text-slate-400">+91</span>
             <input
               className={inputCls + " rounded-l-none"}
               type="tel" inputMode="numeric" autoComplete="tel-national"
@@ -831,12 +831,12 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               onKeyDown={(e) => e.key === "Enter" && phone && sendCode()}
             />
           </div>
-          {error && <p className="text-sm font-semibold text-rose-700 mt-3 text-left hyphens-none">{error}</p>}
+          {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
           <button className={primaryBtn + " mt-5"} disabled={loading || !phone.trim()} onClick={() => sendCode()}>
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
             Verify on WhatsApp
           </button>
-          <p className="text-xs text-slate-500 mt-4 text-center hyphens-none">
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 text-center hyphens-none">
             {manage
               ? "One flow for everything: new numbers start onboarding, registered numbers open the dashboard."
               : "No lengthy forms. We'll verify your WhatsApp, reserve your unique VakilCard address, and guide you through creating your professional profile. Your number stays private unless you choose to display it."}
@@ -848,6 +848,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             <p className="text-sm font-bold text-white/90">Already have a VakilCard?</p>
             <button
               type="button"
+              /* vp-dark-audit-ignore: white button on the brand-purple tile; identical in both themes */
               className="mt-3 w-full rounded-full bg-white px-6 py-3.5 text-sm font-black text-[#635BFF] hover:bg-slate-50 transition-colors shadow-sm"
               onClick={() => {
                 setError("");
@@ -869,10 +870,10 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
       {step === "code" && (
         <>
-          <h3 className="text-2xl font-black tracking-tight text-slate-900">Check WhatsApp</h3>
-          <p className="text-slate-500 mt-2 text-left hyphens-none">
-            We sent a 6-digit code to <b className="text-slate-900">{phone}</b>.
-            <button className="text-[#635BFF] font-bold ml-2 inline-flex items-center gap-1" onClick={() => { setStep("phone"); setError(""); }}>
+          <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Check WhatsApp</h3>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">
+            We sent a 6-digit code to <b className="text-slate-900 dark:text-white">{phone}</b>.
+            <button className="text-[#635BFF] dark:text-[#a5a0ff] font-bold ml-2 inline-flex items-center gap-1" onClick={() => { setStep("phone"); setError(""); }}>
               <Pencil className="h-3 w-3" />Edit
             </button>
           </p>
@@ -884,12 +885,12 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             onChange={(e) => setCode(e.target.value.replace(/\D/g, ""))}
             onKeyDown={(e) => e.key === "Enter" && code.length === 6 && submitCode()}
           />
-          {error && <p className="text-sm font-semibold text-rose-700 mt-3 text-left hyphens-none">{error}</p>}
+          {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
           <button className={primaryBtn + " mt-5"} disabled={loading || code.length !== 6} onClick={submitCode}>
             {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Check className="h-5 w-5" />}
             Verify
           </button>
-          <button className="w-full text-sm font-bold text-slate-500 mt-4 disabled:opacity-50" disabled={cooldown > 0 || loading} onClick={() => sendCode(true)}>
+          <button className="w-full text-sm font-bold text-slate-500 dark:text-slate-400 mt-4 disabled:opacity-50" disabled={cooldown > 0 || loading} onClick={() => sendCode(true)}>
             {cooldown > 0 ? `Resend code in ${cooldown}s` : "Resend code"}
           </button>
         </>
@@ -898,11 +899,11 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
       {step === "welcome" && session && (
         <div className="text-center">
           <img src="/vakilcard_card.webp" alt="VakilCard" className="mx-auto w-full max-w-[240px] drop-shadow-xl mb-3" width="1320" height="791" />
-          <PartyPopper className="h-10 w-10 text-[#635BFF] mx-auto" />
-          <h3 className="text-2xl font-black tracking-tight text-slate-900 mt-3">Welcome to VakilCard</h3>
-          <p className="text-slate-500 mt-2 text-center hyphens-none">Your digital chamber is ready. Your address is reserved:</p>
-          <p className="font-black text-[#635BFF] mt-2 break-all text-center">vakilpedia.com/{session.username}</p>
-          <p className="text-slate-500 mt-2 text-center hyphens-none">Let's personalise it.</p>
+          <PartyPopper className="h-10 w-10 text-[#635BFF] dark:text-[#a5a0ff] mx-auto" />
+          <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white mt-3">Welcome to VakilCard</h3>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-center hyphens-none">Your digital chamber is ready. Your address is reserved:</p>
+          <p className="font-black text-[#635BFF] dark:text-[#a5a0ff] mt-2 break-all text-center">vakilpedia.com/{session.username}</p>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-center hyphens-none">Let's personalise it.</p>
           <button className={primaryBtn + " mt-6"} onClick={() => { setPw1(""); setPw2(""); setStep("createpw"); }}>
             Build My VakilCard <ArrowRight className="h-5 w-5" />
           </button>
@@ -912,10 +913,10 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
       {(step === "createpw" || step === "resetpw") && (
         <>
-          <h3 className="text-2xl font-black tracking-tight text-slate-900">
+          <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
             {step === "resetpw" ? "Create a new password" : "Set your password"}
           </h3>
-          <p className="text-slate-500 mt-2 text-left hyphens-none">
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">
             {step === "resetpw"
               ? "You're verified. Choose a new password for future sign-ins."
               : "Sign in instantly next time with your phone number and password — no waiting for WhatsApp codes."}
@@ -931,7 +932,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                 ariaLabel="Create password"
               />
               <StrengthBar password={pw1} />
-              {pwTooShort && <p className="text-xs font-semibold text-slate-500 mt-1.5">At least 8 characters.</p>}
+              {pwTooShort && <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1.5">At least 8 characters.</p>}
             </div>
             <PasswordInput
               value={pw2}
@@ -941,9 +942,9 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               ariaLabel="Confirm password"
               onEnter={() => pwReady && savePassword(step === "resetpw" ? "dashboard" : "username")}
             />
-            {pwMismatch && <p className="text-sm font-semibold text-rose-700">Passwords don't match.</p>}
+            {pwMismatch && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">Passwords don't match.</p>}
           </div>
-          {error && <p className="text-sm font-semibold text-rose-700 mt-3 text-left hyphens-none">{error}</p>}
+          {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
           <button
             className={primaryBtn + " mt-5"}
             disabled={loading || !pwReady}
@@ -953,7 +954,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             {step === "resetpw" ? "Save & Sign In" : "Save Password"}
           </button>
           {step === "createpw" && (
-            <button className="w-full text-sm font-bold text-slate-500 mt-4" onClick={() => setStep("username")}>
+            <button className="w-full text-sm font-bold text-slate-500 dark:text-slate-400 mt-4" onClick={() => setStep("username")}>
               Skip for now — I'll use WhatsApp codes
             </button>
           )}
@@ -962,12 +963,12 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
       {step === "username" && session && (
         <>
-          <h3 className="text-2xl font-black tracking-tight text-slate-900">Choose your VakilCard Handle</h3>
-          <p className="text-slate-500 mt-2 text-left hyphens-none">Your handle becomes your permanent public profile address — <b className="text-slate-700">vakilpedia.com/{(uname || autoPreview || "sidharthgautam").toLowerCase().trim()}</b>. Keep it memorable, unique and professional. You can change it later.</p>
+          <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Choose your VakilCard Handle</h3>
+          <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">Your handle becomes your permanent public profile address — <b className="text-slate-700 dark:text-slate-300">vakilpedia.com/{(uname || autoPreview || "sidharthgautam").toLowerCase().trim()}</b>. Keep it memorable, unique and professional. You can change it later.</p>
           <p className="text-xs text-slate-400 mt-2 text-left hyphens-none">One link to share with clients, on QR codes, business cards, WhatsApp, email signatures, social media, court filings and your digital visiting card.</p>
 
           <label className="block mt-5">
-            <span className="text-sm font-bold text-slate-700">Your name</span>
+            <span className="text-sm font-bold text-slate-700 dark:text-slate-300">Your name</span>
             <input
               className={inputCls + " mt-1.5"}
               placeholder="Sidharth Gautam"
@@ -982,26 +983,26 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             <button
               type="button"
               onClick={() => setUnameChoice("auto")}
-              className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${unameChoice === "auto" ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 bg-white hover:border-slate-300"}`}
+              className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${unameChoice === "auto" ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-white/20"}`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-black text-slate-900">Simple address</p>
-                <span className="rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Free</span>
+                <p className="text-sm font-black text-slate-900 dark:text-white">Simple address</p>
+                <span className="rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Free</span>
               </div>
-              <p className="text-xs text-slate-500 mt-1 break-all">vakilpedia.com/<b className="text-slate-800">{autoPreview}</b></p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">vakilpedia.com/<b className="text-slate-800 dark:text-white">{autoPreview}</b></p>
             </button>
 
             {/* Option 2 — PHONE (free, explicit consent) */}
             <button
               type="button"
               onClick={() => setUnameChoice("phone")}
-              className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${unameChoice === "phone" ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 bg-white hover:border-slate-300"}`}
+              className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${unameChoice === "phone" ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-white/20"}`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-black text-slate-900">My phone number</p>
-                <span className="rounded-full bg-emerald-100 text-emerald-700 text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Free</span>
+                <p className="text-sm font-black text-slate-900 dark:text-white">My phone number</p>
+                <span className="rounded-full bg-emerald-100 dark:bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Free</span>
               </div>
-              <p className="text-xs text-slate-500 mt-1 break-all">vakilpedia.com/<b className="text-slate-800">{phoneDigits}</b></p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all">vakilpedia.com/<b className="text-slate-800 dark:text-white">{phoneDigits}</b></p>
               {unameChoice === "phone" && (
                 <label className="flex items-start gap-2 mt-3 cursor-pointer" onClick={(e) => e.stopPropagation()}>
                   <input
@@ -1010,7 +1011,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                     checked={phoneConsent}
                     onChange={(e) => setPhoneConsent(e.target.checked)}
                   />
-                  <span className="text-xs font-semibold text-slate-600 text-left hyphens-none">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-300 text-left hyphens-none">
                     My phone number will become part of my public VakilCard URL.
                   </span>
                 </label>
@@ -1024,17 +1025,17 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                 setUnameChoice("custom");
                 if (!proActive) setShowUpgrade(true);
               }}
-              className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${unameChoice === "custom" ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 bg-white hover:border-slate-300"}`}
+              className={`w-full text-left rounded-2xl border-2 p-4 transition-colors ${unameChoice === "custom" ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 hover:border-slate-300 dark:hover:border-white/20"}`}
             >
               <div className="flex items-center justify-between">
-                <p className="text-sm font-black text-slate-900">Custom username</p>
-                <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>
+                <p className="text-sm font-black text-slate-900 dark:text-white">Custom username</p>
+                <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>
               </div>
-              <p className="text-xs text-slate-500 mt-1">vakilpedia.com/<b className="text-slate-800">sidharthgautam</b> · vakilpedia.com/<b className="text-slate-800">sidharth-gautam-law</b></p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">vakilpedia.com/<b className="text-slate-800 dark:text-white">sidharthgautam</b> · vakilpedia.com/<b className="text-slate-800 dark:text-white">sidharth-gautam-law</b></p>
               {unameChoice === "custom" && proActive && (
                 <div onClick={(e) => e.stopPropagation()} className="mt-3">
                   <div className="flex items-center">
-                    <span className="rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 px-3 py-3.5 text-sm text-slate-500">vakilpedia.com/</span>
+                    <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3.5 text-sm text-slate-500 dark:text-slate-400">vakilpedia.com/</span>
                     <input
                       className={inputCls + " rounded-l-none"} autoCapitalize="none" autoCorrect="off"
                       placeholder="your.name" value={uname} aria-label="Choose username"
@@ -1046,7 +1047,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                     <div className="mt-2 flex flex-wrap gap-2" onClick={(e) => e.stopPropagation()}>
                       <span className="text-xs font-semibold text-slate-400 self-center">Try:</span>
                       {[`${uname.toLowerCase().trim()}law`, `adv${uname.toLowerCase().trim()}`, `${uname.toLowerCase().trim()}1`].map((s) => (
-                        <button key={s} type="button" onClick={() => checkUname(s)} className="rounded-full bg-slate-100 hover:bg-slate-200 px-3 py-1 text-xs font-bold text-slate-700 transition-colors">{s}</button>
+                        <button key={s} type="button" onClick={() => checkUname(s)} className="rounded-full bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/15 px-3 py-1 text-xs font-bold text-slate-700 dark:text-slate-300 transition-colors">{s}</button>
                       ))}
                     </div>
                   )}
@@ -1055,7 +1056,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             </button>
           </div>
 
-          {error && <p className="text-sm font-semibold text-rose-700 mt-3 text-left hyphens-none">{error}</p>}
+          {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
           <button
             className={primaryBtn + " mt-5"}
             disabled={
@@ -1101,7 +1102,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
       <SiteFooter />
     </div>
   );
-  const poweredBy = <p className="text-center text-xs text-slate-500 mt-5">Powered by Vakilpedia · Free forever</p>;
+  const poweredBy = <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-5">Powered by Vakilpedia · Free forever</p>;
 
   /* ------- Welcome Back — existing users, password-first ------- */
 
@@ -1113,17 +1114,17 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
           <button
             type="button"
             onClick={() => { setView("signup"); setError(""); setPassword(""); }}
-            className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+            className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="h-4 w-4" /> Back to registration
           </button>
           <div className={`${glass} rounded-[2.5rem] p-7 sm:p-9`}>
-            <h3 className="text-2xl font-black tracking-tight text-slate-900">Welcome back</h3>
-            <p className="text-slate-500 mt-2 text-left hyphens-none">
+            <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Welcome back</h3>
+            <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">
               Sign in with your phone number and password.
             </p>
             <div className="mt-5 flex items-center">
-              <span className="rounded-l-2xl border border-r-0 border-slate-200 bg-slate-50 px-3 py-3.5 text-base text-slate-500">+91</span>
+              <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3.5 text-base text-slate-500 dark:text-slate-400">+91</span>
               <input
                 className={inputCls + " rounded-l-none"}
                 type="tel" inputMode="numeric" autoComplete="tel-national"
@@ -1144,14 +1145,14 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                 onEnter={submitPasswordLogin}
               />
             </div>
-            {error && <p className="text-sm font-semibold text-rose-700 mt-3 text-left hyphens-none">{error}</p>}
+            {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
             <button className={primaryBtn + " mt-5"} disabled={loading || !phone.trim() || !password} onClick={submitPasswordLogin}>
               {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />}
               Login
             </button>
             <button
               type="button"
-              className="w-full text-sm font-bold text-[#635BFF] mt-4 disabled:opacity-50"
+              className="w-full text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff] mt-4 disabled:opacity-50"
               disabled={loading || !phone.trim()}
               onClick={() => startOtpFlow("reset")}
             >
@@ -1159,9 +1160,9 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             </button>
 
             <div className="flex items-center gap-3 my-5" aria-hidden="true">
-              <div className="h-px flex-1 bg-slate-200" />
+              <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
               <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">or</span>
-              <div className="h-px flex-1 bg-slate-200" />
+              <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
             </div>
 
             <button
@@ -1177,7 +1178,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                 <div ref={googleBtnLogin} className={googleSigningIn ? "opacity-50 pointer-events-none" : ""} />
               </div>
             )}
-            <p className="text-xs text-slate-500 mt-4 text-center hyphens-none">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 text-center hyphens-none">
               Tip: password sign-in is instant — no waiting for a WhatsApp code.
             </p>
           </div>
@@ -1197,7 +1198,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             <button
               type="button"
               onClick={() => { setStep("phone"); setError(""); setCode(""); }}
-              className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-600 hover:text-slate-900 transition-colors"
+              className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
             >
               <ArrowLeft className="h-4 w-4" /> Back to sign in
             </button>
@@ -1235,31 +1236,31 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                 <img src="/app-icons/vakilcard.webp" alt="" width={64} height={64} className="w-14 h-14 sm:w-16 sm:h-16 rounded-[22.37%] object-cover flex-none shadow-lg shadow-slate-900/10" />
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
-                    <span className="text-xl font-black text-slate-900 tracking-tight">VakilCard</span>
-                    <span className="text-[0.6rem] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-full" style={{ backgroundColor: `${ACCENT}14`, color: ACCENT }}>
+                    <span className="text-xl font-black text-slate-900 dark:text-white tracking-tight">VakilCard</span>
+                    <span className="text-[0.6rem] font-black uppercase tracking-[0.1em] px-2.5 py-1 rounded-full" style={{ backgroundColor: `${ACCENT}14`, color: "var(--vc-accent)" }}>
                       Free forever
                     </span>
                   </div>
-                  <p className="text-slate-500 italic text-base m-0">Your Digital Chamber.</p>
+                  <p className="text-slate-500 dark:text-slate-400 italic text-base m-0">Your Digital Chamber.</p>
                 </div>
               </div>
 
-              <h1 className="text-4xl sm:text-5xl lg:text-[2.4rem] min-[1440px]:text-5xl 2xl:text-6xl font-black text-slate-900 tracking-[-0.04em] leading-[1.02] mt-6 mb-0">
+              <h1 className="text-4xl sm:text-5xl lg:text-[2.4rem] min-[1440px]:text-5xl 2xl:text-6xl font-black text-slate-900 dark:text-white tracking-[-0.04em] leading-[1.02] mt-6 mb-0">
                 Create your VakilCard.
               </h1>
-              <p className="text-slate-600 text-lg leading-relaxed mt-4 mb-0 max-w-xl">
+              <p className="text-slate-600 dark:text-slate-300 text-lg leading-relaxed mt-4 mb-0 max-w-xl">
                 Your verified digital identity for clients, chambers, payments and professional networking.
               </p>
-              <p className="font-instrument-italic text-slate-900 text-2xl mt-3 mb-0">Your practice. One link.</p>
-              <p className="text-sm font-bold text-slate-500 mt-3 mb-0">
+              <p className="font-instrument-italic text-slate-900 dark:text-white text-2xl mt-3 mb-0">Your practice. One link.</p>
+              <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-3 mb-0">
                 Built for advocates. Live in under 3 minutes. Verified securely on WhatsApp.
               </p>
 
               <div className="flex flex-col sm:flex-row sm:flex-wrap gap-3 mt-6 [&>button]:whitespace-nowrap">
-                <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors">
+                <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors">
                   <MessageCircle className="h-4 w-4" /> Get Started — Free
                 </button>
-                <button onClick={openLogin} className="inline-flex items-center justify-center px-7 py-3.5 rounded-full bg-white border border-slate-200 text-slate-900 text-sm font-bold hover:bg-slate-50 transition-colors">
+                <button onClick={openLogin} className="inline-flex items-center justify-center px-7 py-3.5 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white text-sm font-bold hover:bg-slate-50 dark:hover:bg-white/10 transition-colors">
                   I already have one
                 </button>
               </div>
@@ -1267,8 +1268,8 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               <p className="text-xs font-black uppercase tracking-[0.14em] text-slate-400 mt-7 mb-2">Perfect for</p>
               <div className="flex flex-wrap gap-1.5">
                 {PERFECT_FOR.map((p) => (
-                  <span key={p} className="rounded-full bg-white/80 border border-slate-200/70 px-3 py-1.5 text-xs font-semibold text-slate-700 inline-flex items-center gap-1">
-                    <Check className="h-3 w-3 text-emerald-600" />{p}
+                  <span key={p} className="rounded-full bg-white/80 dark:bg-white/[0.06] border border-slate-200/70 dark:border-white/10 px-3 py-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1">
+                    <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />{p}
                   </span>
                 ))}
               </div>
@@ -1276,7 +1277,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
             <div className="order-3 lg:order-none min-w-0">
               <DemoPhone onCreate={goToSignup} />
-              <p className="text-center text-[11px] font-black uppercase tracking-widest mt-4 mb-0" style={{ color: ACCENT }}>
+              <p className="text-center text-[11px] font-black uppercase tracking-widest mt-4 mb-0" style={{ color: "var(--vc-accent)" }}>
                 See your future VakilCard
               </p>
             </div>
@@ -1286,8 +1287,8 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
           <aside className="order-2 lg:order-none lg:col-start-2 lg:row-start-1 lg:row-span-3 xl:col-start-3 xl:row-span-2 lg:self-stretch" aria-label="Create or sign in to your VakilCard">
             <div className="lg:sticky lg:top-28 lg:max-h-[calc(100vh-8rem)] lg:overflow-y-auto" style={{ scrollbarWidth: "thin" }}>
               {renderVerifyCard(formRef)}
-              <p className="text-xs text-slate-500 mt-4 px-2 text-center hyphens-none leading-relaxed">
-                <span className="inline-flex items-center gap-1.5 font-black text-slate-800"><ShieldCheck className="h-3.5 w-3.5" style={{ color: ACCENT }} />Powered by Vakilpedia</span>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 px-2 text-center hyphens-none leading-relaxed">
+                <span className="inline-flex items-center gap-1.5 font-black text-slate-800 dark:text-white"><ShieldCheck className="h-3.5 w-3.5" style={{ color: "var(--vc-accent)" }} />Powered by Vakilpedia</span>
                 <br />
                 Privacy-first. Your mobile number stays private unless you choose to display it.
               </p>
@@ -1299,7 +1300,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
             <div role="region" aria-labelledby="why">
               <SectionHead id="why" eyebrow="Why lawyers love VakilCard">
-                Not a business card. <span style={{ color: ACCENT }}>The front door to your practice.</span>
+                Not a business card. <span style={{ color: "var(--vc-accent)" }}>The front door to your practice.</span>
               </SectionHead>
               {/* Phones: one swipeable row (snap) instead of six stacked tiles —
                   about 1,300px of scrolling becomes one tile's height. */}
@@ -1315,10 +1316,10 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
             <div role="region" aria-labelledby="included">
               <SectionHead id="included" eyebrow="Free forever">Every VakilCard includes</SectionHead>
-              <ul className="bg-white border border-slate-200 rounded-3xl p-5 sm:p-6 mt-6 grid grid-cols-2 min-[1440px]:grid-cols-3 gap-x-4 sm:gap-x-5 gap-y-2 list-none m-0">
+              <ul className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-3xl p-5 sm:p-6 mt-6 grid grid-cols-2 min-[1440px]:grid-cols-3 gap-x-4 sm:gap-x-5 gap-y-2 list-none m-0">
                 {INCLUDED.map((item) => (
-                  <li key={item} className="flex gap-1.5 sm:gap-2 text-[13px] sm:text-sm text-slate-700 leading-snug">
-                    <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 flex-none mt-0.5" />{item}
+                  <li key={item} className="flex gap-1.5 sm:gap-2 text-[13px] sm:text-sm text-slate-700 dark:text-slate-300 leading-snug">
+                    <Check className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-600 dark:text-emerald-400 flex-none mt-0.5" />{item}
                   </li>
                 ))}
               </ul>
@@ -1327,7 +1328,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
             {/* The estate's dark band (SignLinx's "proof" block), used for
                 the one comparison on this page. */}
             <div role="region" aria-labelledby="compare">
-              <div className="rounded-[2rem] bg-slate-900 text-white px-6 sm:px-10 py-10">
+              <div className="rounded-[2rem] bg-slate-900 dark:bg-white/[0.06] dark:border dark:border-white/10 text-white px-6 sm:px-10 py-10">
                 <div className="grid md:grid-cols-2 gap-8 md:gap-10 items-start">
                   <div>
                     <p className="text-xs font-black uppercase tracking-[0.14em] text-[#A5A0FF] m-0">Better than a visiting card</p>
@@ -1338,11 +1339,11 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                       ))}
                     </ul>
                   </div>
-                  <div className="rounded-[1.5rem] bg-white/5 border border-white/10 p-6">
+                  <div className="rounded-[1.5rem] bg-white/5 dark:bg-white/[0.06] border border-white/10 p-6">
                     <p className="text-[0.62rem] font-black uppercase tracking-[0.2em] text-slate-400 m-0">Traditional visiting card</p>
                     <ul className="mt-4 space-y-2 list-none p-0 m-0">
                       {["Printed once. Outdated tomorrow.", "Gets misplaced.", "Can't accept payments.", "Can't show directions.", "Can't update itself."].map((t) => (
-                        <li key={t} className="flex gap-2 text-[15px] text-slate-400"><X className="h-4 w-4 text-slate-500 flex-none mt-1" />{t}</li>
+                        <li key={t} className="flex gap-2 text-[15px] text-slate-400"><X className="h-4 w-4 text-slate-500 dark:text-slate-400 flex-none mt-1" />{t}</li>
                       ))}
                     </ul>
                   </div>
@@ -1354,12 +1355,12 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               <SectionHead id="faq" eyebrow="Questions">Before you start</SectionHead>
               <div className="grid sm:grid-cols-2 gap-3 mt-6 items-start">
                 {FAQS.map(([q, a]) => (
-                  <details key={q} className="bg-white border border-slate-200 rounded-2xl px-5 py-4 group">
-                    <summary className="flex items-center justify-between cursor-pointer list-none font-bold text-slate-800 text-[15px]">
+                  <details key={q} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 rounded-2xl px-5 py-4 group">
+                    <summary className="flex items-center justify-between cursor-pointer list-none font-bold text-slate-800 dark:text-white text-[15px]">
                       {q}
                       <ChevronDown className="h-4 w-4 text-slate-400 group-open:rotate-180 transition-transform flex-none ml-3" />
                     </summary>
-                    <p className="text-sm text-slate-500 mt-2.5 mb-0">{a}</p>
+                    <p className="text-sm text-slate-500 dark:text-slate-400 mt-2.5 mb-0">{a}</p>
                   </details>
                 ))}
               </div>
@@ -1367,16 +1368,16 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
 
             {/* Closing CTA — the estate's amber band (SignLinx, CourtQue). */}
             <div>
-              <div className="bg-gradient-to-r from-amber-50 to-slate-50 border border-amber-200 rounded-[2rem] py-10 px-6 sm:px-10 grid 2xl:grid-cols-[1fr_auto] gap-6 2xl:gap-10 items-center">
+              <div className="bg-gradient-to-r from-amber-50 dark:from-amber-500/10 to-slate-50 dark:to-white/[0.04] border border-amber-200 dark:border-amber-500/30 rounded-[2rem] py-10 px-6 sm:px-10 grid 2xl:grid-cols-[1fr_auto] gap-6 2xl:gap-10 items-center">
                 <div>
-                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-[-0.03em] m-0">
+                  <h2 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white tracking-[-0.03em] m-0">
                     Your next client is already <span className="font-instrument-italic font-normal">searching online.</span>
                   </h2>
-                  <p className="text-slate-600 mt-3 max-w-2xl leading-relaxed mb-0">
+                  <p className="text-slate-600 dark:text-slate-300 mt-3 max-w-2xl leading-relaxed mb-0">
                     Verify your WhatsApp. Build your profile. Share one trusted link forever.
                   </p>
                 </div>
-                <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors w-full sm:w-auto justify-self-start">
+                <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors w-full sm:w-auto justify-self-start">
                   <MessageCircle className="h-4 w-4" /> Create My Free VakilCard
                 </button>
               </div>

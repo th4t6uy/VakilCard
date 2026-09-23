@@ -28,20 +28,20 @@ const FEATURES = [
    non-interactive + desaturated, clearly labelled a preview. Sample numbers
    are obviously samples — never presented as the user's own data. */
 
-const previewShell = "rounded-2xl border border-slate-200 bg-slate-50 p-3 select-none pointer-events-none";
-const segOn = "flex-1 rounded-xl border-2 border-[#635BFF] bg-white p-2.5 text-center";
-const segOff = "flex-1 rounded-xl border border-slate-200 bg-white p-2.5 text-center";
+const previewShell = "rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] p-3 select-none pointer-events-none";
+const segOn = "flex-1 rounded-xl border-2 border-[#635BFF] bg-white dark:bg-slate-900 p-2.5 text-center";
+const segOff = "flex-1 rounded-xl border border-slate-200 dark:border-white/10 bg-white dark:bg-slate-900 p-2.5 text-center";
 
 function PayPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
       <div className="flex gap-2">
         <div className={segOn}>
-          <p className="text-[11px] font-black text-slate-900">Pay consultation fee</p>
-          <p className="text-sm font-black text-slate-900 mt-0.5">₹2,000</p>
+          <p className="text-[11px] font-black text-slate-900 dark:text-white">Pay consultation fee</p>
+          <p className="text-sm font-black text-slate-900 dark:text-white mt-0.5">₹2,000</p>
         </div>
         <div className={segOff}>
-          <p className="text-[11px] font-black text-slate-500">Custom amount</p>
+          <p className="text-[11px] font-black text-slate-500 dark:text-slate-400">Custom amount</p>
           <p className="text-[10px] text-slate-400 mt-0.5">client chooses</p>
         </div>
       </div>
@@ -61,9 +61,9 @@ function AnalyticsPreview() {
     <div className={previewShell} aria-hidden="true">
       <div className="grid grid-cols-4 gap-2">
         {[["Views", "214"], ["Calls", "32"], ["WhatsApp", "41"], ["Payments", "9"]].map(([l, v]) => (
-          <div key={l} className="rounded-xl bg-white border border-slate-200 py-2 text-center">
-            <p className="text-base font-black text-slate-900">{v}</p>
-            <p className="text-[9px] font-bold text-slate-500">{l}</p>
+          <div key={l} className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 py-2 text-center">
+            <p className="text-base font-black text-slate-900 dark:text-white">{v}</p>
+            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400">{l}</p>
           </div>
         ))}
       </div>
@@ -75,8 +75,8 @@ function BookingPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
       <div className="space-y-1.5">
-        <p className="rounded-xl bg-white border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600" />Google Calendar checked — never double-booked</p>
-        <p className="rounded-xl bg-white border border-slate-200 px-3 py-2 text-[11px] font-bold text-slate-700 flex items-center gap-2"><Banknote className="h-3.5 w-3.5 text-[#635BFF]" />Fee collected before the slot is confirmed</p>
+        <p className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Check className="h-3.5 w-3.5 text-emerald-600 dark:text-emerald-400" />Google Calendar checked — never double-booked</p>
+        <p className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2 text-[11px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-2"><Banknote className="h-3.5 w-3.5 text-[#635BFF] dark:text-[#a5a0ff]" />Fee collected before the slot is confirmed</p>
       </div>
     </div>
   );
@@ -85,7 +85,7 @@ function BookingPreview() {
 function WebsitePreview() {
   return (
     <div className={previewShell} aria-hidden="true">
-      <p className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-[12px] font-bold text-slate-800 flex items-center gap-2"><Globe2 className="h-4 w-4 text-[#635BFF]" />yourchambers.in — live on your card</p>
+      <p className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-[12px] font-bold text-slate-800 dark:text-white flex items-center gap-2"><Globe2 className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff]" />yourchambers.in — live on your card</p>
     </div>
   );
 }
@@ -94,10 +94,10 @@ function ThemesPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
       <div className="flex items-center justify-center gap-3">
-        {[["Default", "bg-gradient-to-br from-slate-100 to-slate-300 border-slate-300"], ["Midnight", "bg-gradient-to-br from-slate-800 to-slate-950 border-slate-700"], ["Ivory", "bg-gradient-to-br from-amber-50 to-orange-100 border-amber-200"]].map(([l, c]) => (
+        {[["Default", "bg-gradient-to-br from-slate-100 to-slate-300 border-slate-300 dark:border-white/10"], ["Midnight", "bg-gradient-to-br from-slate-800 to-slate-950 border-slate-700"], ["Ivory", "bg-gradient-to-br from-amber-50 to-orange-100 border-amber-200 dark:border-amber-500/30"]].map(([l, c]) => (
           <div key={l} className="text-center">
             <span className={`block h-10 w-10 rounded-full border-2 ${c}`} />
-            <p className="text-[9px] font-bold text-slate-500 mt-1">{l}</p>
+            <p className="text-[9px] font-bold text-slate-500 dark:text-slate-400 mt-1">{l}</p>
           </div>
         ))}
       </div>
@@ -108,8 +108,8 @@ function ThemesPreview() {
 function BrandingPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
-      <p className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-[11px] font-bold text-slate-400 text-center line-through">Powered by Vakilpedia</p>
-      <p className="text-[10px] font-bold text-slate-500 text-center mt-1.5">Your card, only your name.</p>
+      <p className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-[11px] font-bold text-slate-400 text-center line-through">Powered by Vakilpedia</p>
+      <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 text-center mt-1.5">Your card, only your name.</p>
     </div>
   );
 }
@@ -117,7 +117,7 @@ function BrandingPreview() {
 function ReviewPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
-      <p className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-[12px] font-black text-slate-800 flex items-center justify-center gap-2"><Star className="h-4 w-4 text-amber-500" />Leave a Review — straight to your Google form</p>
+      <p className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-[12px] font-black text-slate-800 dark:text-white flex items-center justify-center gap-2"><Star className="h-4 w-4 text-amber-500" />Leave a Review — straight to your Google form</p>
     </div>
   );
 }
@@ -125,13 +125,13 @@ function ReviewPreview() {
 function GoogleBusinessPreview() {
   return (
     <div className={previewShell} aria-hidden="true">
-      <div className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 flex items-center gap-2.5">
-        <span className="h-9 w-9 rounded-lg bg-white border border-slate-200 shadow-sm grid place-items-center overflow-hidden flex-none">
+      <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2.5 flex items-center gap-2.5">
+        <span className="h-9 w-9 rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 shadow-sm grid place-items-center overflow-hidden flex-none">
           <img src="/ds/assets/brands/google-maps.png" alt="" className="h-7 w-7 object-contain" onError={(e) => { e.currentTarget.replaceWith("G"); }} />
         </span>
         <span className="min-w-0">
-          <p className="text-[12px] font-black text-slate-900 truncate">Your Law Chambers</p>
-          <p className="text-[10px] text-slate-500 flex items-center gap-1"><span className="text-amber-500">★★★★★</span> Reviews · Photos · Directions</p>
+          <p className="text-[12px] font-black text-slate-900 dark:text-white truncate">Your Law Chambers</p>
+          <p className="text-[10px] text-slate-500 dark:text-slate-400 flex items-center gap-1"><span className="text-amber-500">★★★★★</span> Reviews · Photos · Directions</p>
         </span>
       </div>
     </div>
@@ -141,7 +141,7 @@ function GoogleBusinessPreview() {
 function UsernamePreview() {
   return (
     <div className={previewShell} aria-hidden="true">
-      <p className="rounded-xl bg-white border border-slate-200 px-3 py-2.5 text-[12px] font-black text-center text-slate-800">vakilpedia.com/<span className="text-[#635BFF]">yourname</span></p>
+      <p className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-3 py-2.5 text-[12px] font-black text-center text-slate-800 dark:text-white">vakilpedia.com/<span className="text-[#635BFF] dark:text-[#a5a0ff]">yourname</span></p>
     </div>
   );
 }
@@ -251,6 +251,7 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
           description: r.coupon_applied
             ? `VakilCard Pro — first year ₹${r.first_charge_inr}, renews ₹${r.renewal_inr}/yr`
             : `VakilCard Pro — ₹${r.first_charge_inr}/yr`,
+          // vp-dark-audit-ignore: Razorpay checkout accent (third-party widget config), not page text
           theme: { color: "#635BFF" },
           // Founder decision (2026-08-19): this must be UPI Autopay only.
           // Razorpay subscription checkout otherwise also offers Card and
@@ -319,14 +320,14 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
   return (
     <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-slate-950/60 backdrop-blur-sm" onClick={onClose}>
       <div
-        className="w-full sm:max-w-md bg-white rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto"
+        className="w-full sm:max-w-md bg-white dark:bg-slate-900 rounded-t-[2rem] sm:rounded-[2rem] shadow-2xl p-6 sm:p-8 max-h-[92vh] overflow-y-auto"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-start justify-between mb-1">
-          <h2 className="text-2xl font-black tracking-tight text-slate-900">Unlock VakilCard Pro</h2>
-          <button onClick={onClose} aria-label="Close" className="rounded-full bg-slate-100 hover:bg-slate-200 p-2 -mt-1 -mr-1"><X className="h-4 w-4 text-slate-600" /></button>
+          <h2 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Unlock VakilCard Pro</h2>
+          <button onClick={onClose} aria-label="Close" className="rounded-full bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/15 p-2 -mt-1 -mr-1"><X className="h-4 w-4 text-slate-600 dark:text-slate-300" /></button>
         </div>
-        <p className="text-sm text-slate-500 text-left hyphens-none mb-5">Everything in Free, plus the tools that turn your card into your practice's front desk.</p>
+        <p className="text-sm text-slate-500 dark:text-slate-400 text-left hyphens-none mb-5">Everything in Free, plus the tools that turn your card into your practice's front desk.</p>
 
         {/* The feature the user just tapped — shown greyed out, exactly as it
             would look unlocked, so they see what they're missing. */}
@@ -336,7 +337,7 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
             <div className="opacity-70 grayscale-[35%]">
               <PreviewBlock />
             </div>
-            <p className="text-xs text-slate-600 text-left hyphens-none mt-2">{preview[1]}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300 text-left hyphens-none mt-2">{preview[1]}</p>
           </div>
         )}
 
@@ -345,10 +346,10 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
             const hl = feature && title.toLowerCase().includes(String(feature).replace(/_/g, " "));
             return (
               <div key={title} className={`flex items-start gap-3 rounded-2xl p-3 ${hl ? "bg-[#635BFF]/10 border border-[#635BFF]/30" : ""}`}>
-                <Icon className="h-5 w-5 text-[#635BFF] flex-none mt-0.5" />
+                <Icon className="h-5 w-5 text-[#635BFF] dark:text-[#a5a0ff] flex-none mt-0.5" />
                 <div>
-                  <p className="text-sm font-black text-slate-900">{title}</p>
-                  <p className="text-xs text-slate-500 text-left hyphens-none">{desc}</p>
+                  <p className="text-sm font-black text-slate-900 dark:text-white">{title}</p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 text-left hyphens-none">{desc}</p>
                 </div>
               </div>
             );
@@ -356,42 +357,42 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
         </div>
 
         {done === "activated" ? (
-          <div className="rounded-2xl bg-emerald-50 border border-emerald-200 p-4 text-center">
-            <p className="font-black text-emerald-800">You're Pro now 🎉</p>
-            <button className="mt-3 w-full rounded-full bg-slate-900 text-white px-6 py-3.5 font-bold" onClick={onClose}>Continue</button>
+          <div className="rounded-2xl bg-emerald-50 dark:bg-emerald-500/10 border border-emerald-200 dark:border-emerald-500/30 p-4 text-center">
+            <p className="font-black text-emerald-800 dark:text-emerald-300">You're Pro now 🎉</p>
+            <button className="mt-3 w-full rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white px-6 py-3.5 font-bold" onClick={onClose}>Continue</button>
           </div>
         ) : done === "exists" ? (
-          <div className="rounded-2xl bg-sky-50 border border-sky-200 p-4 text-center">
-            <p className="text-sm font-bold text-sky-900 hyphens-none">A Pro subscription is already set up on this account. If you just approved the UPI mandate, it activates the moment the first payment clears.</p>
-            <button className="mt-3 w-full rounded-full bg-white border border-slate-200 px-6 py-3 font-bold text-slate-700" onClick={onClose}>Okay</button>
+          <div className="rounded-2xl bg-sky-50 dark:bg-sky-500/10 border border-sky-200 dark:border-sky-500/30 p-4 text-center">
+            <p className="text-sm font-bold text-sky-900 dark:text-sky-300 hyphens-none">A Pro subscription is already set up on this account. If you just approved the UPI mandate, it activates the moment the first payment clears.</p>
+            <button className="mt-3 w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-6 py-3 font-bold text-slate-700 dark:text-slate-300" onClick={onClose}>Okay</button>
           </div>
         ) : done === "error" ? (
-          <div className="rounded-2xl bg-rose-50 border border-rose-200 p-4 text-center">
-            <p className="text-sm font-bold text-rose-900 hyphens-none">Couldn't reach checkout just now — nothing was charged. Please try again in a moment.</p>
-            <button className="mt-3 w-full rounded-full bg-white border border-slate-200 px-6 py-3 font-bold text-slate-700" onClick={() => setDone(null)}>Try again</button>
+          <div className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-4 text-center">
+            <p className="text-sm font-bold text-rose-900 dark:text-rose-300 hyphens-none">Couldn't reach checkout just now — nothing was charged. Please try again in a moment.</p>
+            <button className="mt-3 w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-6 py-3 font-bold text-slate-700 dark:text-slate-300" onClick={() => setDone(null)}>Try again</button>
           </div>
         ) : done === "pending" ? (
-          <div className="rounded-2xl bg-amber-50 border border-amber-200 p-4 text-center">
-            <p className="text-sm font-bold text-amber-900 hyphens-none">Payments are launching shortly — your Founder price is noted. We'll message you on WhatsApp the moment checkout opens.</p>
-            <button className="mt-3 w-full rounded-full bg-white border border-slate-200 px-6 py-3 font-bold text-slate-700" onClick={onClose}>Okay</button>
+          <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 text-center">
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-300 hyphens-none">Payments are launching shortly — your Founder price is noted. We'll message you on WhatsApp the moment checkout opens.</p>
+            <button className="mt-3 w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-6 py-3 font-bold text-slate-700 dark:text-slate-300" onClick={onClose}>Okay</button>
           </div>
         ) : (
           <>
             {coupon ? (
-              <div className="rounded-2xl border-2 border-emerald-300 bg-emerald-50 p-4 text-center mb-4">
-                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 flex items-center justify-center gap-1">
+              <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 p-4 text-center mb-4">
+                <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300 flex items-center justify-center gap-1">
                   <Ticket className="h-3.5 w-3.5" /> {coupon.code} applied
                 </p>
-                <p className="text-2xl font-black text-slate-900 mt-1">
+                <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">
                   <span className="text-base font-bold text-slate-400 line-through mr-2">₹{coupon.base_inr}</span>
-                  ₹{coupon.final_inr}<span className="text-xs font-bold text-slate-500"> first year</span>
+                  ₹{coupon.final_inr}<span className="text-xs font-bold text-slate-500 dark:text-slate-400"> first year</span>
                 </p>
-                <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">
+                <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1 hyphens-none">
                   Renews at ₹{coupon.base_inr}/yr · UPI Autopay, cancel anytime
                 </p>
                 <button
                   type="button"
-                  className="mt-2 text-[11px] font-bold text-slate-500 underline"
+                  className="mt-2 text-[11px] font-bold text-slate-500 dark:text-slate-400 underline"
                   onClick={() => { setCoupon(null); setCouponInput(""); }}
                 >
                   Remove code
@@ -399,15 +400,15 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
               </div>
             ) : (
               <div className="grid grid-cols-2 gap-3 mb-4">
-                <div className={`rounded-2xl border-2 p-4 text-center ${founderAvailable ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 opacity-50"}`}>
-                  <p className="text-[10px] font-black uppercase tracking-widest text-[#635BFF]">Founder</p>
-                  <p className="text-2xl font-black text-slate-900 mt-1">₹{pricing.founder_inr}<span className="text-xs font-bold text-slate-500">/yr</span></p>
-                  <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">Price locked while you stay subscribed</p>
+                <div className={`rounded-2xl border-2 p-4 text-center ${founderAvailable ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 dark:border-white/10 opacity-50"}`}>
+                  <p className="text-[10px] font-black uppercase tracking-widest text-[#635BFF] dark:text-[#a5a0ff]">Founder</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">₹{pricing.founder_inr}<span className="text-xs font-bold text-slate-500 dark:text-slate-400">/yr</span></p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Price locked while you stay subscribed</p>
                 </div>
-                <div className="rounded-2xl border border-slate-200 p-4 text-center">
+                <div className="rounded-2xl border border-slate-200 dark:border-white/10 p-4 text-center">
                   <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Regular</p>
-                  <p className="text-2xl font-black text-slate-900 mt-1">₹{pricing.regular_inr}<span className="text-xs font-bold text-slate-500">/yr</span></p>
-                  <p className="text-[10px] font-bold text-slate-500 mt-1 hyphens-none">After the founder window</p>
+                  <p className="text-2xl font-black text-slate-900 dark:text-white mt-1">₹{pricing.regular_inr}<span className="text-xs font-bold text-slate-500 dark:text-slate-400">/yr</span></p>
+                  <p className="text-[10px] font-bold text-slate-500 dark:text-slate-400 mt-1 hyphens-none">After the founder window</p>
                 </div>
               </div>
             )}
@@ -417,7 +418,7 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
               <div className="mb-4">
                 <div className="flex gap-2">
                   <input
-                    className="flex-1 rounded-full border border-slate-200 px-4 py-2.5 text-sm font-bold text-slate-800 placeholder:font-normal focus:outline-none focus:border-[#635BFF]"
+                    className="flex-1 rounded-full border border-slate-200 dark:border-white/10 dark:bg-white/5 px-4 py-2.5 text-sm font-bold text-slate-800 dark:text-white placeholder:font-normal focus:outline-none focus:border-[#635BFF]"
                     placeholder="Have a coupon code?"
                     value={couponInput}
                     onChange={(e) => { setCouponInput(e.target.value.toUpperCase()); setCouponError(""); }}
@@ -427,19 +428,19 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
                   />
                   <button
                     type="button"
-                    className="rounded-full bg-slate-100 hover:bg-slate-200 px-5 py-2.5 text-sm font-black text-slate-700 disabled:opacity-50"
+                    className="rounded-full bg-slate-100 dark:bg-white/[0.05] hover:bg-slate-200 dark:hover:bg-white/15 px-5 py-2.5 text-sm font-black text-slate-700 dark:text-slate-300 disabled:opacity-50"
                     disabled={couponBusy || !couponInput.trim()}
                     onClick={applyCoupon}
                   >
                     {couponBusy ? <Loader2 className="h-4 w-4 animate-spin" /> : "Apply"}
                   </button>
                 </div>
-                {couponError && <p className="text-xs font-bold text-rose-600 mt-1.5 ml-2">{couponError}</p>}
+                {couponError && <p className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-1.5 ml-2">{couponError}</p>}
               </div>
             )}
 
             <button
-              className="w-full rounded-full bg-slate-900 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
+              className="w-full rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white hover:bg-[#635BFF] transition-colors px-8 py-4 font-bold flex items-center justify-center gap-2 disabled:opacity-50"
               disabled={busy}
               onClick={upgrade}
             >
@@ -448,7 +449,7 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
                 ? `Upgrade — ₹${coupon.final_inr} first year`
                 : `Upgrade — ₹${founderAvailable ? pricing.founder_inr : pricing.regular_inr}/year`}
             </button>
-            <button className="mt-3 w-full text-sm font-bold text-slate-500" onClick={onClose}>Maybe later</button>
+            <button className="mt-3 w-full text-sm font-bold text-slate-500 dark:text-slate-400" onClick={onClose}>Maybe later</button>
           </>
         )}
       </div>

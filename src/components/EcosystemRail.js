@@ -71,12 +71,12 @@ export default function EcosystemRail({
   const showFeatured = !exclude.includes(FEATURED.name);
 
   return (
-    <div className="bg-white/70 backdrop-blur-xl border border-slate-200/70 shadow-sm rounded-[2rem] p-5">
+    <div className="bg-white/70 dark:bg-white/[0.06] backdrop-blur-xl border border-slate-200/70 dark:border-white/10 shadow-sm rounded-[2rem] p-5">
       <div className="flex items-center gap-2 mb-4">
         {/* logo-128.webp, not logo.png: the original is an 876KB 843x1024
             render painted here at 20px high. */}
         <img src="/logo-128.webp" alt="" width={17} height={20} className="h-5 w-auto object-contain flex-none" />
-        <p className="text-xs font-black uppercase tracking-widest text-[#635BFF] m-0">
+        <p className="text-xs font-black uppercase tracking-widest text-[#635BFF] dark:text-[#a5a0ff] m-0">
           More from <BrandWordmark />
         </p>
       </div>
@@ -86,18 +86,18 @@ export default function EcosystemRail({
         <a
           href={link(origin, FEATURED.path)}
           onClick={() => onNavigate && onNavigate(FEATURED.name, link(origin, FEATURED.path))}
-          className="group relative block rounded-[1.75rem] p-5 mb-3 overflow-hidden bg-gradient-to-br from-indigo-50/90 via-white to-blue-50/70 border-2 border-indigo-200 hover:border-[#635BFF] hover:shadow-lg hover:shadow-indigo-100 transition-all no-underline"
+          className="group relative block rounded-[1.75rem] p-5 mb-3 overflow-hidden bg-gradient-to-br from-indigo-50/90 dark:from-indigo-500/15 via-white dark:via-white/[0.03] to-blue-50/70 dark:to-sky-500/10 border-2 border-indigo-200 dark:border-indigo-500/30 hover:border-[#635BFF] hover:shadow-lg hover:shadow-indigo-100 transition-all no-underline"
         >
           <span className="absolute top-4 right-4 bg-[#635BFF] text-white text-[9px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full">
             {FEATURED.badge}
           </span>
-          <div className="w-12 h-12 rounded-[22.37%] overflow-hidden bg-white shadow-sm grid place-items-center mb-3">
+          <div className="w-12 h-12 rounded-[22.37%] overflow-hidden bg-white dark:bg-slate-900 shadow-sm grid place-items-center mb-3">
             <img src={FEATURED.icon} alt="CaseLinx" width={48} height={48} className="w-full h-full object-cover" />
           </div>
-          <p className="text-lg font-black text-slate-900 tracking-tight leading-none m-0">{FEATURED.name}</p>
-          <p className="text-[#635BFF] font-bold text-xs mt-1 m-0">{FEATURED.tag}</p>
-          <p className="text-xs text-slate-600 mt-2 text-left hyphens-none leading-snug m-0">{FEATURED.desc}</p>
-          <span className="inline-flex items-center gap-1 text-xs font-black text-slate-900 group-hover:text-[#635BFF] group-hover:gap-2 transition-all mt-3">
+          <p className="text-lg font-black text-slate-900 dark:text-white tracking-tight leading-none m-0">{FEATURED.name}</p>
+          <p className="text-[#635BFF] dark:text-[#a5a0ff] font-bold text-xs mt-1 m-0">{FEATURED.tag}</p>
+          <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 text-left hyphens-none leading-snug m-0">{FEATURED.desc}</p>
+          <span className="inline-flex items-center gap-1 text-xs font-black text-slate-900 dark:text-white group-hover:text-[#635BFF] dark:group-hover:text-[#a5a0ff] group-hover:gap-2 transition-all mt-3">
             {FEATURED.cta}
             <ArrowRight className="h-3.5 w-3.5" />
           </span>
@@ -114,21 +114,21 @@ export default function EcosystemRail({
               href={href}
               {...(external ? { target: '_blank', rel: 'noopener noreferrer' } : {})}
               onClick={() => onNavigate && onNavigate(name, href)}
-              className="flex items-center gap-3 rounded-2xl bg-white border border-slate-200 hover:border-[#635BFF]/50 hover:shadow-sm transition-all p-3 no-underline"
+              className="flex items-center gap-3 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 hover:border-[#635BFF]/50 hover:shadow-sm transition-all p-3 no-underline"
             >
-              <div className="w-10 h-10 rounded-[22.37%] overflow-hidden bg-slate-50 shadow-sm grid place-items-center flex-none">
+              <div className="w-10 h-10 rounded-[22.37%] overflow-hidden bg-slate-50 dark:bg-white/[0.05] shadow-sm grid place-items-center flex-none">
                 <img src={icon} alt="" width={40} height={40} loading="lazy" className="w-full h-full object-cover" />
               </div>
               <div className="min-w-0">
                 <div className="flex items-center gap-1.5">
-                  <p className="text-sm font-black text-slate-900 truncate m-0">{name}</p>
+                  <p className="text-sm font-black text-slate-900 dark:text-white truncate m-0">{name}</p>
                   {badge && (
-                    <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 flex-none">
+                    <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[9px] font-black uppercase tracking-wider px-1.5 py-0.5 flex-none">
                       {badge}
                     </span>
                   )}
                 </div>
-                <p className="text-[11px] text-slate-500 mt-0.5 text-left hyphens-none leading-snug line-clamp-2 m-0">{desc}</p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 text-left hyphens-none leading-snug line-clamp-2 m-0">{desc}</p>
               </div>
             </a>
           );
