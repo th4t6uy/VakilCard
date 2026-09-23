@@ -243,10 +243,14 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
         const modal = new Razorpay({
           key: r.key_id,
           subscription_id: r.subscription_id,
-          name: "VakilCard Pro",
+          // Business identity on the checkout modal is Vakilpedia (the brand);
+          // DatarOne Private Limited is the legal/settlement entity behind it,
+          // never shown here. "VakilCard Pro" is the line item, in description.
+          name: "Vakilpedia",
+          image: "https://www.vakilpedia.com/logo.png",
           description: r.coupon_applied
-            ? `First year ₹${r.first_charge_inr}, renews ₹${r.renewal_inr}/yr`
-            : `₹${r.first_charge_inr}/yr`,
+            ? `VakilCard Pro — first year ₹${r.first_charge_inr}, renews ₹${r.renewal_inr}/yr`
+            : `VakilCard Pro — ₹${r.first_charge_inr}/yr`,
           theme: { color: "#635BFF" },
           // Founder decision (2026-08-19): this must be UPI Autopay only.
           // Razorpay subscription checkout otherwise also offers Card and
