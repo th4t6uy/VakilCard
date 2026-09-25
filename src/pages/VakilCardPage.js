@@ -1051,7 +1051,13 @@ export default function VakilCardPage() {
   // to production www.
   const atRoot = typeof window !== "undefined" && window.location.pathname === "/";
   const inSignInFlow = autoGoogleSignIn;
-  if (!authed && atRoot && !inSignInFlow && process.env.NODE_ENV === "production") {
+  // A visitor who already holds a Vakilpedia session cookie is signed in
+  // somewhere in the estate: they must NEVER be sent to the marketing page
+  // (founder rule 2026-09-25). www/vakilcard sends them here; sending them
+  // back would loop. Let the silent Suite bridge finish instead.
+  const hasVakilpediaSession =
+    typeof document !== "undefined" && /(?:^|;\s*)sb-[^=]*-auth-token/.test(document.cookie || "");
+  if (!authed && atRoot && !inSignInFlow && !hasVakilpediaSession && process.env.NODE_ENV === "production") {
     window.location.replace(`${CARD_ORIGIN}/vakilcard`);
     return null;
   }
