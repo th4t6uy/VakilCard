@@ -303,6 +303,9 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
         setCouponError("This code isn't ready yet — please try again shortly.");
       } else if (code === "mandate_exists") {
         setDone("exists");
+      } else if (code === "purchases_paused") {
+        // The admin panel's per-app "purchases" switch is off: nothing was charged.
+        setDone("paused");
       } else if (code === "checkout_unavailable" || code === "verify_unavailable" || code === "provider_unreachable") {
         setDone("error");
       } else if (COUPON_ERRORS[code]) {
@@ -370,6 +373,11 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
           <div className="rounded-2xl bg-rose-50 dark:bg-rose-500/10 border border-rose-200 dark:border-rose-500/30 p-4 text-center">
             <p className="text-sm font-bold text-rose-900 dark:text-rose-300 hyphens-none">Couldn't reach checkout just now — nothing was charged. Please try again in a moment.</p>
             <button className="mt-3 w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-6 py-3 font-bold text-slate-700 dark:text-slate-300" onClick={() => setDone(null)}>Try again</button>
+          </div>
+        ) : done === "paused" ? (
+          <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 text-center">
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-300 hyphens-none">New purchases are paused for now — nothing was charged. Everything you already have keeps working.</p>
+            <button className="mt-3 w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-6 py-3 font-bold text-slate-700 dark:text-slate-300" onClick={onClose}>Okay</button>
           </div>
         ) : done === "pending" ? (
           <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 text-center">

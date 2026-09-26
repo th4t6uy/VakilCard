@@ -54,6 +54,7 @@ const ERRORS = {
   expired: "That code expired. Request a fresh one.",
   locked: "Too many wrong attempts. Request a fresh code.",
   no_session: "Request a code first.",
+  signups_paused: "New sign-ups are paused for now. Existing accounts are not affected.",
   awaiting_approval: "Your Vakilpedia account has been created and is awaiting approval. We'll let you know on WhatsApp as soon as it's ready.",
   server_error: "We hit a problem on our end verifying that. Please try again in a moment.",
   unauthenticated: "Your session expired. Please verify your WhatsApp number again.",

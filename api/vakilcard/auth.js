@@ -27,6 +27,7 @@ const {
   REFRESH_TTL_SEC,
 } = require("./_jwt");
 const verification = require("./_verify");
+const controls = require("./_controls");
 const messaging = require("./_messaging");
 const { hashPassword, verifyPassword, passwordPolicyError } = require("./_password");
 const { generateAutoUsername } = require("./_usernames");
@@ -520,7 +521,28 @@ module.exports = async function handler(req, res) {
   const ip = clientIp(req);
 
   try {
+    // The admin panel's per-app switches (Apps -> VakilCard -> Controls), read by the SPA for its
+    // banner. Public, no auth, fail-open (see _controls.js). Lives here, not in a new endpoint
+    // file: this deployment is at Vercel's 12-function ceiling.
+    if (action === "controls") {
+      res.setHeader("Cache-Control", "public, s-maxage=60, stale-while-revalidate=120");
+      return json(res, 200, { ok: true, controls: await controls.getControls() });
+    }
+
     if (action === "start" || action === "resend") {
+      // "Sign-ups" switch: while paused, a phone with NO existing VakilCard identity gets no
+      // code (so no new account can begin). Existing card owners sign in exactly as before.
+      if (!(await controls.getControls()).signupsEnabled) {
+        const wanted = verification.normalizePhone(body.phone);
+        if (wanted) {
+          const existing = await db(
+            `account_phone_identities?phone_e164=eq.${encodeURIComponent(wanted)}&select=account_id&limit=1`
+          );
+          if (!existing.length) {
+            return json(res, 403, { ok: false, error: "signups_paused", message: controls.MESSAGES.signups });
+          }
+        }
+      }
       const r = await verification.sendVerification({
         phone: body.phone,
         ip,
@@ -749,6 +771,10 @@ module.exports = async function handler(req, res) {
     // between the invite and the tap (another tab, a double-click), this
     // signs into that one instead of creating a second.
     if (action === "create_from_suite") {
+      // "Sign-ups" switch: a signed-in Vakilpedia user creating their FIRST VakilCard is a sign-up.
+      if (!(await controls.getControls()).signupsEnabled) {
+        return json(res, 403, { ok: false, error: "signups_paused", message: controls.MESSAGES.signups });
+      }
       const accessToken = readSupabaseAccessTokenFromCookies(req);
       if (!accessToken) return json(res, 401, { ok: false, error: "no_vakilpedia_session" });
 

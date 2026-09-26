@@ -3,6 +3,7 @@ import "./App.css";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { setTokens, hasPhoneSession } from "./lib/vakilcardApi";
 import SuiteInvite from "./components/SuiteInvite";
+import ProductControlsBanner from "./components/ProductControlsBanner";
 import ThemeSync from "./components/ThemeSync";
 import ThemeCornerToggle from "./components/ThemeCornerToggle";
 import AddToHomeScreen from './components/AddToHomeScreen';
@@ -117,6 +118,7 @@ function App() {
   return (
     <div className="App">
       <ThemeSync />
+      <ProductControlsBanner />
       {suiteInvite && <SuiteInvite invite={suiteInvite} />}
       <BrowserRouter>
         <Routes>

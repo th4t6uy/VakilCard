@@ -48,6 +48,7 @@ const { db, resolveAccount } = require("./_lib");
 const { entitlementsFor } = require("./_entitlements");
 const { audit } = require("./_verify");
 const billing = require("./_billing");
+const controls = require("./_controls");
 
 const BILLING_SECRET = process.env.VAKILCARD_BILLING_SECRET || "";
 const PRODUCT_ID = billing.PRODUCT_ID;
@@ -262,6 +263,11 @@ module.exports = async function handler(req, res) {
     }
 
     if (action === "checkout") {
+      // The admin panel's per-app "purchases" switch (Apps -> VakilCard -> Controls). The platform
+      // checkout enforces it too; this answers first, in words the app can show. Fails open.
+      if (!(await controls.getControls()).purchasesEnabled) {
+        return json(res, 503, { ok: false, error: "purchases_paused", message: controls.MESSAGES.purchases });
+      }
       const couponCode = String(body.coupon_code || "").trim().toUpperCase();
 
       /* Platform rail not configured, or the payment gate is closed →
