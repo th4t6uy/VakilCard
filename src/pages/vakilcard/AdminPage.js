@@ -14,6 +14,7 @@ import {
   isForbidden, ApiError,
 } from "../../lib/vakilcardApi";
 import BrandWordmark from "../../components/BrandWordmark";
+import { trackPageView } from "../../lib/ga4";
 
 const CARD_ORIGIN = "https://www.vakilpedia.com";
 
@@ -338,6 +339,15 @@ export default function AdminPage() {
   }, [q, plan, page]);
 
   useEffect(() => { load(); }, [load]);
+
+  // Previously unset entirely — this route inherited whatever title the
+  // static index.html or a prior screen had left behind, and never told
+  // GA4 what it was. See src/lib/ga4.js.
+  useEffect(() => {
+    const t = "VakilCard Admin | Vakilpedia";
+    document.title = t;
+    trackPageView(t);
+  }, []);
 
   const act = async (id, fn, ...args) => {
     setBusyId(id);

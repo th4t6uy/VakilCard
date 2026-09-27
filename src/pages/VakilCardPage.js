@@ -776,6 +776,13 @@ export default function VakilCardPage() {
   }, [googleNotice]);
 
   useEffect(() => {
+    // Cosmetic only, for the instant before we know which of the three real
+    // states below applies (not signed in / no card yet / dashboard) — each
+    // of those sets its own title AND reports it to GA4 via SEOHead or
+    // trackPageView(). This one deliberately does NOT call trackPageView:
+    // it isn't a page anyone actually saw, and every render path below it
+    // replaces this title within the same tick anyway (see src/lib/ga4.js
+    // for why that used to matter and now doesn't).
     document.title = "VakilCard — One Link. Everything Your Client Needs. | Vakilpedia";
   }, []);
 
@@ -1101,13 +1108,21 @@ export default function VakilCardPage() {
   // Authed but no card yet.
   if (!profile) {
     return shell(
-      <div className="text-center py-16">
-        <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">No VakilCard yet</h1>
-        <p className="text-slate-600 dark:text-slate-400 mt-3">Create one in under three minutes — verified on WhatsApp.</p>
-        <button onClick={doLogout} className="mt-6 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-8 py-4 font-bold transition-colors">
-          Start with your WhatsApp number
-        </button>
-      </div>
+      <>
+        <SEOHead
+          title="VakilCard | Create Your Card"
+          description="You're verified — create your free VakilCard digital chamber card in under three minutes."
+          canonicalUrl="https://vakilcard.vakilpedia.com/"
+          imageUrl="https://www.vakilpedia.com/logo.png"
+        />
+        <div className="text-center py-16">
+          <h1 className="text-3xl font-black tracking-tight text-slate-900 dark:text-white">No VakilCard yet</h1>
+          <p className="text-slate-600 dark:text-slate-400 mt-3">Create one in under three minutes — verified on WhatsApp.</p>
+          <button onClick={doLogout} className="mt-6 rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-8 py-4 font-bold transition-colors">
+            Start with your WhatsApp number
+          </button>
+        </div>
+      </>
     );
   }
 

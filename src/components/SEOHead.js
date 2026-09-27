@@ -1,8 +1,13 @@
 import React from 'react';
+import { trackPageView } from '../lib/ga4';
 
 /**
  * SEO Head Component - Handles dynamic meta tags and structured data
  * Safe for production - only adds SEO metadata
+ *
+ * Also reports the resulting title to GA4 (see src/lib/ga4.js for why this
+ * component, not GA4's own automatic page_view, is what tells Google
+ * Analytics what page a visitor was on).
  */
 const SEOHead = ({ 
   title, 
@@ -60,6 +65,7 @@ const SEOHead = ({
     const finalCanonicalUrl = resolveCanonicalUrl();
 
     document.title = finalTitle;
+    trackPageView(finalTitle);
 
     // Update or create meta tags
     const updateMetaTag = (name, content) => {

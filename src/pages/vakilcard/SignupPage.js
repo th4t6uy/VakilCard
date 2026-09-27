@@ -28,6 +28,7 @@ import SiteFooter from "../../components/SiteFooter";
 import EcosystemRail from "../../components/EcosystemRail";
 import { WWW } from "../../config/ecosystem";
 import { isQaPhone, startQaSession, QaBadge } from "../../lib/vakilcardQa";
+import { trackPageView } from "../../lib/ga4";
 
 // Google sign-in is live (full alternative to phone — see auth.js
 // action=google_signin). Every entry point stays gated on this flag so it
@@ -595,7 +596,9 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   }, [step, view, handleGoogleCredential, autoGoogleSignIn]);
 
   useEffect(() => {
-    document.title = "VakilCard — Claim your Digital Chamber | Vakilpedia";
+    const t = "VakilCard — Claim your Digital Chamber | Vakilpedia";
+    document.title = t;
+    trackPageView(t);
     track("otp_started");
   }, []);
 

@@ -21,6 +21,7 @@ import {
   chamberTypeError, CHAMBER_TYPE_MAX,
 } from "../../lib/vakilcardNormalize";
 import { qaActive, qaPreviewSrc, QaBadge } from "../../lib/vakilcardQa";
+import { trackPageView } from "../../lib/ga4";
 import QaStepJumper from "../../components/QaStepJumper";
 import LiveCardPreview from "../../components/LiveCardPreview";
 import UpgradeSheet from "../../components/UpgradeSheet";
@@ -248,7 +249,9 @@ export default function SetupWizard() {
   }, [navigate, sectionMode]);
 
   useEffect(() => {
-    document.title = "Set up your VakilCard | Vakilpedia";
+    const t = "Set up your VakilCard | Vakilpedia";
+    document.title = t;
+    trackPageView(t);
     load();
   }, [load]);
 
