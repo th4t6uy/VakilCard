@@ -32,12 +32,18 @@
  * content. It only expands into the full card when the person taps it, and
  * even then it's a capped-width corner card, never a full-width strip.
  *
+ * 2026-09-29 — moved to the bottom-LEFT corner (founder: it kept landing on
+ * top of each app's own bottom-right button — back-to-top, Support, the
+ * VakilCard setup button, toasts). Bottom-right is where apps put their own
+ * floating actions; this button is the guest, so it takes the other corner.
+ * Matches CaseLinx's copy, which was already bottom-left.
+ *
  * Everything is inline-styled on purpose: this same file ships into eight
  * repos on three different CSS toolchains, and a banner that silently loses
  * its styling in one of them is worse than no banner.
  */
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 const KEY = 'vp-a2hs-dismissed';
 const SNOOZE_DAYS = 60;
@@ -82,8 +88,9 @@ function isIosSafari() {
     // iPadOS 13+ reports itself as a Mac; touch points give it away
     (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   if (!ios) return false;
-  // Chrome/Firefox/Edge on iOS cannot add to the home screen at all.
-  return !/CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  // Firefox/Edge/Opera on iOS have no Add to Home Screen. Chrome on iOS
+  // 16.4+ does (Share → Add to Home Screen), so it gets the walkthrough too.
+  return !/FxiOS|EdgiOS|OPiOS/.test(ua);
 }
 
 export function AddToHomeScreen({ appName = 'this app' }) {
@@ -142,13 +149,19 @@ export function AddToHomeScreen({ appName = 'this app' }) {
     return (
       <button
         type="button"
-        onClick={() => setOpen(true)}
-        aria-label={`Add ${appName} to your home screen`}
+        onClick={evt ? install : () => setOpen(true)}
+        aria-label={evt ? `Install ${appName}` : `Add ${appName} to your home screen`}
         style={pillBtn}
       >
         <img src="/icons/icon-192.png" alt="" width={26} height={26} style={pillIcon} />
       </button>
     );
+  }
+
+  // iOS: no install API exists, so the open state is a walkthrough that
+  // shows each tap (IosInstallCard, below). 2026-09-29.
+  if (ios) {
+    return <IosInstallCard appName={appName} onClose={snooze} />;
   }
 
   // Open state: a capped-width card anchored to the same corner, never a
@@ -161,20 +174,12 @@ export function AddToHomeScreen({ appName = 'this app' }) {
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={title}>Add {appName} to your home screen</div>
           <div style={sub}>
-            {ios ? (
-              <>
-                Tap <ShareGlyph /> Share, then <b>Add to Home Screen</b>.
-              </>
-            ) : (
-              'Opens full screen, straight from your phone, like an app.'
-            )}
+            {'Opens full screen, straight from your phone, like an app.'}
           </div>
         </div>
-        {!ios && (
-          <button type="button" onClick={install} style={cta}>
+        <button type="button" onClick={install} style={cta}>
             Install
           </button>
-        )}
         <button type="button" onClick={snooze} aria-label="Not now" style={close}>
           ✕
         </button>
@@ -183,19 +188,10 @@ export function AddToHomeScreen({ appName = 'this app' }) {
   );
 }
 
-function ShareGlyph() {
-  return (
-    <svg viewBox="0 0 24 24" width="14" height="14" aria-hidden
-      style={{ verticalAlign: '-2px', margin: '0 2px' }}>
-      <path d="M12 3l4 4h-3v9h-2V7H8l4-4z" fill="currentColor" />
-      <path d="M5 12v7a2 2 0 002 2h10a2 2 0 002-2v-7h-2v7H7v-7H5z" fill="currentColor" />
-    </svg>
-  );
-}
 
 const pillBtn = {
   position: 'fixed',
-  right: 'max(14px, env(safe-area-inset-right))',
+  left: 'max(14px, env(safe-area-inset-left))',
   bottom: 'max(14px, env(safe-area-inset-bottom))',
   zIndex: Z_FLOAT,
   width: 48,
@@ -217,7 +213,7 @@ const pillIcon = { borderRadius: 7, display: 'block' };
 
 const wrap = {
   position: 'fixed',
-  right: 'max(12px, env(safe-area-inset-right))',
+  left: 'max(12px, env(safe-area-inset-left))',
   bottom: 'max(12px, env(safe-area-inset-bottom))',
   zIndex: Z_FLOAT,
   maxWidth: 'min(340px, calc(100vw - 24px))',
@@ -269,6 +265,237 @@ const close = {
   lineHeight: 1,
   padding: 6,
   cursor: 'pointer',
+};
+
+// ─────────────────────────────────────────────────────────────────────────────
+// iOS install walkthrough (2026-09-29)
+//
+// Apple gives a web page no install button, so on an iPhone the only way in is
+// a chain of taps through Safari's own menus — six screens on iOS 26, where
+// "Add to Home Screen" moved behind the page menu and "View More".
+//
+// For Safari 26 the card plays a short looping clip (muted, inline, like a GIF)
+// cut from a REAL screen recording of an iPhone doing it — real Safari
+// screens, with a blue tap marker on each button — next to numbered steps that
+// highlight in time with the clip. Tapping a step jumps the clip there. The
+// clip lives at /a2hs/ios-add-to-home.mp4 in each app's public folder
+// (~200 KB) and is only downloaded when someone opens this card.
+//
+// Older Safari and Chrome on iPhone use different menus, and we have no real
+// recording of those, so they get the written steps only — never a drawn
+// imitation that might not match what the person actually sees.
+// ─────────────────────────────────────────────────────────────────────────────
+function iosFlow() {
+  const ua = navigator.userAgent;
+  // Chrome on iOS 16.4+ can add to the home screen via its own Share button.
+  if (/CriOS/.test(ua)) return 'chrome';
+  // Safari 26 freezes the OS number in the user agent but not its own version.
+  const v = /Version\/(\d+)/.exec(ua);
+  return v && Number(v[1]) >= 26 ? 'safari26' : 'safari';
+}
+// `at` = second in the clip where that step's screen starts (clip is 19.9s).
+const IOS_STEPS = {
+  safari26: [
+    { label: 'Tap the ☰ button at the bottom, next to the web address', at: 0 },
+    { label: 'Tap Share', at: 3.87 },
+    { label: 'Tap View More (the round ⌄ button)', at: 6.8 },
+    { label: 'Tap Add to Home Screen', at: 9.73 },
+    { label: 'Keep “Open as Web App” ON and tap Add (top right)', at: 12.67 },
+    { label: 'Done — open it from your Home Screen', at: 16.27 },
+  ],
+  safari: [
+    { label: 'Tap the Share button (square with an arrow) at the bottom' },
+    { label: 'Scroll down and tap Add to Home Screen' },
+    { label: 'Tap Add (top right)' },
+    { label: 'Done — open it from your Home Screen' },
+  ],
+  chrome: [
+    { label: 'Tap the Share button (square with an arrow) in the address bar' },
+    { label: 'Tap Add to Home Screen (tap More if you don’t see it)' },
+    { label: 'Tap Add (top right)' },
+    { label: 'Done — open it from your Home Screen' },
+  ],
+};
+const IOS_CLIP = '/a2hs/ios-add-to-home.mp4';
+const IOS_POSTER = '/a2hs/ios-add-to-home.jpg';
+function IosInstallCard({ appName, onClose, boxRef }) {
+  const [flow] = useState(iosFlow);
+  const steps = IOS_STEPS[flow];
+  const hasClip = flow === 'safari26';
+  const [cur, setCur] = useState(0);
+  const videoRef = useRef(null);
+  // iOS only autoplays a video that is muted and inline, so set both on the
+  // element itself before asking it to play (React's `muted` prop alone is
+  // not always reflected in time).
+  useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    v.muted = true;
+    v.defaultMuted = true;
+    v.setAttribute('playsinline', '');
+    v.setAttribute('webkit-playsinline', '');
+    v.play().catch(() => {
+      /* autoplay refused (e.g. Low Power Mode): the poster + steps still show */
+    });
+  }, []);
+  const onTime = () => {
+    const v = videoRef.current;
+    if (!v) return;
+    let n = 0;
+    steps.forEach((s, i) => {
+      if (s.at !== undefined && v.currentTime >= s.at) n = i;
+    });
+    if (n !== cur) setCur(n);
+  };
+  const jump = (i) => {
+    const v = videoRef.current;
+    const at = steps[i].at;
+    if (v && at !== undefined) {
+      v.currentTime = at + 0.05;
+      v.play().catch(() => {});
+    }
+    setCur(i);
+  };
+  return (
+    <div ref={boxRef} role="dialog" aria-label={`Add ${appName} to your Home Screen`} style={iosWrap}>
+      <div style={iosCard}>
+        <div style={iosHead}>
+          <img src="/icons/icon-192.png" alt="" width={26} height={26} style={icon} />
+          <div style={{ minWidth: 0, flex: 1 }}>
+            <div style={title}>Add {appName} to Home Screen</div>
+            <div style={sub}>Opens like an app. Here’s how:</div>
+          </div>
+          <button type="button" onClick={onClose} aria-label="Not now" style={close}>
+            ✕
+          </button>
+        </div>
+        <div style={iosBody}>
+          {hasClip && (
+            <video
+              ref={videoRef}
+              src={IOS_CLIP}
+              poster={IOS_POSTER}
+              autoPlay
+              muted
+              loop
+              playsInline
+              preload="auto"
+              onTimeUpdate={onTime}
+              aria-label="Short video showing each tap on an iPhone"
+              style={iosVideo}
+            />
+          )}
+          <ol style={iosList}>
+            {steps.map((s, n) => {
+              const active = hasClip && n === cur;
+              return (
+                <li key={s.label} style={{ margin: 0 }}>
+                  <button
+                    type="button"
+                    onClick={() => jump(n)}
+                    aria-current={active ? 'step' : undefined}
+                    style={{
+                      ...iosStep,
+                      cursor: hasClip ? 'pointer' : 'default',
+                      opacity: !hasClip || active ? 1 : 0.55,
+                      fontWeight: active ? 650 : 500,
+                    }}
+                  >
+                    <span
+                      style={{
+                        ...iosNum,
+                        background: active || !hasClip ? '#0a84ff' : 'rgba(127,127,127,0.18)',
+                        color: active || !hasClip ? '#fff' : 'inherit',
+                      }}
+                    >
+                      {n + 1}
+                    </span>
+                    <span>{s.label}</span>
+                  </button>
+                </li>
+              );
+            })}
+          </ol>
+        </div>
+      </div>
+    </div>
+  );
+}
+const iosWrap = {
+  position: 'fixed',
+  right: 'max(12px, env(safe-area-inset-right))',
+  bottom: 'max(12px, env(safe-area-inset-bottom))',
+  zIndex: Z_FLOAT,
+  width: 'min(380px, calc(100vw - 24px))',
+  maxHeight: '48vh',
+};
+const iosCard = {
+  padding: 10,
+  maxHeight: '48vh',
+  display: 'flex',
+  flexDirection: 'column',
+  boxSizing: 'border-box',
+  borderRadius: 18,
+  background: 'var(--a2hs-bg, rgba(255,255,255,0.97))',
+  backdropFilter: 'saturate(180%) blur(14px)',
+  WebkitBackdropFilter: 'saturate(180%) blur(14px)',
+  border: '1px solid var(--a2hs-border, rgba(20,31,58,0.10))',
+  boxShadow: '0 12px 38px rgba(16,24,40,0.22)',
+  // vp-dark-audit-ignore: self-contained light card with its own explicit dark ink (theme vars override where an app defines them)
+  color: 'var(--a2hs-fg, #141f3a)',
+  font: '500 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif',
+};
+const iosHead = { display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8, flex: '0 0 auto' };
+const iosBody = { display: 'flex', gap: 10, alignItems: 'center', minHeight: 0 };
+// Sized so the whole card stays under half the screen (founder rule, 29 Sept):
+// the clip is at most 230px tall and never more than 30% of the viewport.
+const iosVideo = {
+  flex: '0 0 auto',
+  height: 'min(230px, 30vh)',
+  aspectRatio: '360 / 732',
+  borderRadius: 16,
+  background: '#000',
+  objectFit: 'cover',
+  boxShadow: '0 0 0 3px #111, 0 4px 14px rgba(0,0,0,0.25)',
+  margin: 3,
+};
+const iosList = {
+  listStyle: 'none',
+  margin: 0,
+  padding: 0,
+  display: 'flex',
+  flexDirection: 'column',
+  gap: 1,
+  minWidth: 0,
+  flex: 1,
+  maxHeight: '100%',
+  overflowY: 'auto', // the steps scroll inside the card, never the card off-screen
+};
+const iosStep = {
+  display: 'flex',
+  alignItems: 'flex-start',
+  gap: 8,
+  width: '100%',
+  textAlign: 'left',
+  border: 0,
+  background: 'transparent',
+  color: 'inherit',
+  padding: '3px 0',
+  font: 'inherit',
+  fontSize: 12.5,
+  lineHeight: 1.25,
+};
+const iosNum = {
+  flex: '0 0 auto',
+  width: 19,
+  height: 19,
+  borderRadius: 999,
+  display: 'inline-flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  fontSize: 11,
+  fontWeight: 700,
+  marginTop: -1,
 };
 
 export default AddToHomeScreen;
