@@ -47,6 +47,8 @@ import { useEffect, useRef, useState } from 'react';
 
 const KEY = 'vp-a2hs-dismissed';
 const SNOOZE_DAYS = 7; // 2026-09-30 founder: remind weekly until installed
+const AUTO_KEY = 'vp-a2hs-auto-opened';
+const AUTO_OPEN_MS = 2500;
 // Shared stacking convention for floating chrome (install prompt, toasts,
 // future non-modal banners): stay in the 300–500 band, comfortably above
 // normal content but nowhere near a MAX_INT arms race with anything else
@@ -123,6 +125,22 @@ export function AddToHomeScreen({ appName = 'this app' }) {
     if (isIosSafari()) setIos(true);
     return () => window.removeEventListener('beforeinstallprompt', onPrompt);
   }, []);
+
+  // 2026-09-30 founder: "the add to home screen animation is nowhere to be
+  // seen". It only opened after tapping the small round button, which most
+  // people never notice. On iPhone it now opens by itself (2.5 s after the
+  // page loads) once a week until the app is installed; ✕ snoozes 7 days.
+  useEffect(() => {
+    if (!ios || open) return;
+    let last = 0;
+    try { last = Number(localStorage.getItem(AUTO_KEY) || 0); } catch { /* private mode */ }
+    if (Date.now() - last < SNOOZE_DAYS * 864e5) return;
+    const id = setTimeout(() => {
+      try { localStorage.setItem(AUTO_KEY, String(Date.now())); } catch { /* ignore */ }
+      setOpen(true);
+    }, AUTO_OPEN_MS);
+    return () => clearTimeout(id);
+  }, [ios, open]);
 
   if (!evt && !ios) return null;
 
