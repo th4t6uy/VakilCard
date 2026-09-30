@@ -7,6 +7,7 @@ import ProductControlsBanner from "./components/ProductControlsBanner";
 import ThemeSync from "./components/ThemeSync";
 import ThemeCornerToggle from "./components/ThemeCornerToggle";
 import AddToHomeScreen from './components/AddToHomeScreen';
+import OfflineBar from './components/OfflineBar';
 
 // Bridge tokens minted just-in-time by the NFC claim flow (api/vakilcard/nfc.js's
 // claimPage) into this SPA's own session store. The claim page is a standalone
@@ -151,6 +152,7 @@ function App() {
         </Routes>
       </BrowserRouter>
       <AddToHomeScreen appName="VakilCard" />
+      <OfflineBar />
     </div>
   );
 }
