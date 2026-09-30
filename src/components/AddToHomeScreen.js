@@ -20,7 +20,7 @@
  *   - show on a non-Safari iOS browser, where Add to Home Screen does not
  *     exist and the instruction would be a lie;
  *   - come back the day after someone dismissed it. Dismissal is remembered
- *     for 60 days, and installing clears it for good.
+ *     for 7 days (founder, 30 Sept 2026), and installing hides it for good.
  *
  * 2026-09-20 — redesigned to fix a real collision: this used to render as a
  * persistent, full-width bar pinned to the bottom of the viewport at
@@ -46,7 +46,7 @@
 import { useEffect, useRef, useState } from 'react';
 
 const KEY = 'vp-a2hs-dismissed';
-const SNOOZE_DAYS = 60;
+const SNOOZE_DAYS = 7; // 2026-09-30 founder: remind weekly until installed
 // Shared stacking convention for floating chrome (install prompt, toasts,
 // future non-modal banners): stay in the 300–500 band, comfortably above
 // normal content but nowhere near a MAX_INT arms race with anything else
@@ -104,7 +104,7 @@ export function AddToHomeScreen({ appName = 'this app' }) {
     // thing that depends on it rather than somewhere it can be deleted by
     // accident.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js').catch(() => {});
+      navigator.serviceWorker.register('/sw.js?spa=1') // single-page app: see sw.js.catch(() => {});
     }
     if (installed() || snoozed()) return;
 
