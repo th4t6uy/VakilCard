@@ -1,4 +1,7 @@
 /* Vakilpedia service worker — v4 (2026-10-01): a new build always shows up.
+ *   v4.1 (www, 1 Oct 2026): navigation preload — the page request starts at
+ *   once instead of waiting for this worker to wake up (cache names unchanged,
+ *   so nobody's saved pages are dropped).
  *
  * One file, shipped unchanged into every Vakilpedia app.
  *
@@ -78,9 +81,27 @@ self.addEventListener('activate', (e) => {
     caches
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => !k.startsWith(VERSION)).map((k) => caches.delete(k))))
+      .then(() =>
+        // Navigation preload: the browser starts the page request at the
+        // same moment it wakes this worker, instead of after. Without it every
+        // page load paid the worker's start-up time first (tens to hundreds
+        // of ms on a phone) before the request even left.
+        self.registration.navigationPreload
+          ? self.registration.navigationPreload.enable().catch(() => {})
+          : null
+      )
       .then(() => self.clients.claim())
   );
 });
+
+// The page request the browser already started (navigation preload), or a
+// fresh one where preload is unavailable. Using it also avoids sending the
+// same request twice.
+function pageRequest(e) {
+  return Promise.resolve(e.preloadResponse)
+    .catch(() => undefined)
+    .then((pre) => pre || fetch(e.request));
+}
 
 function clearUserData() {
   freshReady.clear();
@@ -163,11 +184,11 @@ async function handleNavigate(e) {
   if (url.pathname === REPAIR_PATH) return repair();
   if (SIGN_PATH.test(url.pathname)) {
     await clearUserData().catch(() => {});
-    return fetch(req);
+    return pageRequest(e);
   }
 
   let stored = Promise.resolve();
-  const network = fetch(req).then((res) => {
+  const network = pageRequest(e).then((res) => {
     stored = storePage(req.url, res.clone()).catch(() => {});
     return res;
   });
