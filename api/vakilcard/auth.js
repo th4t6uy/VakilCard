@@ -7,6 +7,8 @@
 //   POST /api/vakilcard/auth  { action: "logout",  refresh_token }
 //   POST /api/vakilcard/auth  { action: "bridge_from_suite" }         (no body — reads the shared session cookie)
 //   POST /api/vakilcard/auth  { action: "redeem_courtque_beta" }       (Bearer auth required)
+//   POST /api/vakilcard/auth  { action: "legal_outstanding", product? } (Bearer auth required)
+//   POST /api/vakilcard/auth  { action: "legal_accept", documentIds, viewedDocumentIds?, product? } (Bearer auth required)
 //
 // Successful verification creates the account + a DRAFT VakilCard: the
 // username (phone number) and URL are reserved immediately, but nothing is
@@ -27,6 +29,7 @@ const {
   REFRESH_TTL_SEC,
 } = require("./_jwt");
 const verification = require("./_verify");
+const legal = require("./_legal");
 const controls = require("./_controls");
 const messaging = require("./_messaging");
 const { hashPassword, verifyPassword, passwordPolicyError } = require("./_password");
@@ -254,28 +257,6 @@ async function touchLogin(accountId) {
     await db(`vakilpedia_accounts?id=eq.${accountId}`, {
       method: "PATCH",
       body: { last_login_at: now, last_active_at: now },
-      prefer: "return=minimal",
-    });
-  } catch {
-    /* non-fatal */
-  }
-}
-
-/**
- * Records explicit Terms-of-Use acceptance (2026-08-15) — the NFC signup
- * flow previously only implied consent via a sentence of body copy, never
- * a recorded event. `column` is one of the two eula_*_accepted_at columns
- * on vakilpedia_accounts. Only sets it the FIRST time (the `is.null` filter)
- * so the timestamp always reflects original consent, not the most recent
- * login. Best-effort, like touchLogin — a logging failure must never block
- * signup or a beta redemption.
- */
-async function stampEulaAcceptance(accountId, column) {
-  if (!accountId) return;
-  try {
-    await db(`vakilpedia_accounts?id=eq.${accountId}&${column}=is.null`, {
-      method: "PATCH",
-      body: { [column]: new Date().toISOString() },
       prefer: "return=minimal",
     });
   } catch {
@@ -609,9 +590,6 @@ module.exports = async function handler(req, res) {
       const { accountId, profile, created } = ensured;
       const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
       await touchLogin(accountId);
-      if (body.eula_accepted === true) {
-        await stampEulaAcceptance(accountId, "eula_vakilcard_accepted_at");
-      }
       return json(res, 200, {
         ok: true,
         token: access, // back-compat field (Phase 2 clients)
@@ -861,9 +839,6 @@ module.exports = async function handler(req, res) {
       if (!result || result.ok !== true) {
         return json(res, 200, { ok: false, error: (result && result.error) || "unknown_error" });
       }
-      if (body.eula_accepted === true) {
-        await stampEulaAcceptance(who.accountId, "eula_courtque_accepted_at");
-      }
       return json(res, 200, {
         ok: true,
         idempotent: !!result.idempotent,
@@ -871,6 +846,27 @@ module.exports = async function handler(req, res) {
         limits: result.limits,
         expiresAt: result.expiresAt,
       });
+    }
+
+    // ── Consent (ROUTE A, 2026-10-01) ─────────────────────────────────────
+    // Explicit, recorded acceptance inside VakilCard, through the same SupraCore consent system
+    // the Account uses. The account comes from the Bearer token only; the product from a fixed
+    // allow-list (see _legal.js); IP and user agent are read from THIS request. Nothing here
+    // trusts a flag from the browser -- the old `eula_accepted` flag is gone.
+    if (action === "legal_outstanding" || action === "legal_accept") {
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { ok: false, error: "not_signed_in" });
+      const out =
+        action === "legal_outstanding"
+          ? await legal.outstanding({ db, accountId: who.accountId, product: body.product })
+          : await legal.accept({
+              db,
+              accountId: who.accountId,
+              body,
+              ip,
+              userAgent: req.headers["user-agent"],
+            });
+      return json(res, out.status, out.body);
     }
 
     // ── Link phone to an already-authenticated account (e.g. a Google-only

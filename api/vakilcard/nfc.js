@@ -9,10 +9,17 @@
 //        caller already owns it; 409 if it's already someone else's card —
 //        binding NEVER silently steals a card from another account.
 //
+// Consent (2026-10-01, founder: "NO silent consents assumed"): after the OTP proves the phone and
+// BEFORE the card is bound, the page shows the shared consent card (api/vakilcard/_consentClient.js)
+// listing every agreement still owed; one tap on "Accept all & continue" records it for real
+// through auth.js (actions legal_outstanding / legal_accept -> supracore_legal_accept). The page
+// no longer sends any "I agreed" flag, and there is no tick box.
+//
 // Design note: the tag itself is written+locked once, at manufacturing time,
 // with this opaque code and nothing else. Nothing here ever touches the
 // physical chip again — "reassigning" a card is only ever this table.
 const { db, esc, jsStr, readJsonBody, resolveAccount, trackEvent } = require("./_lib");
+const { consentClientSource } = require("./_consentClient");
 
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js/profile.js.
 // The public card itself lives on the root marketing domain (same SITE
@@ -22,6 +29,8 @@ const { db, esc, jsStr, readJsonBody, resolveAccount, trackEvent } = require("./
 const SITE = "https://www.vakilpedia.com";
 const DASHBOARD_SITE = process.env.VAKILCARD_DASHBOARD_URL || "https://vakilcard.vakilpedia.com";
 const CODE_RE = /^[a-z0-9]{6,16}$/;
+// The Vakilpedia Account: where the agreement text is read from and where "I don't accept" leads.
+const ACCOUNT_ORIGIN = process.env.ACCOUNT_ORIGIN || "https://account.vakilpedia.com";
 
 // CourtQue MPHC-kiosk beta offer, shown once right after a fresh card
 // activation — "first touch VakilCard, second touch CourtQue" (2026-08-15).
@@ -92,10 +101,30 @@ function claimPage(code) {
   .err{color:#DC2626;font-size:13px;margin:-4px 0 12px;min-height:16px}
   .step{display:none}
   .step.active{display:block}
-  .agree{display:flex;align-items:flex-start;gap:8px;margin:0 0 14px}
-  .agree input{width:auto;margin:2px 0 0;flex:none}
-  .agree label{font-size:12.5px;color:#475569;line-height:1.4}
-  .agree a{color:#635BFF;font-weight:600;text-decoration:none}
+  /* Consent card (same wording and behaviour as the Account's shared card) */
+  .cs-h{font-size:20px;font-weight:900;margin:0 0 6px;color:#0f172a}
+  .cs-intro{color:#475569;font-size:13px;line-height:1.5;margin:0 0 12px}
+  .cs-list{list-style:none;margin:0 0 12px;padding:0;border-top:1px solid #E2E8F0;border-bottom:1px solid #E2E8F0;max-height:38vh;overflow-y:auto}
+  .cs-row{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid #E2E8F0}
+  .cs-row:last-child{border-bottom:none}
+  .cs-title{flex:1;min-width:0;font-size:13px;font-weight:700;color:#0f172a;line-height:1.35}
+  .cs-ver{display:block;font-size:11px;font-weight:400;color:#94A3B8}
+  button.cs-read{flex:none;width:auto;padding:6px 12px;border-radius:999px;background:#fff;color:#0f172a;border:1.5px solid #CBD5E1;font-size:12px;font-weight:700}
+  button.cs-accept{border-radius:999px;padding:14px}
+  button.cs-ghost{background:#fff;color:#635BFF;border:1.5px solid #CBD5E1;border-radius:999px;margin-top:10px}
+  .cs-error{color:#B91C1C;background:#FEF2F2;border:1px solid #FECACA;border-radius:12px;padding:8px 10px;font-size:12.5px;line-height:1.4;margin:0 0 10px;overflow-wrap:anywhere}
+  .cs-status{color:#475569;font-size:14px;line-height:1.5;padding:12px 0}
+  .cs-decline{text-align:center;font-size:11.5px;color:#94A3B8;margin:10px 0 0;line-height:1.5}
+  .cs-decline a{color:#64748B;font-weight:600;text-decoration:underline}
+  .cs-readhead{display:flex;align-items:center;gap:10px;margin:0 0 8px}
+  .cs-readtitle{min-width:0;font-size:13px;font-weight:700;color:#0f172a;line-height:1.35}
+  .cs-body{max-height:55vh;overflow-y:auto;border-top:1px solid #E2E8F0;padding-top:8px;font-size:13px;line-height:1.55;color:#334155;overflow-wrap:anywhere}
+  .cs-body.cs-bad{color:#B91C1C}
+  .cs-h1{font-size:14px;font-weight:800;margin:14px 0 4px;color:#0f172a}
+  .cs-h2{font-size:13px;font-weight:700;margin:10px 0 3px;color:#0f172a}
+  .cs-p{margin:0 0 9px;font-size:13px;line-height:1.55;color:#334155}
+  .cs-li{margin:0 0 5px 10px;font-size:13px;line-height:1.5;color:#334155}
+  .cs-lines{white-space:pre-line;margin:0 0 9px}
   button:disabled{opacity:.5;cursor:default}
 </style>
 </head>
@@ -104,14 +133,10 @@ function claimPage(code) {
   ${BRAND_HEADER}
   <div id="step-phone" class="step active">
     <h1>Activate this VakilCard</h1>
-    <p>Enter your phone number to link this card to your account. If you don't have one yet, this creates your VakilCard and your Vakilpedia account &mdash; used to sign in across CaseLinx, CourtQue and other Vakilpedia apps. By continuing you agree to both products' Terms of Use.</p>
+    <p>Enter your phone number to link this card to your account. If you don't have one yet, this creates your VakilCard and your Vakilpedia account &mdash; used to sign in across CaseLinx, CourtQue and other Vakilpedia apps. After you verify your number you will be shown the Vakilpedia Terms, the Privacy Notice and the VakilCard agreement to read and accept.</p>
     <input id="phone" type="tel" inputmode="tel" placeholder="10-digit mobile number" autocomplete="tel">
-    <div class="agree">
-      <input type="checkbox" id="agree-vakilcard">
-      <label for="agree-vakilcard">I agree to the <a href="https://www.vakilpedia.com/terms" target="_blank" rel="noopener noreferrer">Vakilpedia Terms of Use</a> for VakilCard.</label>
-    </div>
     <div class="err" id="err-phone"></div>
-    <button id="btn-send" disabled>Send code</button>
+    <button id="btn-send">Send code</button>
   </div>
   <div id="step-otp" class="step">
     <h1>Enter the code</h1>
@@ -125,18 +150,17 @@ function claimPage(code) {
       Didn&rsquo;t get it? You can resend in <span id="resend-count">60</span>s.
     </p>
   </div>
+  <div id="step-consent" class="step">
+    <div id="consent-root"></div>
+  </div>
   <div id="step-done" class="step">
     <h1>VakilCard activated 🎉</h1>
     <p id="done-msg">Setting things up…</p>
     <div id="courtque-offer" style="display:none;margin-top:6px;padding-top:18px;border-top:1px solid #E2E8F0">
       <p style="font-weight:800;color:#0f172a;margin:0 0 6px">Try CourtQue free</p>
-      <p>Get a WhatsApp alert the moment your case is coming up at MPHC &mdash; 10 alerts a day, free during our beta.</p>
-      <div class="agree">
-        <input type="checkbox" id="agree-courtque">
-        <label for="agree-courtque">I agree to the <a href="https://www.vakilpedia.com/terms" target="_blank" rel="noopener noreferrer">Vakilpedia Terms of Use</a> for CourtQue.</label>
-      </div>
+      <p>Get a WhatsApp alert the moment your case is coming up at MPHC &mdash; 10 alerts a day, free during our beta. You will be shown the CourtQue agreement to read and accept first.</p>
       <div class="err" id="err-courtque"></div>
-      <button id="btn-courtque" type="button" disabled>Try CourtQue free</button>
+      <button id="btn-courtque" type="button">Try CourtQue free</button>
       <button id="btn-continue" type="button" style="background:#fff;color:#635BFF;border:1.5px solid #635BFF;margin-top:10px">Continue to my VakilCard</button>
     </div>
   </div>
@@ -147,16 +171,14 @@ function claimPage(code) {
   var DASHBOARD_FALLBACK = ${jsStr(DASHBOARD_SITE)};
   var COURTQUE_WA = ${jsStr(COURTQUE_WHATSAPP_URL)};
   var phone = "";
+  var authState = null; // tokens from the OTP verify
+  var dest = null;      // where "Continue to my VakilCard" goes
   function show(id){ document.querySelectorAll(".step").forEach(function(s){ s.classList.remove("active"); }); document.getElementById(id).classList.add("active"); }
   function setErr(id, msg){ document.getElementById(id).textContent = msg || ""; }
 
-  var agreeVakilcard = document.getElementById("agree-vakilcard");
-  var btnSendEl = document.getElementById("btn-send");
-  agreeVakilcard.addEventListener("change", function(){ btnSendEl.disabled = !agreeVakilcard.checked; });
-
-  var agreeCourtque = document.getElementById("agree-courtque");
-  document.getElementById("btn-courtque").disabled = true; // re-armed once step-done renders below
-  agreeCourtque.addEventListener("change", function(){ document.getElementById("btn-courtque").disabled = !agreeCourtque.checked; });
+  // The consent card (see api/vakilcard/_consentClient.js). Nothing is recorded, and no card is
+  // bound, until the person has accepted what is listed there for real (or nothing is owed).
+  var consent = ${consentClientSource({ accountOrigin: ACCOUNT_ORIGIN })};
 
   // ── Resend cooldown (2026-08-16) ───────────────────────────────────────────
   // WhatsApp delivery is not instant and a lawyer standing at a stall has no way
@@ -211,7 +233,6 @@ function claimPage(code) {
 
   document.getElementById("btn-send").addEventListener("click", function(){
     setErr("err-phone", "");
-    if (!agreeVakilcard.checked) { setErr("err-phone", "Please agree to the Terms of Use to continue."); return; }
     phone = document.getElementById("phone").value.trim();
     if (!phone) { setErr("err-phone", "Enter your phone number."); return; }
     var btn = this; btn.disabled = true; btn.textContent = "Sending…";
@@ -243,64 +264,102 @@ function claimPage(code) {
     var resendBtn = document.getElementById("btn-resend");
     var resendWasDisabled = resendBtn.disabled;
     resendBtn.disabled = true;
-    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", phone: phone, code: code, eula_accepted: true }) })
+    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "verify", phone: phone, code: code }) })
       .then(function(r){ return r.json().then(function(d){ return { ok: r.ok, d: d }; }); })
       .then(function(res){
         if (!res.ok) {
           btn.disabled = false; btn.textContent = "Verify & activate";
           if (!resendWasDisabled) resendBtn.disabled = false;
-          setErr("err-otp", "Incorrect or expired code.");
+          // A brand-new person whose account is still in the approval queue gets the server's own words.
+          setErr("err-otp", res.d && res.d.error === "awaiting_approval" && res.d.message ? res.d.message : "Incorrect or expired code.");
           return;
         }
-        return fetch("/api/vakilcard/nfc", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + res.d.access_token }, body: JSON.stringify({ action: "bind", code: CODE }) })
-          .then(function(r2){ return r2.json().then(function(d2){ return { ok: r2.ok, d: d2, auth: res.d }; }); })
-          .then(function(bindRes){
-            if (!bindRes.ok) { btn.disabled = false; btn.textContent = "Verify & activate"; setErr("err-otp", bindRes.d.error === "already_claimed" ? "This card is already linked to another account." : "Couldn't activate this card. Contact support."); return; }
-            var dest;
-            if (bindRes.d.published && bindRes.d.redirect) {
-              // Published card: the public URL needs no session, land there directly.
-              dest = bindRes.d.redirect;
-            } else {
-              // Not published yet: this browser JUST proved phone ownership via the
-              // OTP above, and already holds the freshly-issued tokens (bindRes.auth) —
-              // carry them into the dashboard via a URL FRAGMENT (never sent to the
-              // server, never logged) instead of bouncing to an unauthenticated
-              // dashboard root, which previously dead-ended on the marketing page.
-              // See App.js's fragment-token bootstrap. (2026-08-15 kiosk fix.)
-              dest = DASHBOARD_FALLBACK + "/setup#at=" + encodeURIComponent(bindRes.auth.access_token) + "&rt=" + encodeURIComponent(bindRes.auth.refresh_token);
-            }
-            document.getElementById("done-msg").textContent = "Your VakilCard is ready.";
-            document.getElementById("courtque-offer").style.display = "block";
-            show("step-done");
-
-            document.getElementById("btn-continue").addEventListener("click", function(){
-              window.location.href = dest;
-            });
-            document.getElementById("btn-courtque").addEventListener("click", function(){
-              if (!agreeCourtque.checked) { setErr("err-courtque", "Please agree to the Terms of Use to continue."); return; }
-              var cqBtn = this; cqBtn.disabled = true; cqBtn.textContent = "Activating…";
-              fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + bindRes.auth.access_token }, body: JSON.stringify({ action: "redeem_courtque_beta", eula_accepted: true }) })
-                .then(function(r3){ return r3.json().then(function(d3){ return { ok: r3.ok, d: d3 }; }); })
-                .then(function(cqRes){
-                  if (!cqRes.ok || !cqRes.d.ok) {
-                    cqBtn.disabled = false; cqBtn.textContent = "Try CourtQue free";
-                    setErr("err-courtque", cqRes.d && cqRes.d.error === "exhausted" ? "This beta offer is fully claimed — sorry!" : cqRes.d && cqRes.d.error === "invalid_code" ? "This offer isn't available right now." : "Couldn't activate CourtQue just now. Try again in a moment.");
-                    return;
-                  }
-                  cqBtn.textContent = "CourtQue activated ✓";
-                  if (COURTQUE_WA) {
-                    window.location.href = COURTQUE_WA;
-                  } else {
-                    setErr("err-courtque", "");
-                    document.getElementById("done-msg").textContent = "CourtQue activated — we'll message you on WhatsApp with next steps.";
-                  }
-                })
-                .catch(function(){ cqBtn.disabled = false; cqBtn.textContent = "Try CourtQue free"; setErr("err-courtque", "Network error, try again."); });
-            });
-          });
+        authState = res.d;
+        // Consent BEFORE the card is bound. The card lists every agreement still owed; if nothing is
+        // owed it hands straight on. If the account is awaiting approval it says so and stops.
+        consent.start({
+          token: res.d.access_token,
+          product: "vakilcard",
+          show: function(){ show("step-consent"); },
+          onDone: function(ctx){ bindCard(res.d, ctx); }
+        });
       })
       .catch(function(){ btn.disabled = false; btn.textContent = "Verify & activate"; if (!resendWasDisabled) resendBtn.disabled = false; setErr("err-otp", "Network error, try again."); });
   });
+
+  function bindCard(auth, ctx){
+    ctx.busy("Linking your card…");
+    fetch("/api/vakilcard/nfc", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + auth.access_token }, body: JSON.stringify({ action: "bind", code: CODE }) })
+      .then(function(r2){ return r2.json().then(function(d2){ return { ok: r2.ok, d: d2 }; }); })
+      .then(function(bindRes){
+        if (!bindRes.ok) {
+          var claimed = bindRes.d && bindRes.d.error === "already_claimed";
+          ctx.fail(claimed ? "This card is already linked to another account." : "Couldn't activate this card. Contact support.", claimed ? null : function(){ bindCard(auth, ctx); });
+          return;
+        }
+        if (bindRes.d.published && bindRes.d.redirect) {
+          // Published card: the public URL needs no session, land there directly.
+          dest = bindRes.d.redirect;
+        } else {
+          // Not published yet: this browser JUST proved phone ownership via the
+          // OTP above, and already holds the freshly-issued tokens (auth) —
+          // carry them into the dashboard via a URL FRAGMENT (never sent to the
+          // server, never logged) instead of bouncing to an unauthenticated
+          // dashboard root, which previously dead-ended on the marketing page.
+          // See App.js's fragment-token bootstrap. (2026-08-15 kiosk fix.)
+          dest = DASHBOARD_FALLBACK + "/setup#at=" + encodeURIComponent(auth.access_token) + "&rt=" + encodeURIComponent(auth.refresh_token);
+        }
+        document.getElementById("done-msg").textContent = "Your VakilCard is ready.";
+        document.getElementById("courtque-offer").style.display = "block";
+        show("step-done");
+      })
+      .catch(function(){ ctx.fail("Network error while linking your card.", function(){ bindCard(auth, ctx); }); });
+  }
+
+  document.getElementById("btn-continue").addEventListener("click", function(){
+    if (dest) window.location.href = dest;
+  });
+
+  // CourtQue offer: same card, for the CourtQue agreement, then redeem. An OPTIONAL offer, so the
+  // card has "Not now" (back to this screen) instead of the delete-my-account link.
+  document.getElementById("btn-courtque").addEventListener("click", function(){
+    if (!authState) return;
+    setErr("err-courtque", "");
+    consent.start({
+      token: authState.access_token,
+      product: "courtque",
+      heading: "Before you try CourtQue",
+      optional: true,
+      show: function(){ show("step-consent"); },
+      onBack: function(){ show("step-done"); },
+      onDone: function(ctx){ redeemCourtque(ctx); }
+    });
+  });
+
+  function redeemCourtque(ctx){
+    ctx.busy("Activating CourtQue…");
+    var cqBtn = document.getElementById("btn-courtque");
+    fetch("/api/vakilcard/auth", { method: "POST", headers: { "Content-Type": "application/json", "Authorization": "Bearer " + authState.access_token }, body: JSON.stringify({ action: "redeem_courtque_beta" }) })
+      .then(function(r3){ return r3.json().then(function(d3){ return { ok: r3.ok, d: d3 }; }); })
+      .then(function(cqRes){
+        if (!cqRes.ok || !cqRes.d.ok) {
+          var code = cqRes.d && cqRes.d.error;
+          var terminal = code === "exhausted" || code === "invalid_code";
+          var msg = code === "exhausted" ? "This beta offer is fully claimed — sorry!" : code === "invalid_code" ? "This offer isn't available right now." : "Couldn't activate CourtQue" + (code ? " (" + code + ")" : "") + ".";
+          ctx.fail(msg, terminal ? null : function(){ redeemCourtque(ctx); });
+          return;
+        }
+        show("step-done");
+        cqBtn.disabled = true; cqBtn.textContent = "CourtQue activated ✓";
+        if (COURTQUE_WA) {
+          window.location.href = COURTQUE_WA;
+        } else {
+          setErr("err-courtque", "");
+          document.getElementById("done-msg").textContent = "CourtQue activated — we'll message you on WhatsApp with next steps.";
+        }
+      })
+      .catch(function(){ ctx.fail("Network error while activating CourtQue.", function(){ redeemCourtque(ctx); }); });
+  }
 })();
 </script>
 </body>
