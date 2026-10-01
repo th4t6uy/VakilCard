@@ -18,6 +18,13 @@
  *
  * It never takes taps (pointer-events: none), so it can't cover a button's
  * function, and it is inline-styled so it ships unchanged into every repo.
+ *
+ * New build (1 Oct 2026): when the server was slow and the phone's saved copy
+ * of this page was shown, sw.js says so once the real page arrives
+ * ({type:'vp-fresh-page'}). A page nobody has touched yet simply reloads onto
+ * the new version; if someone is already tapping or typing, the bar offers
+ *   "A newer version is ready · Refresh"
+ * instead (the one time it takes a tap — only on the pill itself).
  */
 import { useEffect, useRef, useState } from 'react';
 export function OfflineBar({ translate }) {
@@ -30,6 +37,7 @@ export function OfflineBar({ translate }) {
   });
   const [synced, setSynced] = useState(false);
   const wasOffline = useRef(false);
+  const [newer, setNewer] = useState(false);
   useEffect(() => {
     setOnline(navigator.onLine);
     const up = () => setOnline(true);
@@ -51,6 +59,53 @@ export function OfflineBar({ translate }) {
       window.removeEventListener('vp:sync-status', onSync);
     };
   }, []);
+  // A newer version of this page arrived after the saved copy was shown (the
+  // server was slow, usually right after a new build — see sw.js).
+  useEffect(() => {
+    const sw = 'serviceWorker' in navigator ? navigator.serviceWorker : null;
+    if (!sw) return;
+    let touched = false;
+    let handled = false;
+    const touch = () => {
+      touched = true;
+    };
+    const kinds = ['pointerdown', 'keydown', 'input', 'wheel', 'touchstart'];
+    kinds.forEach((k) => window.addEventListener(k, touch, { capture: true, passive: true }));
+    const here = () => window.location.href.split('#')[0];
+    const onMessage = (e) => {
+      const d = (e.data || {});
+      if (handled || d.type !== 'vp-fresh-page' || d.url !== here()) return;
+      handled = true;
+      // Never reload the same page twice in a minute (a server that is slow
+      // every time would otherwise bounce it): offer the button instead.
+      const key = 'vp-fresh-reload:' + here();
+      let last = 0;
+      try {
+        last = Number(sessionStorage.getItem(key) || 0);
+      } catch {
+        // storage blocked (private mode): fine
+      }
+      if (touched || Date.now() - last < 60 * 1000) {
+        setNewer(true);
+        return;
+      }
+      try {
+        sessionStorage.setItem(key, String(Date.now()));
+      } catch {
+        // storage blocked (private mode): fine
+      }
+      window.location.reload();
+    };
+    sw.addEventListener('message', onMessage);
+    sw.startMessages();
+    // The news may have arrived before this page was listening: ask.
+    sw.controller?.postMessage({ type: 'vp-fresh?', url: here() });
+    return () => {
+      kinds.forEach((k) => window.removeEventListener(k, touch, { capture: true }));
+      sw.removeEventListener('message', onMessage);
+    };
+  }, []);
+
   // Once back online and nothing is waiting, say so briefly, then hide.
   useEffect(() => {
     if (online && wasOffline.current && queue.pending === 0 && !queue.syncing) {
@@ -83,6 +138,18 @@ export function OfflineBar({ translate }) {
     dot = '#22c55e';
     head = t('Back online');
     body = queue.known ? t('All changes synced.') : t('Everything is up to date.');
+  } else if (newer) {
+    return (
+      <div role="status" aria-live="polite" style={wrap}>
+        <div style={{ ...pill, pointerEvents: 'auto' }}>
+          <span aria-hidden style={{ ...dotStyle, background: '#38bdf8' }} />
+          <b style={{ fontWeight: 700, minWidth: 0 }}>{t('A newer version is ready')}</b>
+          <button type="button" onClick={() => window.location.reload()} style={refreshBtn}>
+            {t('Refresh')}
+          </button>
+        </div>
+      </div>
+    );
   } else {
     return null;
   }
@@ -125,6 +192,18 @@ const pill = {
   color: '#f1f5f9',
   font: '500 12.5px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif',
 };
+const refreshBtn = {
+  flex: '0 0 auto',
+  border: 0,
+  borderRadius: 999,
+  padding: '4px 12px',
+  background: '#38bdf8',
+  // vp-dark-audit-ignore: lives on the self-contained dark pill in both themes
+  color: '#0f172a',
+  font: '700 12.5px/1.2 system-ui, -apple-system, "Segoe UI", sans-serif',
+  cursor: 'pointer',
+};
+
 const dotStyle = {
   flex: '0 0 auto',
   width: 8,

@@ -95,6 +95,21 @@ function isIosSafari() {
   return !/FxiOS|EdgiOS|OPiOS/.test(ua);
 }
 
+// An installed app can stay open for days, and the browser only looks for a
+// new service worker on a full page load. Look again whenever the app comes
+// back on screen (at most every 30 minutes).
+let swWatching = false;
+let swCheckedAt = 0;
+function checkForNewVersionOnReturn(reg) {
+  if (swWatching) return;
+  swWatching = true;
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState !== 'visible' || Date.now() - swCheckedAt < 30 * 60 * 1000) return;
+    swCheckedAt = Date.now();
+    reg.update().catch(() => {});
+  });
+}
+
 export function AddToHomeScreen({ appName = 'this app' }) {
   const [evt, setEvt] = useState(null);
   const [ios, setIos] = useState(false);
@@ -106,7 +121,11 @@ export function AddToHomeScreen({ appName = 'this app' }) {
     // thing that depends on it rather than somewhere it can be deleted by
     // accident.
     if ('serviceWorker' in navigator) {
-      navigator.serviceWorker.register('/sw.js?spa=1') // single-page app: see sw.js.catch(() => {});
+      // single-page app: see sw.js
+      navigator.serviceWorker
+        .register('/sw.js?spa=1', { updateViaCache: 'none' })
+        .then(checkForNewVersionOnReturn)
+        .catch(() => {});
     }
     if (installed() || snoozed()) return;
 
