@@ -36,6 +36,10 @@ import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 import EcosystemRail from "../components/EcosystemRail";
 import SEOHead from "../components/SEOHead";
+import { LAUNCHER_ITEMS } from "../config/ecosystem";
+
+// CaseLinx address from the shared ecosystem list (one place for app URLs).
+const CASELINX_HREF = (LAUNCHER_ITEMS.find((a) => a.id === "caselinx") || {}).href || "https://caselinx.vakilpedia.com";
 
 // Password errors — kept local since VakilCardPage never shows the full
 // onboarding ERRORS map, just the handful relevant to Change Password.
@@ -617,7 +621,15 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
       </div>
 
       <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
-        <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">Appointment requests</p>
+        <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Appointment requests</p>
+          {/* Cross-sell (3 Oct 2026): the same bookings show in CaseLinx, beside the lawyer's hearings,
+              read from this same table — nothing is copied. */}
+          <a href={`${CASELINX_HREF}/dashboard/cause-list`} target="_blank" rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff]">
+            See them next to your hearings in CaseLinx →
+          </a>
+        </div>
         {loading ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
         ) : !cfg || !cfg.requests || !cfg.requests.length ? (
@@ -1213,7 +1225,12 @@ export default function VakilCardPage() {
             >
               <div className="flex items-center justify-between gap-4">
                 <div>
-                  <p className="text-sm font-black text-slate-900 dark:text-white">VakilCard Pro — ₹199/year founder price</p>
+                  {/* Price from the catalogue via GET /me (founder, 3 Oct 2026: Pro is ₹299/year); never typed here. */}
+                  <p className="text-sm font-black text-slate-900 dark:text-white">
+                    {ent && ent.pricing && ent.pricing.founder_available
+                      ? <>VakilCard Pro — ₹{ent.pricing.founder_inr}/year founder price</>
+                      : <>VakilCard Pro — ₹{ent && ent.pricing ? ent.pricing.regular_inr : 299}/year</>}
+                  </p>
                   <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-left hyphens-none">Custom username · Native Pay · Website · Booking · Analytics · No branding</p>
                 </div>
                 <span className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 text-xs font-bold px-4 py-2 flex-none">Upgrade</span>

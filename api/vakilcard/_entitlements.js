@@ -145,7 +145,7 @@ function entitlementsFor(profile, pricing) {
     expires_at: (profile && profile.subscription_expires_at) || null,
     founder_pricing: !!(profile && profile.founder_pricing),
     features,
-    pricing: { founder_inr: p.founder_inr, regular_inr: p.regular_inr, period_days: p.period_days },
+    pricing: { founder_inr: p.founder_inr, regular_inr: p.regular_inr, period_days: p.period_days, founder_available: p.founder_available !== false },
   };
 }
 

@@ -46,7 +46,16 @@ test("LEGACY_PRICING is a cold-start fallback with the same shape and the same n
   assert.equal(billing.LEGACY_PRICING.period_days, PRICING.period_days);
   assert.equal(billing.LEGACY_PRICING.source, "legacy_fallback");
   const ent = entitlementsFor({ subscription_plan: "FREE", subscription_status: "ACTIVE" }, billing.LEGACY_PRICING);
-  assert.deepEqual(ent.pricing, { founder_inr: 199, regular_inr: 299, period_days: 365 });
+  assert.deepEqual(ent.pricing, { founder_inr: 199, regular_inr: 299, period_days: 365, founder_available: true });
+});
+
+test("no founder row in the catalogue: founder offer closed, ₹299/year shown (founder, 3 Oct 2026)", () => {
+  const live = billing.pricingFromPlans([{ ...CATALOGUE[1], price_paise: 29900, active: false }], {});
+  assert.equal(live.regular_inr, 299);
+  assert.equal(live.founder_available, false);
+  const ent = entitlementsFor({ subscription_plan: "FREE", subscription_status: "ACTIVE" }, live);
+  assert.equal(ent.pricing.founder_available, false);
+  assert.equal(ent.pricing.regular_inr, 299);
 });
 
 test("entitlementsFor: live catalogue pricing rides through, fallback when omitted", () => {

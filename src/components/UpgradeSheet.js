@@ -169,7 +169,8 @@ const FEATURE_PREVIEWS = {
  */
 export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
   const [pricing, setPricing] = useState({ founder_inr: 199, regular_inr: 299 });
-  const [founderAvailable, setFounderAvailable] = useState(true);
+  // false until GET /subscription answers, so a stale founder price never flashes (founder, 3 Oct 2026: Pro ₹299/year).
+  const [founderAvailable, setFounderAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
   // null | "activated" | "pending" | "exists" | "error"
   //   exists — the platform already holds a live Pro mandate for this account
