@@ -19,7 +19,7 @@ const {
   sanitizeBookingWindows,
 } = require("./_lib");
 const { sign } = require("./_jwt");
-const { entitlementsFor, isProActive, requirePro } = require("./_entitlements");
+const { entitlementsFor, isProActive, requirePro, primePaidPlans } = require("./_entitlements");
 
 const SOCIAL_KEYS = ["linkedin", "facebook", "instagram", "x", "threads", "youtube", "whatsapp", "barcouncil"];
 
@@ -86,6 +86,7 @@ async function loadOwn(accountId) {
 }
 
 module.exports = async function handler(req, res) {
+  await primePaidPlans(); // admin "Paid plans" switch -- see _entitlements.js
   const who = await resolveAccount(req);
   if (!who) return json(res, 401, { error: "unauthenticated" });
 

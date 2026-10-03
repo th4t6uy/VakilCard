@@ -41,7 +41,7 @@
 // word — a state that LOOKED like verification and was not, which is worse
 // than having no state at all.
 const { db, readJsonBody, resolveAccount, trackEvent, sanitizeBookingWindows, expandBookingSlots } = require("./_lib");
-const { isProActive, requirePro } = require("./_entitlements");
+const { isProActive, requirePro, primePaidPlans } = require("./_entitlements");
 const { sign, verify } = require("./_jwt");
 const messaging = require("./_messaging");
 const email = require("./_email");
@@ -625,6 +625,7 @@ async function notifyOwnerOfBooking(profile, appointment) {
 }
 
 module.exports = async function handler(req, res) {
+  await primePaidPlans(); // admin "Paid plans" switch -- see _entitlements.js
   try {
     // `action` must be readable from the QUERY STRING **or** the POST BODY.
     //

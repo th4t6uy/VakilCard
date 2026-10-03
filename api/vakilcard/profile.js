@@ -17,7 +17,7 @@ const {
   readJsonBody,
 } = require("./_lib");
 const { verify: verifyJwt } = require("./_jwt");
-const { isProActive, lockedCardFeatures } = require("./_entitlements");
+const { isProActive, lockedCardFeatures, primePaidPlans } = require("./_entitlements");
 
 const SITE = "https://www.vakilpedia.com";
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js.
@@ -731,6 +731,7 @@ ${THEME_BOOT_SCRIPT}
 }
 
 module.exports = async function handler(req, res) {
+  await primePaidPlans(); // admin "Paid plans" switch -- see _entitlements.js
   if (req.method === "POST") {
     // This is an ALLOWLIST for events arriving from the wild, so entries are
     // retired on a different clock from the code that fires them.

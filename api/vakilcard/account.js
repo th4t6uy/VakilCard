@@ -13,7 +13,7 @@ const {
   isReservedUsername,
 } = require("./_lib");
 const { audit } = require("./_verify");
-const { requirePro } = require("./_entitlements");
+const { requirePro, primePaidPlans } = require("./_entitlements");
 const { generateAutoUsername } = require("./_usernames");
 
 function json(res, status, data) {
@@ -40,6 +40,7 @@ async function usernameTakenBy(uname) {
 }
 
 module.exports = async function handler(req, res) {
+  await primePaidPlans(); // admin "Paid plans" switch -- see _entitlements.js
   const who = await resolveAccount(req);
   if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
   const accountId = who.accountId;

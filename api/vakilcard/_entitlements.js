@@ -119,8 +119,38 @@ function lockedCardFeatures(profile) {
   return CARD_LOCKABLE_FEATURES.map((f) => ({ key: f.key, title: f.title, detail: f.detail }));
 }
 
+// ── Platform "Paid plans" switch (founder, 3 Oct 2026) ────────────────────────────
+// admin.vakilpedia.com → Overview → Paid plans. OFF = beta: every card gets Pro, free.
+// isProActive() stays synchronous (it is called all over), so each handler calls
+// `await primePaidPlans()` once at the top; the answer is cached 30 s per lambda.
+// FAILS TO "LIVE" (normal paid behaviour) on any error, so a glitch never gives Pro away
+// by accident -- and never takes it away either, because ON is how Pro works today.
+let paidPlans = { live: true, at: 0 };
+async function primePaidPlans() {
+  if (Date.now() - paidPlans.at < 30 * 1000) return paidPlans.live;
+  const url = process.env.SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || "";
+  const key = process.env.SUPABASE_SERVICE_ROLE_KEY || "";
+  let live = true;
+  if (url && key) {
+    try {
+      const r = await fetch(`${url}/rest/v1/rpc/vp_paid_plans_live`, {
+        method: "POST",
+        headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: "{}",
+        signal: AbortSignal.timeout(3000),
+      });
+      if (r.ok) live = (await r.json()) !== false;
+    } catch {
+      live = true;
+    }
+  }
+  paidPlans = { live, at: Date.now() };
+  return live;
+}
+
 function isProActive(profile) {
   if (!profile) return false;
+  if (!paidPlans.live) return true; // beta: Pro is open to everyone
   if (profile.subscription_plan !== "PRO") return false;
   if (profile.subscription_status !== "ACTIVE") return false;
   if (profile.subscription_expires_at && new Date(profile.subscription_expires_at) <= new Date())
@@ -171,4 +201,5 @@ module.exports = {
   isProActive,
   entitlementsFor,
   requirePro,
+  primePaidPlans,
 };
