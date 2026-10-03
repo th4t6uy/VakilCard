@@ -51,7 +51,7 @@ function consentClient(cfg) {
         return "You are signed out, so nothing was recorded. Sign in again and retry." + tag;
       case "account_not_found":
         return body && body.accountStatus && body.accountStatus !== "active"
-          ? "Your account is awaiting approval, so agreements cannot be accepted yet. Nothing was recorded." + tag
+          ? "You’re on the Vakilpedia waitlist, awaiting approval, so agreements cannot be accepted yet. Nothing was recorded." + tag
           : "We could not find your account, so nothing was recorded." + tag;
       case "document_not_current":
         return "One of these agreements was updated while this screen was open. Nothing was recorded. Reload the page to see the current version." + tag;
@@ -191,7 +191,7 @@ function consentClient(cfg) {
       );
     }
     var AWAITING_TEXT =
-      "Your account is awaiting approval — nothing was recorded. We’ll let you know on WhatsApp as soon as it’s ready.";
+      "You’re on the Vakilpedia waitlist, awaiting approval — nothing was recorded. We’ll let you know on WhatsApp as soon as you’re approved.";
 
     function renderList() {
       clear();

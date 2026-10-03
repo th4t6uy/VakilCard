@@ -27,6 +27,7 @@ import SiteNav from "../../components/SiteNav";
 import SiteFooter from "../../components/SiteFooter";
 import EcosystemRail from "../../components/EcosystemRail";
 import { WWW } from "../../config/ecosystem";
+import { waitlistPendingMessage } from "../../lib/waitlist";
 import { isQaPhone, startQaSession, QaBadge } from "../../lib/vakilcardQa";
 import { trackPageView } from "../../lib/ga4";
 
@@ -56,7 +57,7 @@ const ERRORS = {
   locked: "Too many wrong attempts. Request a fresh code.",
   no_session: "Request a code first.",
   signups_paused: "New sign-ups are paused for now. Existing accounts are not affected.",
-  awaiting_approval: "Your Vakilpedia account has been created and is awaiting approval. We'll let you know on WhatsApp as soon as it's ready.",
+  awaiting_approval: `Your Vakilpedia account is created. ${waitlistPendingMessage()} We'll message you on WhatsApp.`,
   server_error: "We hit a problem on our end verifying that. Please try again in a moment.",
   unauthenticated: "Your session expired. Please verify your WhatsApp number again.",
   invalid_credentials: "Phone number or password is incorrect.",

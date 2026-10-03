@@ -34,6 +34,7 @@ const controls = require("./_controls");
 const messaging = require("./_messaging");
 const { hashPassword, verifyPassword, passwordPolicyError } = require("./_password");
 const { generateAutoUsername } = require("./_usernames");
+const { waitlistPendingMessage } = require("./_waitlist");
 
 // Google sign-in (full alternative to phone — no OTP required at signup).
 // A SEPARATE Google Cloud OAuth client from the Calendar-sync one in
@@ -570,8 +571,8 @@ module.exports = async function handler(req, res) {
           return json(res, 403, {
             ok: false,
             error: "awaiting_approval",
-            message:
-              "Your Vakilpedia account has been created and is awaiting approval. We'll let you know on WhatsApp as soon as it's ready.",
+            // Waitlist wording (founder, 3 Oct 2026).
+            message: `Your Vakilpedia account is created. ${waitlistPendingMessage()} We'll message you on WhatsApp.`,
           });
         }
       }
