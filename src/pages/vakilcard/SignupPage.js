@@ -27,7 +27,7 @@ import SiteNav from "../../components/SiteNav";
 import SiteFooter from "../../components/SiteFooter";
 import EcosystemRail from "../../components/EcosystemRail";
 import { WWW } from "../../config/ecosystem";
-import { waitlistPendingMessage } from "../../lib/waitlist";
+import { waitlistPendingMessage, waitlistSignupIntro } from "../../lib/waitlist";
 import { isQaPhone, startQaSession, QaBadge } from "../../lib/vakilcardQa";
 import { trackPageView } from "../../lib/ga4";
 
@@ -826,6 +826,10 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               ? "Enter the WhatsApp number your card is registered with — we'll verify it and open your dashboard."
               : "Join the lawyers building their professional identity online. Enter your WhatsApp number to get started."}
           </p>
+          {/* Waitlist (founder, 3 Oct 2026): said before anyone signs up. */}
+          {!manage && (
+            <p className="text-xs font-semibold text-slate-600 dark:text-slate-300 mt-2 mb-0 text-left">{waitlistSignupIntro()}</p>
+          )}
           <div className="mt-5 flex items-center">
             <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3.5 text-base text-slate-500 dark:text-slate-400">+91</span>
             <input
@@ -1383,7 +1387,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                   </p>
                 </div>
                 <button onClick={() => { track("cta_click"); goToSignup(); }} className="inline-flex items-center justify-center gap-2 px-7 py-3.5 rounded-full bg-slate-900 dark:bg-white dark:text-slate-900 dark:hover:bg-slate-100 text-white text-sm font-bold hover:bg-[#635BFF] transition-colors w-full sm:w-auto justify-self-start">
-                  <MessageCircle className="h-4 w-4" /> Create My Free VakilCard
+                  <MessageCircle className="h-4 w-4" /> Create My VakilCard
                 </button>
               </div>
             </div>

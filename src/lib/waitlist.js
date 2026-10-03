@@ -1,11 +1,15 @@
 /**
  * Waitlist wording — ONE text for every Vakilpedia sign-up (founder, 2–3 Oct 2026).
  *
- * Every sign-up, on any app, joins the waitlist. An admin approval (admin panel → People)
- * is what lets a waitlisted person into the apps. Waitlisted people are let in from
- * 12 October 2026; paid plans start 30 October 2026.
+ * Every new account, on any app, joins the waitlist. An admin approval (admin panel → People)
+ * is what lets a waitlisted person into the apps. Every sign-up box must say so BEFORE the
+ * person signs up — in the sign-in view too, not only after switching to "sign up".
  *
- * The same file (same text, same dates) lives in every app that has a sign-up screen:
+ * Founder, 3 Oct 2026: no dates are announced to the public, and nothing is said about
+ * plans. When paid plans start is decided by a switch in the admin panel, never by a date
+ * in code — so this file carries no dates and no prices.
+ *
+ * The same file (same text) lives in every app that has a sign-up screen:
  *   Account        src/lib/waitlist.ts
  *   www            frontend-next/components/waitlistCopy.js
  *   CaseLinx       src/lib/platform/waitlist.ts
@@ -14,58 +18,33 @@
  *   BareLex        src/lib/waitlist.ts
  *   VakilCard      src/lib/waitlist.js (+ api/vakilcard/_waitlist.js)
  *   CourtQue       backend/waitlist_copy.py
- * Change the dates in ALL of them together.
- *
- * The dates switch themselves off: after 12 Oct the note says "we approve waitlisted
- * members in batches", after 30 Oct the paid-plans line disappears. No stale promises.
+ * Change the wording in ALL of them together.
  */
-
-/** Day waitlisted people start being let in (IST calendar date). */
-export const WAITLIST_OPENS_ON = "2026-10-12";
-/** Day paid plans start (IST calendar date). */
-export const PAID_PLANS_START_ON = "2026-10-30";
-
-/** Today's date in India (YYYY-MM-DD), whatever the server or phone time zone is. */
-function indiaToday(now = new Date()) {
-  return new Date(now.getTime() + 330 * 60_000).toISOString().slice(0, 10);
-}
 
 export const WAITLIST_SIGNUP_TITLE = "Sign up to the waitlist";
 export const WAITLIST_SIGNUP_BUTTON = "Join the waitlist";
 export const WAITLIST_PENDING_TITLE = "You're on the waitlist";
+/** The collapsed "sign in or sign up" pill. */
+export const WAITLIST_ENTRY_LABEL = "Sign in or join the waitlist";
 
-/** The dates line: "We let waitlisted members in from 12 October 2026. Paid plans start 30 October 2026." */
-export function waitlistNote(now = new Date()) {
-  const today = indiaToday(now);
-  const parts = [];
-  parts.push(
-    today < WAITLIST_OPENS_ON
-      ? "We let waitlisted members in from 12 October 2026."
-      : "We approve waitlisted members in batches.",
-  );
-  if (today < PAID_PLANS_START_ON) parts.push("Paid plans start 30 October 2026.");
-  return parts.join(" ");
+/** The one-line rule shown in every sign-up box, in sign-in view too. */
+export function waitlistNote() {
+  return "We approve waitlisted members in batches.";
 }
 
-/** Shown under every sign-up heading. */
-export function waitlistSignupIntro(now = new Date()) {
-  return `Every new account joins the waitlist. ${waitlistNote(now)}`;
+/** Shown in every sign-up box (sign-in view included), before anyone signs up. */
+export function waitlistSignupIntro() {
+  return `New accounts join the waitlist. ${waitlistNote()}`;
 }
 
 /** Shown (or sent) to someone who has signed up but is not approved yet. */
-export function waitlistPendingMessage(now = new Date()) {
-  return `You're on the Vakilpedia waitlist. ${waitlistNote(now)} We'll let you know as soon as your account is approved.`;
+export function waitlistPendingMessage() {
+  return `You're on the Vakilpedia waitlist. ${waitlistNote()} We'll let you know as soon as your account is approved.`;
 }
 
-/** One-line banner: "Vakilpedia is in beta — every sign-up joins the waitlist. Waitlisted members get in from 12 Oct; paid plans start 30 Oct." */
-export function waitlistBanner(now = new Date()) {
-  const today = indiaToday(now);
-  const first =
-    today < WAITLIST_OPENS_ON
-      ? "Waitlisted members get in from 12 Oct"
-      : "We approve waitlisted members in batches";
-  const paid = today < PAID_PLANS_START_ON ? "; paid plans start 30 Oct." : ".";
-  return `Vakilpedia is in beta — every sign-up joins the waitlist. ${first}${paid}`;
+/** The pop-up / banner line. */
+export function waitlistBanner() {
+  return "Vakilpedia is in beta. New accounts join the waitlist — we approve members in batches.";
 }
 
 /* Hindi (CaseLinx is bilingual). */
@@ -73,22 +52,14 @@ export const WAITLIST_SIGNUP_TITLE_HI = "वेटलिस्ट में स�
 export const WAITLIST_SIGNUP_BUTTON_HI = "वेटलिस्ट में शामिल हों";
 export const WAITLIST_PENDING_TITLE_HI = "आप वेटलिस्ट में हैं";
 
-export function waitlistNoteHi(now = new Date()) {
-  const today = indiaToday(now);
-  const parts = [];
-  parts.push(
-    today < WAITLIST_OPENS_ON
-      ? "वेटलिस्ट के सदस्यों को 12 अक्टूबर 2026 से प्रवेश मिलेगा।"
-      : "हम वेटलिस्ट के सदस्यों को बैचों में मंज़ूरी देते हैं।",
-  );
-  if (today < PAID_PLANS_START_ON) parts.push("पेड प्लान 30 अक्टूबर 2026 से शुरू होंगे।");
-  return parts.join(" ");
+export function waitlistNoteHi() {
+  return "हम वेटलिस्ट के सदस्यों को बैचों में मंज़ूरी देते हैं।";
 }
 
-export function waitlistSignupIntroHi(now = new Date()) {
-  return `हर नया अकाउंट वेटलिस्ट में जुड़ता है। ${waitlistNoteHi(now)}`;
+export function waitlistSignupIntroHi() {
+  return `नए अकाउंट वेटलिस्ट में जुड़ते हैं। ${waitlistNoteHi()}`;
 }
 
-export function waitlistPendingMessageHi(now = new Date()) {
-  return `आप Vakilpedia वेटलिस्ट में हैं। ${waitlistNoteHi(now)} आपका अकाउंट मंज़ूर होते ही हम आपको बताएंगे।`;
+export function waitlistPendingMessageHi() {
+  return `आप Vakilpedia वेटलिस्ट में हैं। ${waitlistNoteHi()} आपका अकाउंट मंज़ूर होते ही हम आपको बताएंगे।`;
 }
