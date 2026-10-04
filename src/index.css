@@ -473,3 +473,53 @@ textarea:invalid:not(:placeholder-shown) {
 @media (min-width: 1280px) { .vp-container { max-width: 1280px; } }
 @media (min-width: 1536px) { .vp-container { max-width: 1440px; } }
 @media (min-width: 1700px) { .vp-container { max-width: 1600px; } }
+
+/* === VP-NIGHT v1 — the ONE dark-mode background for every Vakilpedia app ===
+ * Canonical copy: ~/dev/Vakilpedia/bin/vp-night.css. Do not edit this block in
+ * an app; edit the canonical file and run ~/dev/Vakilpedia/bin/vp-night-sync.
+ *
+ * Founder, 4 Oct 2026: some apps were plain blue in dark mode, others had a
+ * brown gradient that showed visible stripes ("layers of brown getting dark").
+ * Every app had hand-rolled its own dark backdrop. This replaces all of them:
+ * blue (top left) -> dark blue (bottom left) -> brown (bottom right), a soft
+ * whitish glow at the top, and a faint grain that stops stripes (banding).
+ * Painted once, no animation, no blur filter — cheap on phones.
+ * Light mode is NOT touched by anything in this block. */
+:root {
+  --vp-night-base: #0a1124;
+  --vp-night-noise: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .5 0 0 0 0 .5 0 0 0 0 .5 0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --vp-night-bg:
+    var(--vp-night-noise),
+    radial-gradient(85% 55% at 50% -14%, rgba(214, 226, 255, 0.20) 0%, rgba(214, 226, 255, 0.07) 40%, rgba(214, 226, 255, 0) 72%),
+    radial-gradient(70% 80% at -10% 20%, rgba(37, 99, 235, 0.26) 0%, rgba(37, 99, 235, 0.10) 40%, rgba(37, 99, 235, 0) 72%),
+    radial-gradient(75% 65% at 20% 110%, rgba(30, 41, 110, 0.45) 0%, rgba(30, 41, 110, 0.16) 45%, rgba(30, 41, 110, 0) 75%),
+    radial-gradient(70% 75% at 110% 95%, rgba(160, 102, 52, 0.34) 0%, rgba(160, 102, 52, 0.13) 42%, rgba(160, 102, 52, 0) 74%),
+    radial-gradient(45% 45% at 100% 0%, rgba(180, 120, 60, 0.12) 0%, rgba(180, 120, 60, 0) 70%),
+    linear-gradient(160deg, #0c1733 0%, #0a1124 50%, #120f16 100%);
+}
+/* The page field is <html>; <body> must stay see-through. Root cause of the
+ * "plain blue" apps (SignLinx, Affidavit Maker, …): when <html> has its own
+ * background, <body>'s background no longer moves to the canvas — <body> then
+ * paints ON TOP of the fixed backdrop (z-index -1) and hides it completely. */
+html[data-theme="dark"] {
+  background-color: var(--vp-night-base) !important;
+}
+[data-theme="dark"] body {
+  background: transparent !important;
+}
+/* Every app's fixed backdrop layer, whatever it is called. */
+[data-theme="dark"] .bg-animated,
+[data-theme="dark"] .vp-backdrop {
+  background: var(--vp-night-bg) !important;
+  opacity: 1 !important;
+  filter: none !important;
+}
+/* The old drifting blobs gave each app a different tint. Off in dark mode. */
+[data-theme="dark"] .bg-animated::before,
+[data-theme="dark"] .bg-animated::after,
+[data-theme="dark"] .vp-backdrop::before,
+[data-theme="dark"] .vp-backdrop::after,
+[data-theme="dark"] .bg-glow-amber {
+  display: none !important;
+}
+/* === /VP-NIGHT === */
