@@ -32,7 +32,6 @@ const verification = require("./_verify");
 const legal = require("./_legal");
 const controls = require("./_controls");
 const messaging = require("./_messaging");
-const { hashPassword, verifyPassword, passwordPolicyError } = require("./_password");
 const { generateAutoUsername } = require("./_usernames");
 const { waitlistPendingMessage } = require("./_waitlist");
 
@@ -917,108 +916,6 @@ module.exports = async function handler(req, res) {
       });
       await verification.audit("phone_linked", { accountId: who.accountId, phoneE164: r.phoneE164, ip });
       return json(res, 200, { ok: true, phone: r.phoneE164 });
-    }
-
-    // ── Password credential ────────────────────────────────────────────
-    // Password is the primary re-login credential (OTP costs money per send).
-    // set_password / change_password share ONE implementation (_password.js);
-    // there is no duplicate hashing anywhere in the live tree.
-
-    if (action === "login_password") {
-      const phoneE164 = verification.normalizePhone(body.phone);
-      if (!phoneE164) return json(res, 400, { error: "invalid_phone" });
-      const password = String(body.password || "");
-      if (!password) return json(res, 400, { error: "missing_password" });
-
-      // Lockout: 8+ failed attempts for this phone in the last 15 minutes.
-      const since = new Date(Date.now() - 15 * 60 * 1000).toISOString();
-      const fails = await db(
-        `identity_audit_log?event=eq.password_login_failed&phone_e164=eq.${encodeURIComponent(phoneE164)}&created_at=gte.${encodeURIComponent(since)}&select=id&limit=8`
-      );
-      if (fails.length >= 8) return json(res, 429, { error: "too_many_attempts" });
-
-      const ids = await db(
-        `account_phone_identities?phone_e164=eq.${encodeURIComponent(phoneE164)}&select=account_id`
-      );
-      const accountId = ids[0] && ids[0].account_id;
-      const accounts = accountId
-        ? await db(`vakilpedia_accounts?id=eq.${accountId}&select=id,password_hash,status`)
-        : [];
-      const account = accounts[0];
-
-      if (!account || account.status !== "active" || !account.password_hash) {
-        if (account && !account.password_hash) {
-          await verification.audit("password_login_failed", { accountId, phoneE164, ip, meta: { reason: "no_password_set" } });
-          return json(res, 400, { error: "no_password_set" });
-        }
-        // Same generic error for unknown numbers: don't leak who is registered.
-        await verification.audit("password_login_failed", { phoneE164, ip, meta: { reason: "no_account" } });
-        return json(res, 401, { error: "invalid_credentials" });
-      }
-
-      if (!verifyPassword(password, account.password_hash)) {
-        await verification.audit("password_login_failed", { accountId, phoneE164, ip, meta: { reason: "wrong_password" } });
-        return json(res, 401, { error: "invalid_credentials" });
-      }
-
-      const profiles = await db(
-        `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,is_published`
-      );
-      const profile = profiles[0] || null;
-      const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
-      await touchLogin(accountId);
-      await verification.audit("password_login_success", { accountId, phoneE164, ip });
-      return json(res, 200, {
-        ok: true,
-        token: access,
-        access_token: access,
-        refresh_token: refresh,
-        expires_in: ACCESS_TTL_SEC,
-        account_id: accountId,
-        created: false,
-        username: profile ? profile.username : null,
-        published: profile ? profile.is_published === true : false,
-        card_url: profile ? `${SITE}/${profile.username}` : null,
-        setup_url: DASHBOARD_SITE,
-      });
-    }
-
-    if (action === "set_password") {
-      // Authenticated (fresh OTP session or normal session). Used during
-      // first-time onboarding and as the last step of a password reset.
-      const who = await resolveAccount(req);
-      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
-      const policy = passwordPolicyError(body.password);
-      if (policy) return json(res, 400, { error: policy });
-      await db(`vakilpedia_accounts?id=eq.${who.accountId}`, {
-        method: "PATCH",
-        body: { password_hash: hashPassword(body.password), password_set_at: new Date().toISOString() },
-        prefer: "return=minimal",
-      });
-      await verification.audit("password_set", { accountId: who.accountId, ip });
-      return json(res, 200, { ok: true });
-    }
-
-    if (action === "change_password") {
-      const who = await resolveAccount(req);
-      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
-      const rows = await db(`vakilpedia_accounts?id=eq.${who.accountId}&select=password_hash`);
-      const current = rows[0] && rows[0].password_hash;
-      // If a password already exists, the correct current one must be given.
-      // If none exists yet, this doubles as "set" (dashboard "Set a password").
-      if (current && !verifyPassword(String(body.current_password || ""), current)) {
-        await verification.audit("password_change_failed", { accountId: who.accountId, ip, meta: { reason: "wrong_current" } });
-        return json(res, 401, { error: "wrong_current_password" });
-      }
-      const policy = passwordPolicyError(body.new_password);
-      if (policy) return json(res, 400, { error: policy });
-      await db(`vakilpedia_accounts?id=eq.${who.accountId}`, {
-        method: "PATCH",
-        body: { password_hash: hashPassword(body.new_password), password_set_at: new Date().toISOString() },
-        prefer: "return=minimal",
-      });
-      await verification.audit(current ? "password_changed" : "password_set", { accountId: who.accountId, ip });
-      return json(res, 200, { ok: true });
     }
 
     if (action === "refresh") {

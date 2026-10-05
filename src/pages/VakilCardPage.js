@@ -16,12 +16,12 @@ import {
   // same import for a while without breaking anything, which proves it.)
   Banknote, Briefcase, CalendarClock, Check, Copy, Download,
   ExternalLink, Eye, Globe2, Image as ImageIcon, Landmark, Link2, Loader2,
-  Lock, LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
+  LogOut, MapPin, Phone, Pencil, Plus, QrCode, Rocket, Share2,
   Smartphone, Sparkles, Star, Trash2, UserRound, X,
 } from "lucide-react";
 import {
-  getMe, getMyAnalytics, getAccount, saveProfile, deleteProfile,
-  logout as apiLogout, changePassword as apiChangePassword,
+  getMe, getMyAnalytics, saveProfile, deleteProfile,
+  logout as apiLogout,
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
   placesSearch, placesLink, placesUnlink, newPlacesSession,
@@ -32,7 +32,7 @@ import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
 import LiveCardPreview from "../components/LiveCardPreview";
 import UpgradeSheet from "../components/UpgradeSheet";
 import UsernamePicker from "../components/UsernamePicker";
-import SignupPage, { PasswordInput, StrengthBar } from "./vakilcard/SignupPage";
+import SignupPage from "./vakilcard/SignupPage";
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
 import EcosystemRail from "../components/EcosystemRail";
@@ -41,16 +41,6 @@ import { LAUNCHER_ITEMS } from "../config/ecosystem";
 
 // CaseLinx address from the shared ecosystem list (one place for app URLs).
 const CASELINX_HREF = (LAUNCHER_ITEMS.find((a) => a.id === "caselinx") || {}).href || "https://caselinx.vakilpedia.com";
-
-// Password errors — kept local since VakilCardPage never shows the full
-// onboarding ERRORS map, just the handful relevant to Change Password.
-const PW_ERRORS = {
-  wrong_current_password: "Current password is incorrect.",
-  password_too_short: "New password must be at least 8 characters.",
-  password_too_long: "That password is too long (200 characters max).",
-  unauthenticated: "Your session expired. Please sign in again.",
-};
-const pwMsg = (e) => PW_ERRORS[e && e.code] || "Couldn't update your password. Please try again.";
 
 const CARD_ORIGIN = "https://www.vakilpedia.com";
 const btn = "rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 transition-colors";
@@ -706,12 +696,6 @@ export default function VakilCardPage() {
   const [upgradeFeature, setUpgradeFeature] = useState(null); // null | feature key
   const [linkOpen, setLinkOpen] = useState(false); // "Your card's link" picker
 
-  // Change Password (Account panel) — hasPassword null until we know;
-  // account.js reports it via has_password so the UI can say "Set a
-  // password" (no current one yet) vs "Change password".
-  const [hasPassword, setHasPassword] = useState(null);
-  const [pwOpen, setPwOpen] = useState(false);
-
   // Add-phone nudge (Google-only signups) — unlocks WhatsApp booking alerts.
   // Optional and skippable; nothing else in the dashboard depends on it.
   const [phoneOpen, setPhoneOpen] = useState(false);
@@ -720,12 +704,6 @@ export default function VakilCardPage() {
   const [phoneCode, setPhoneCode] = useState("");
   const [phoneBusy, setPhoneBusy] = useState(false);
   const [phoneErr, setPhoneErr] = useState("");
-  const [curPw, setCurPw] = useState("");
-  const [newPw1, setNewPw1] = useState("");
-  const [newPw2, setNewPw2] = useState("");
-  const [pwSaving, setPwSaving] = useState(false);
-  const [pwErr, setPwErr] = useState("");
-  const [pwDone, setPwDone] = useState(false);
 
   // Phone (WhatsApp OTP) session check. hasPhoneSession() reads localStorage
   // synchronously, so no async "auth state resolving" placeholder is needed
@@ -822,11 +800,6 @@ export default function VakilCardPage() {
     else setProfile(null);
   }, [authed, load]);
 
-  useEffect(() => {
-    if (!authed) return;
-    getAccount().then((a) => setHasPassword(!!a.has_password)).catch(() => {});
-  }, [authed]);
-
   // Keep the dashboard URL canonical: /:username/dashboard. Runs once
   // the signed-in owner's profile is known.
   //  • / (no username) → the owner's dashboard URL
@@ -871,26 +844,6 @@ export default function VakilCardPage() {
     installPrompt.prompt();
     try { await installPrompt.userChoice; } catch {}
     setInstallPrompt(null);
-  };
-
-  const submitChangePassword = async () => {
-    setPwErr("");
-    setPwDone(false);
-    if (hasPassword && !curPw) return setPwErr("Enter your current password.");
-    if (newPw1.length < 8) return setPwErr("New password must be at least 8 characters.");
-    if (newPw1 !== newPw2) return setPwErr("Passwords don't match.");
-    setPwSaving(true);
-    try {
-      await apiChangePassword(curPw, newPw1);
-      setHasPassword(true);
-      setPwDone(true);
-      setCurPw(""); setNewPw1(""); setNewPw2("");
-      setTimeout(() => { setPwOpen(false); setPwDone(false); }, 1500);
-    } catch (e) {
-      setPwErr(pwMsg(e));
-    } finally {
-      setPwSaving(false);
-    }
   };
 
   const sendPhoneCode = async () => {
@@ -1380,83 +1333,6 @@ export default function VakilCardPage() {
               </div>
             )}
 
-            {/* password — phone stays primary identity; password is the
-                free, instant login credential (OTP costs money per send) */}
-            {profile.phone && hasPassword !== null && (
-              <div className="mt-5 pt-5 border-t border-slate-200 dark:border-white/10">
-                <div className="flex items-center justify-between gap-3">
-                  <h3 className="text-sm font-black text-slate-900 dark:text-white">Password</h3>
-                  {!pwOpen && (
-                    <button
-                      type="button"
-                      onClick={() => { setPwOpen(true); setPwErr(""); setPwDone(false); }}
-                      className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff]"
-                    >
-                      {hasPassword ? "Change password" : "Set a password"}
-                    </button>
-                  )}
-                </div>
-                {!pwOpen && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 text-left hyphens-none">
-                    {hasPassword
-                      ? "Sign in instantly with your phone number and password."
-                      : "Add a password to skip WhatsApp codes next time you sign in."}
-                  </p>
-                )}
-                {pwOpen && (
-                  <div className="mt-3 space-y-3 max-w-sm">
-                    {hasPassword && (
-                      <PasswordInput
-                        value={curPw}
-                        onChange={setCurPw}
-                        placeholder="Current password"
-                        autoComplete="current-password"
-                        autoFocus
-                        ariaLabel="Current password"
-                      />
-                    )}
-                    <div>
-                      <PasswordInput
-                        value={newPw1}
-                        onChange={setNewPw1}
-                        placeholder="New password"
-                        autoComplete="new-password"
-                        autoFocus={!hasPassword}
-                        ariaLabel="New password"
-                      />
-                      <StrengthBar password={newPw1} />
-                    </div>
-                    <PasswordInput
-                      value={newPw2}
-                      onChange={setNewPw2}
-                      placeholder="Confirm new password"
-                      autoComplete="new-password"
-                      ariaLabel="Confirm new password"
-                      onEnter={submitChangePassword}
-                    />
-                    {pwErr && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">{pwErr}</p>}
-                    {pwDone && <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-300">Password updated.</p>}
-                    <div className="flex gap-2">
-                      <button
-                        onClick={submitChangePassword}
-                        disabled={pwSaving}
-                        className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white transition-colors px-5 py-2.5 text-sm font-bold inline-flex items-center gap-1.5 disabled:opacity-50"
-                      >
-                        {pwSaving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-                        Save
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => { setPwOpen(false); setCurPw(""); setNewPw1(""); setNewPw2(""); setPwErr(""); }}
-                        className="rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-5 py-2.5 text-sm font-bold text-slate-700 dark:text-slate-300"
-                      >
-                        Cancel
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
 
           </div>

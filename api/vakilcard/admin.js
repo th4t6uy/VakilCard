@@ -58,9 +58,9 @@ const SITE = process.env.VAKILCARD_SITE_URL || "https://www.vakilpedia.com";
 // a verified-phone account row, so we drive the registry from
 // vakilpedia_accounts (LEFT JOIN phone identity + profile). That means a
 // registration still appears even if the user abandoned onboarding before
-// choosing a username, setting a password, or publishing a card.
+// choosing a username or publishing a card.
 //
-// Security: the scrypt hash is NEVER emitted — only a `password_set` boolean.
+// Sign-in lives in SupraCore / Supabase identity; this registry never reads a password hash.
 
 // Longest-prefix E.164 calling-code lookup. India-first product, so the map
 // covers India + common diaspora/business codes; unknown numbers fall back to
@@ -106,7 +106,7 @@ function productsFor(account) {
 async function buildRegistry() {
   const [accounts, identities, profiles] = await Promise.all([
     db(
-      "vakilpedia_accounts?select=id,status,password_hash,last_login_at,last_active_at,registration_source,created_at&order=created_at.desc&limit=100000"
+      "vakilpedia_accounts?select=id,status,last_login_at,last_active_at,registration_source,created_at&order=created_at.desc&limit=100000"
     ),
     db(
       "account_phone_identities?select=account_id,phone_e164,verified_at,is_primary,created_at&limit=100000"
@@ -139,7 +139,6 @@ async function buildRegistry() {
       phone,
       country_code: callingCode(phone),
       whatsapp_verified: !!(idn && idn.verified_at),
-      password_set: !!a.password_hash, // boolean ONLY — hash never leaves server
       card_status: cardStatus,
       is_suspended: !!(p && p.is_suspended),
       products: productsFor(a),
@@ -154,7 +153,7 @@ async function buildRegistry() {
 }
 
 /** Apply search + facet filters + sort. Pure, operates on registry rows. */
-function filterRegistry(rows, { q, verification, plan, card, password, sort }) {
+function filterRegistry(rows, { q, verification, plan, card, sort }) {
   let out = rows;
   const needle = String(q || "").trim().toLowerCase();
   if (needle) {
@@ -173,8 +172,6 @@ function filterRegistry(rows, { q, verification, plan, card, password, sort }) {
   else if (card === "DRAFT") out = out.filter((r) => r.card_status === "Draft");
   else if (card === "NONE") out = out.filter((r) => r.card_status === "Not Created");
 
-  if (password === "SET") out = out.filter((r) => r.password_set);
-  else if (password === "UNSET") out = out.filter((r) => !r.password_set);
 
   const cmpStr = (a, b) => String(a || "").localeCompare(String(b || ""));
   const ts = (v) => (v ? new Date(v).getTime() : 0);
@@ -190,7 +187,6 @@ const CSV_COLUMNS = [
   ["phone", "Phone Number"],
   ["country_code", "Country Code"],
   ["whatsapp_verified", "WhatsApp Verified"],
-  ["password_set", "Password Set"],
   ["card_status", "Card Status"],
   ["products", "Products"],
   ["plan", "Plan"],
@@ -297,7 +293,6 @@ module.exports = async function handler(req, res) {
           verification: String(req.query?.verification || "ALL").toUpperCase(),
           plan: String(req.query?.plan || "ALL").toUpperCase(),
           card: String(req.query?.card || "ALL").toUpperCase(),
-          password: String(req.query?.password || "ALL").toUpperCase(),
           sort: String(req.query?.sort || "NEWEST").toUpperCase(),
         };
         const all = filterRegistry(await buildRegistry(), params);

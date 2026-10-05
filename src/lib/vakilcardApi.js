@@ -145,14 +145,6 @@ export const verifyCode = async (phone, code) => {
   return data;
 };
 
-// Password auth — the primary login credential (OTP costs money per send;
-// it stays available for recovery, device changes and preference).
-export const loginPassword = async (phone, password) => {
-  const data = await call("auth", { method: "POST", body: { action: "login_password", phone, password }, authed: false });
-  setTokens(data);
-  return data;
-};
-
 // Google sign-in — full alternative to phone (no OTP required). Creates a
 // new account on first sign-in (Google-only, no phone attached yet) or logs
 // an existing Google-linked account straight in. `id_token` is the GIS
@@ -171,11 +163,6 @@ export const linkPhoneStart = (phone) =>
   call("auth", { method: "POST", body: { action: "link_phone_start", phone } });
 export const linkPhoneVerify = (phone, code) =>
   call("auth", { method: "POST", body: { action: "link_phone_verify", phone, code } });
-
-export const setPassword = (password) =>
-  call("auth", { method: "POST", body: { action: "set_password", password } });
-export const changePassword = (current_password, new_password) =>
-  call("auth", { method: "POST", body: { action: "change_password", current_password, new_password } });
 
 // Profile
 export const getMe = () => call("me");
@@ -307,12 +294,12 @@ export const adminDeleteCard = (id) =>
 /* ---- Read-only VakilCard Users registry (Part B/C) ---- */
 function registryQuery(p = {}) {
   const {
-    q = "", verification = "ALL", plan = "ALL", card = "ALL", password = "ALL",
+    q = "", verification = "ALL", plan = "ALL", card = "ALL",
     sort = "NEWEST", page = 1, pageSize = 25,
   } = p;
   return (
     `q=${encodeURIComponent(q)}&verification=${verification}&plan=${plan}` +
-    `&card=${card}&password=${password}&sort=${sort}&page=${page}&pageSize=${pageSize}`
+    `&card=${card}&sort=${sort}&page=${page}&pageSize=${pageSize}`
   );
 }
 export const adminRegistry = (params = {}) =>

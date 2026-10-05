@@ -40,19 +40,15 @@ module.exports = async function handler(req, res) {
 
   try {
     if (req.method === "GET") {
-      const [phones, oauth, profile, acct] = await Promise.all([
+      const [phones, oauth, profile] = await Promise.all([
         db(`account_phone_identities?account_id=eq.${accountId}&select=phone_e164,verified_at,is_primary`),
         db(`account_oauth_identities?account_id=eq.${accountId}&select=provider,email,display_name,linked_at`),
         ownProfile(accountId),
-        db(`vakilpedia_accounts?id=eq.${accountId}&select=password_hash`),
       ]);
       const aliases = profile
         ? await db(`vakilcard_aliases?profile_id=eq.${profile.id}&select=alias,kind,is_primary,created_at`)
         : [];
-      // Boolean only — the hash never leaves the server. Drives the dashboard's
-      // "Set a password" vs "Change password" branch (VakilCardPage.js).
-      const has_password = !!(acct && acct[0] && acct[0].password_hash);
-      return json(res, 200, { account_id: accountId, phones, oauth, profile, aliases, has_password });
+      return json(res, 200, { account_id: accountId, phones, oauth, profile, aliases });
     }
 
     if (req.method !== "POST") return json(res, 405, { error: "method_not_allowed" });

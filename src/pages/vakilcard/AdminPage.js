@@ -89,7 +89,6 @@ function RegistryDetailModal({ row, onClose }) {
     ["Phone Number", row.phone || "—"],
     ["Country Code", row.country_code ? "+" + row.country_code : "—"],
     ["WhatsApp Verified", row.whatsapp_verified ? "Yes" : "No"],
-    ["Password", row.password_set ? "Set" : "Not Set"],
     ["Card Status", row.card_status],
     ["Products", (row.products || []).join(", ") || "—"],
     ["Plan", row.plan],
@@ -134,7 +133,6 @@ function UsersRegistry({ onError }) {
   const [verification, setVerification] = useState("ALL");
   const [plan, setPlan] = useState("ALL");
   const [cardStatus, setCardStatus] = useState("ALL");
-  const [password, setPassword] = useState("ALL");
   const [sort, setSort] = useState("NEWEST");
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
@@ -146,7 +144,7 @@ function UsersRegistry({ onError }) {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const data = await adminRegistry({ q, verification, plan, card: cardStatus, password, sort, page, pageSize });
+      const data = await adminRegistry({ q, verification, plan, card: cardStatus, sort, page, pageSize });
       setRows(data.rows || []);
       setTotal(data.total || 0);
     } catch (e) {
@@ -154,7 +152,7 @@ function UsersRegistry({ onError }) {
     } finally {
       setLoading(false);
     }
-  }, [q, verification, plan, cardStatus, password, sort, page, onError]);
+  }, [q, verification, plan, cardStatus, sort, page, onError]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -168,7 +166,7 @@ function UsersRegistry({ onError }) {
   const exportCsv = async () => {
     setExporting(true);
     try {
-      const blob = await adminRegistryExport({ q, verification, plan, card: cardStatus, password, sort });
+      const blob = await adminRegistryExport({ q, verification, plan, card: cardStatus, sort });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
@@ -216,11 +214,6 @@ function UsersRegistry({ onError }) {
           <option value="DRAFT">Draft</option>
           <option value="NONE">Not created</option>
         </select>
-        <select value={password} onChange={resetPage(setPassword)} className={selectCls}>
-          <option value="ALL">Any password</option>
-          <option value="SET">Password set</option>
-          <option value="UNSET">No password</option>
-        </select>
         <select value={sort} onChange={resetPage(setSort)} className={selectCls}>
           <option value="NEWEST">Newest</option>
           <option value="ACTIVE">Last active</option>
@@ -241,7 +234,6 @@ function UsersRegistry({ onError }) {
                 <th className="px-4 py-3">Name / Username</th>
                 <th className="px-4 py-3">Phone</th>
                 <th className="px-4 py-3">WhatsApp</th>
-                <th className="px-4 py-3">Password</th>
                 <th className="px-4 py-3">Card</th>
                 <th className="px-4 py-3">Products</th>
                 <th className="px-4 py-3">Plan</th>
@@ -252,10 +244,10 @@ function UsersRegistry({ onError }) {
             </thead>
             <tbody>
               {loading && rows.length === 0 && (
-                <tr><td colSpan={10} className="px-4 py-10 text-center text-slate-400"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-400"><Loader2 className="w-5 h-5 animate-spin mx-auto" /></td></tr>
               )}
               {!loading && rows.length === 0 && (
-                <tr><td colSpan={10} className="px-4 py-10 text-center text-slate-400">No registered users match this filter.</td></tr>
+                <tr><td colSpan={9} className="px-4 py-10 text-center text-slate-400">No registered users match this filter.</td></tr>
               )}
               {rows.map((r) => (
                 <tr key={r.account_id} className="border-b border-slate-100 dark:border-white/10 last:border-0 align-top">
@@ -268,7 +260,6 @@ function UsersRegistry({ onError }) {
                     {r.country_code && <span className="text-slate-400"> (+{r.country_code})</span>}
                   </td>
                   <td className="px-4 py-3"><YesNo value={r.whatsapp_verified} yes="Verified" no="Unverified" /></td>
-                  <td className="px-4 py-3 font-bold">{r.password_set ? <span className="text-emerald-700 dark:text-emerald-300">Set</span> : <span className="text-slate-400">Not set</span>}</td>
                   <td className="px-4 py-3"><span className={badge + " " + (CARD_STATUS_STYLES[r.card_status] || "bg-slate-100 dark:bg-white/[0.05] text-slate-500 dark:text-slate-400")}>{r.card_status}</span></td>
                   <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{(r.products || []).join(", ") || "—"}</td>
                   <td className="px-4 py-3"><span className={badge + " " + (r.plan === "Paid" ? "bg-violet-100 dark:bg-violet-500/10 text-violet-700 dark:text-violet-300" : "bg-slate-100 dark:bg-white/[0.05] text-slate-600 dark:text-slate-300")}>{r.plan}</span></td>

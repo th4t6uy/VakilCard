@@ -5,21 +5,20 @@
 // story → benefits → trust → verification card → FAQ → closing CTA.
 // Verification (code/welcome/username) then takes over as a focused view.
 //
-// Auth model (this sprint): password is the PRIMARY credential for existing
-// users (OTP costs money per WhatsApp send). OTP remains for first sign-in,
-// device changes, password recovery and personal preference. "Already have
-// a VakilCard?" opens a dedicated Welcome Back view with a permanent ← Back.
+// Auth model: one Vakilpedia identity (SupraCore / Supabase). VakilCard has no
+// password of its own any more — people sign in with a WhatsApp code or with
+// Google. "Already have a VakilCard?" opens a dedicated Welcome Back view with
+// a permanent ← Back.
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  ArrowLeft, ArrowRight, Check, ChevronDown, Eye, EyeOff, Globe, Landmark,
-  Loader2, Lock, Mail, MapPin, MessageCircle, PartyPopper, Pencil, Phone,
+  ArrowLeft, ArrowRight, Check, ChevronDown, Globe, Landmark,
+  Loader2, Mail, MapPin, MessageCircle, PartyPopper, Pencil, Phone,
   ShieldCheck, IndianRupee, Link2, X,
 } from "lucide-react";
 import {
   startVerification, resendVerification, verifyCode, checkUsername,
   changeUsername, setUsernameAuto, setUsernamePhone, isProRequired, track,
-  loginPassword as apiLoginPassword, setPassword as apiSetPassword,
   googleSignIn,
 } from "../../lib/vakilcardApi";
 import UpgradeSheet from "../../components/UpgradeSheet";
@@ -60,11 +59,6 @@ const ERRORS = {
   awaiting_approval: `Your Vakilpedia account is created. ${waitlistPendingMessage()} We'll message you on WhatsApp.`,
   server_error: "We hit a problem on our end verifying that. Please try again in a moment.",
   unauthenticated: "Your session expired. Please verify your WhatsApp number again.",
-  invalid_credentials: "Phone number or password is incorrect.",
-  no_password_set: "This account doesn't have a password yet — sign in with a WhatsApp code once, then set one.",
-  too_many_attempts: "Too many attempts. Please wait 15 minutes or sign in with a WhatsApp code.",
-  password_too_short: "Password must be at least 8 characters.",
-  missing_password: "Please enter your password.",
   // Google sign-in — surface the REAL cause instead of the generic fallback,
   // so a missing server-side GOOGLE_SIGNIN_CLIENT_ID reads as what it is.
   google_signin_not_configured: "Google sign-in isn't switched on yet. Please sign in with your phone number instead.",
@@ -74,63 +68,6 @@ const ERRORS = {
   google_unreachable: "We couldn't reach Google just now. Please try again in a moment.",
 };
 const msg = (e) => ERRORS[e && e.code] || "We couldn't complete that just now. Please try again in a moment.";
-
-/* ---------------- password building blocks (shared) ---------------- */
-
-export function PasswordInput({ value, onChange, placeholder = "Password", autoComplete = "current-password", autoFocus = false, onEnter, ariaLabel }) {
-  const [show, setShow] = useState(false);
-  return (
-    <div className="relative">
-      <input
-        className={inputCls + " pr-12"}
-        type={show ? "text" : "password"}
-        placeholder={placeholder}
-        value={value}
-        autoComplete={autoComplete}
-        autoFocus={autoFocus}
-        aria-label={ariaLabel || placeholder}
-        onChange={(e) => onChange(e.target.value)}
-        onKeyDown={(e) => e.key === "Enter" && onEnter && onEnter()}
-      />
-      <button
-        type="button"
-        tabIndex={-1}
-        className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-        onClick={() => setShow((s) => !s)}
-        aria-label={show ? "Hide password" : "Show password"}
-      >
-        {show ? <EyeOff className="h-5 w-5" /> : <Eye className="h-5 w-5" />}
-      </button>
-    </div>
-  );
-}
-
-export function passwordStrength(pw) {
-  const s = String(pw || "");
-  if (!s) return null;
-  let score = 0;
-  if (s.length >= 8) score++;
-  if (s.length >= 12) score++;
-  if (/[a-z]/.test(s) && /[A-Z]/.test(s)) score++;
-  if (/\d/.test(s)) score++;
-  if (/[^a-zA-Z0-9]/.test(s)) score++;
-  if (score <= 1) return { label: "Weak", tone: "bg-rose-400", width: "w-1/4", text: "text-rose-600 dark:text-rose-400" };
-  if (score <= 3) return { label: "Okay", tone: "bg-amber-400", width: "w-2/4", text: "text-amber-600 dark:text-amber-400" };
-  return { label: "Strong", tone: "bg-emerald-500", width: "w-full", text: "text-emerald-600 dark:text-emerald-400" };
-}
-
-export function StrengthBar({ password }) {
-  const s = passwordStrength(password);
-  if (!s) return null;
-  return (
-    <div className="mt-2 flex items-center gap-2">
-      <div className="h-1.5 flex-1 bg-slate-100 dark:bg-white/[0.05] rounded-full overflow-hidden">
-        <div className={`h-full rounded-full transition-all duration-300 ${s.tone} ${s.width}`} />
-      </div>
-      <span className={`text-[11px] font-bold ${s.text}`}>{s.label}</span>
-    </div>
-  );
-}
 
 /* ---------------- marketing building blocks ---------------- */
 
@@ -480,21 +417,14 @@ const PERFECT_FOR = [
 
 export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   const navigate = useNavigate();
-  const [step, setStep] = useState("phone"); // phone | code | welcome | createpw | username | resetpw
+  const [step, setStep] = useState("phone"); // phone | code | welcome | username
   const [manage, setManage] = useState(false); // legacy OTP-manage copy (login view supersedes it)
-  // view: "signup" (default landing) | "login" (Welcome Back — password-first).
+  // view: "signup" (default landing) | "login" (Welcome Back — WhatsApp code or Google).
   // Login always shows a visible ← Back that instantly returns to signup:
   // the user is never trapped in login mode.
   const [view, setView] = useState("signup");
-  // Why the user is running the OTP flow: "signup" (default onboarding),
-  // "login" (existing user prefers OTP) or "reset" (forgot password —
-  // OTP verify → create new password → dashboard).
-  const [otpIntent, setOtpIntent] = useState("signup");
   const [phone, setPhone] = useState("");
   const [code, setCode] = useState("");
-  const [password, setPassword] = useState("");
-  const [pw1, setPw1] = useState("");
-  const [pw2, setPw2] = useState("");
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
@@ -674,13 +604,6 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
       setSession(data);
       track("otp_verified");
       if (data.created) track("draft_created", null);
-      // Forgot-password: the fresh OTP session authorises setting a new
-      // password before entering the dashboard.
-      if (otpIntent === "reset" && !data.created) {
-        setPw1(""); setPw2("");
-        setStep("resetpw");
-        return;
-      }
       // Routing rule: an existing owner NEVER replays onboarding — their
       // dashboard opens directly. Only a brand-new account goes to welcome.
       // (Hard navigation: this component is rendered BY / when signed out,
@@ -699,47 +622,9 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
     }
   };
 
-  // Password login — the default for existing users (OTP costs money per
-  // send; passwords are free). OTP stays one tap away below.
-  const submitPasswordLogin = async () => {
-    if (!phone.trim() || !password) return;
-    setError("");
-    setLoading(true);
-    try {
-      await apiLoginPassword(phone, password);
-      track("password_login");
-      window.location.assign("/");
-    } catch (e) {
-      setError(msg(e));
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const startOtpFlow = (intent) => {
-    setOtpIntent(intent);
+  const startOtpFlow = () => {
     setError("");
     sendCode();
-  };
-
-  const pwMismatch = pw1 && pw2 && pw1 !== pw2;
-  const pwTooShort = pw1 && pw1.length < 8;
-  const pwReady = pw1.length >= 8 && pw1 === pw2;
-
-  // Shared by onboarding ("createpw") and forgot-password ("resetpw").
-  const savePassword = async (nextStep) => {
-    setError("");
-    setLoading(true);
-    try {
-      await apiSetPassword(pw1);
-      track("password_set");
-      if (nextStep === "dashboard") window.location.assign("/");
-      else setStep(nextStep);
-    } catch (e) {
-      setError(msg(e));
-    } finally {
-      setLoading(false);
-    }
   };
 
   const checkUname = (value) => {
@@ -851,7 +736,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
               : "No lengthy forms. We'll verify your WhatsApp, reserve your unique VakilCard address, and guide you through creating your professional profile. Your number stays private unless you choose to display it."}
           </p>
           {/* Existing-owner entry — a deliberate, unmissable brand-purple
-              tile. Opens the dedicated Welcome Back (password-first) view;
+              tile. Opens the dedicated Welcome Back view;
               registration stays exactly where it was behind its ← Back. */}
           <div className="mt-6 rounded-[1.75rem] bg-[#635BFF] p-5 text-center shadow-lg shadow-[#635BFF]/25">
             <p className="text-sm font-bold text-white/90">Already have a VakilCard?</p>
@@ -913,61 +798,11 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
           <p className="text-slate-500 dark:text-slate-400 mt-2 text-center hyphens-none">Your digital chamber is ready. Your address is reserved:</p>
           <p className="font-black text-[#635BFF] dark:text-[#a5a0ff] mt-2 break-all text-center">vakilpedia.com/{session.username}</p>
           <p className="text-slate-500 dark:text-slate-400 mt-2 text-center hyphens-none">Let's personalise it.</p>
-          <button className={primaryBtn + " mt-6"} onClick={() => { setPw1(""); setPw2(""); setStep("createpw"); }}>
+          <button className={primaryBtn + " mt-6"} onClick={() => setStep("username")}>
             Build My VakilCard <ArrowRight className="h-5 w-5" />
           </button>
           <button className={secondaryBtn + " mt-3"} onClick={() => window.location.assign("/")}>Skip for now</button>
         </div>
-      )}
-
-      {(step === "createpw" || step === "resetpw") && (
-        <>
-          <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">
-            {step === "resetpw" ? "Create a new password" : "Set your password"}
-          </h3>
-          <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">
-            {step === "resetpw"
-              ? "You're verified. Choose a new password for future sign-ins."
-              : "Sign in instantly next time with your phone number and password — no waiting for WhatsApp codes."}
-          </p>
-          <div className="mt-5 space-y-3">
-            <div>
-              <PasswordInput
-                value={pw1}
-                onChange={setPw1}
-                placeholder="Create password"
-                autoComplete="new-password"
-                autoFocus
-                ariaLabel="Create password"
-              />
-              <StrengthBar password={pw1} />
-              {pwTooShort && <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mt-1.5">At least 8 characters.</p>}
-            </div>
-            <PasswordInput
-              value={pw2}
-              onChange={setPw2}
-              placeholder="Confirm password"
-              autoComplete="new-password"
-              ariaLabel="Confirm password"
-              onEnter={() => pwReady && savePassword(step === "resetpw" ? "dashboard" : "username")}
-            />
-            {pwMismatch && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300">Passwords don't match.</p>}
-          </div>
-          {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
-          <button
-            className={primaryBtn + " mt-5"}
-            disabled={loading || !pwReady}
-            onClick={() => savePassword(step === "resetpw" ? "dashboard" : "username")}
-          >
-            {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />}
-            {step === "resetpw" ? "Save & Sign In" : "Save Password"}
-          </button>
-          {step === "createpw" && (
-            <button className="w-full text-sm font-bold text-slate-500 dark:text-slate-400 mt-4" onClick={() => setStep("username")}>
-              Skip for now — I'll use WhatsApp codes
-            </button>
-          )}
-        </>
       )}
 
       {step === "username" && session && (
@@ -1113,7 +948,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
   );
   const poweredBy = <p className="text-center text-xs text-slate-500 dark:text-slate-400 mt-5">Powered by Vakilpedia · Free forever</p>;
 
-  /* ------- Welcome Back — existing users, password-first ------- */
+  /* ------- Welcome Back — existing users: WhatsApp code or Google ------- */
 
   if (view === "login" && step === "phone") {
     return frame(
@@ -1122,7 +957,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
           {/* Always-visible escape hatch back to registration. */}
           <button
             type="button"
-            onClick={() => { setView("signup"); setError(""); setPassword(""); }}
+            onClick={() => { setView("signup"); setError(""); }}
             className="mb-4 inline-flex items-center gap-1.5 text-sm font-bold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors"
           >
             <ArrowLeft className="h-4 w-4" /> Back to registration
@@ -1130,7 +965,7 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
           <div className={`${glass} rounded-[2.5rem] p-7 sm:p-9`}>
             <h3 className="text-2xl font-black tracking-tight text-slate-900 dark:text-white">Welcome back</h3>
             <p className="text-slate-500 dark:text-slate-400 mt-2 text-left hyphens-none">
-              Sign in with your phone number and password.
+              Sign in with your phone number. We'll send a code on WhatsApp.
             </p>
             <div className="mt-5 flex items-center">
               <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3.5 text-base text-slate-500 dark:text-slate-400">+91</span>
@@ -1140,56 +975,27 @@ export default function SignupPage({ autoGoogleSignIn = false } = {}) {
                 placeholder="98765 43210" value={phone} aria-label="Mobile number"
                 autoFocus={!phone}
                 onChange={(e) => setPhone(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && phone && password && submitPasswordLogin()}
-              />
-            </div>
-            <div className="mt-3">
-              <PasswordInput
-                value={password}
-                onChange={setPassword}
-                placeholder="Password"
-                autoComplete="current-password"
-                autoFocus={!!phone}
-                ariaLabel="Password"
-                onEnter={submitPasswordLogin}
+                onKeyDown={(e) => e.key === "Enter" && phone.trim() && startOtpFlow()}
               />
             </div>
             {error && <p className="text-sm font-semibold text-rose-700 dark:text-rose-300 mt-3 text-left hyphens-none">{error}</p>}
-            <button className={primaryBtn + " mt-5"} disabled={loading || !phone.trim() || !password} onClick={submitPasswordLogin}>
-              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <Lock className="h-5 w-5" />}
-              Login
-            </button>
-            <button
-              type="button"
-              className="w-full text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff] mt-4 disabled:opacity-50"
-              disabled={loading || !phone.trim()}
-              onClick={() => startOtpFlow("reset")}
-            >
-              Forgot Password?
+            <button className={primaryBtn + " mt-5"} disabled={loading || !phone.trim()} onClick={startOtpFlow}>
+              {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" />}
+              Send WhatsApp code
             </button>
 
-            <div className="flex items-center gap-3 my-5" aria-hidden="true">
-              <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
-              <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">or</span>
-              <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
-            </div>
-
-            <button
-              type="button"
-              className={secondaryBtn + " flex items-center justify-center gap-2 disabled:opacity-50"}
-              disabled={loading || !phone.trim()}
-              onClick={() => startOtpFlow("login")}
-            >
-              <MessageCircle className="h-5 w-5" /> Continue with OTP
-            </button>
             {GOOGLE_AUTH_ENABLED && (
-              <div className="mt-3 flex justify-center">
-                <div ref={googleBtnLogin} className={googleSigningIn ? "opacity-50 pointer-events-none" : ""} />
-              </div>
+              <>
+                <div className="flex items-center gap-3 my-5" aria-hidden="true">
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-400">or</span>
+                  <div className="h-px flex-1 bg-slate-200 dark:bg-white/10" />
+                </div>
+                <div className="flex justify-center">
+                  <div ref={googleBtnLogin} className={googleSigningIn ? "opacity-50 pointer-events-none" : ""} />
+                </div>
+              </>
             )}
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-4 text-center hyphens-none">
-              Tip: password sign-in is instant — no waiting for a WhatsApp code.
-            </p>
           </div>
           {poweredBy}
         </div>
