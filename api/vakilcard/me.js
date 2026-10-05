@@ -19,6 +19,7 @@ const {
   sanitizeBookingWindows,
 } = require("./_lib");
 const { sign } = require("./_jwt");
+const { usernameTakenBy, applyPendingUsername } = require("./_usernameSwitch");
 const { entitlementsFor, isProActive, requirePro, primePaidPlans } = require("./_entitlements");
 
 const SOCIAL_KEYS = ["linkedin", "facebook", "instagram", "x", "threads", "youtube", "whatsapp", "barcouncil"];
@@ -47,7 +48,7 @@ const str = (v, max = 500) =>
 // collapse whitespace, cap length). Mirrors lib/vakilcardNormalize on the client.
 const chamberStr = (v) =>
   typeof v === "string"
-    ? str(v.replace(/[<>\x00-\x1f\x7f]/g, "").replace(/\s+/g, " "), 60)
+    ? str(v.replace(/[<>\x00-\x1f\x7f]/g, "").replace(/\s+/g, " "), 90)
     : null;
 
 // Chamber type (2026-08-16): same sanitization, shorter cap — see
@@ -61,17 +62,8 @@ async function usernameAvailable(raw, ownProfileId) {
   const v = validateUsername(raw);
   if (!v.ok)
     return { available: false, reason: v.reason === "reserved" ? "reserved" : "invalid" };
-  const uname = v.uname;
-  if (await isReservedUsername(uname)) return { available: false, reason: "reserved" };
-  const prof = await db(
-    `vakilcard_profiles?username=eq.${encodeURIComponent(uname)}&select=id`
-  );
-  if (prof.length && prof[0].id !== ownProfileId) return { available: false, reason: "taken" };
-  const alias = await db(
-    `vakilcard_aliases?alias=eq.${encodeURIComponent(uname)}&select=profile_id`
-  );
-  if (alias.length && alias[0].profile_id !== ownProfileId)
-    return { available: false, reason: "taken" };
+  const taken = await usernameTakenBy(v.uname, ownProfileId);
+  if (taken) return { available: false, reason: taken.reason };
   return { available: true };
 }
 
@@ -126,6 +118,17 @@ module.exports = async function handler(req, res) {
       }
       // Preview token: lets the wizard iframe the REAL production renderer
       // for a draft (profile.js honors typ:"preview" bound to this profile).
+      // Paid but the app never applied the held link (tab closed after the
+      // UPI app) -> make it theirs now. Cheap no-op for everyone else.
+      if (profile && profile.pending_username && isProActive(profile)) {
+        const applied = await applyPendingUsername(accountId, profile);
+        if (applied) {
+          profile.username = applied;
+          profile.username_source = "CUSTOM";
+          profile.pending_username = null;
+          profile.pending_username_until = null;
+        }
+      }
       const preview_token = profile
         ? sign({ pid: profile.id, typ: "preview" }, { expiresInSec: 900 })
         : null;

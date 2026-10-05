@@ -36,7 +36,7 @@ export function isValidWebsite(raw) {
 // We validate ONLY length + prohibited characters (control chars and markup
 // angle brackets); no format is imposed. Mirrored server-side in
 // api/vakilcard/me.js (that file is CommonJS and can't import this module).
-export const CHAMBER_NAME_MAX = 60;
+export const CHAMBER_NAME_MAX = 90; // one "Firm name" box since 5 Oct 2026 — room for full firm names
 const CHAMBER_FORBIDDEN = /[<>\x00-\x1f\x7f]/;
 
 /** Strip prohibited chars, collapse whitespace, cap length. Never throws. */
@@ -285,31 +285,40 @@ export function publishBlockers(f) {
 // Client-side port of api/vakilcard/profile.js toDsProfile() — keeps the
 // live in-wizard preview pixel-identical to the SSR card. If you change one,
 // change the other (both are exercised by tests/vakilcard-verification).
+/** Mirror of api/vakilcard/_cardFace.js firmNameOf(): ONE "Firm name" box
+ *  (5 Oct 2026). Older cards kept a second "Firm type" box that was cut at
+ *  30 letters; it is merged in without losing text — appended only when it
+ *  is not already part of the name (or a cut-off copy of it). */
+export function firmNameOf(office) {
+  const clean = (v) => String(v || "").replace(/\s+/g, " ").trim();
+  const name = clean(office && office.chamber_name);
+  const type = clean(office && office.chamber_type);
+  if (!type) return name;
+  if (!name) return type;
+  const n = name.toLowerCase();
+  const t = type.toLowerCase();
+  if (n.includes(t) || n.startsWith(t) || t.startsWith(n)) return name.length >= type.length ? name : type;
+  return `${name} ${type}`;
+}
+
 export function formToDsProfile(f) {
+  // Mirrors api/vakilcard/_cardFace.js cardFace() — keep both in sync.
   const office = f.office || {};
-  const chamber = (office.chamber_name || "").trim();
+  const chamber = firmNameOf(office);
   const chamberWords = chamber.split(/\s+/).filter(Boolean);
   const nameParts = (f.full_name || "")
     .replace(/^adv(ocate)?\.?\s*/i, "")
     .trim()
     .split(/\s+/);
   const firmShort = chamberWords[0] || nameParts[nameParts.length - 1] || "Chambers";
-  // 2026-08-16: firmSub used to default to the literal "LAW CHAMBERS"
-  // whenever chamber_name had 0 or 1 words — wrong for solo practitioners,
-  // associates, or any non-chambers practice, and impossible to opt out of.
-  // Now: an explicit chamber_type field wins when the lawyer has set one
-  // (the intentional, discoverable way to customize this caption); falls
-  // back to any extra words already typed into chamber_name (unchanged
-  // legacy behavior for existing users relying on that); otherwise the
-  // caption is omitted entirely rather than fabricated.
-  const chamberType = (office.chamber_type || "").trim();
-  const firmSub = (chamberType || chamberWords.slice(1).join(" ")).toUpperCase();
+  const firmSub = chamberWords.slice(1).join(" ").toUpperCase();
   const addrParts = (office.address || "").split(/,\s*/).filter(Boolean);
   const mid = Math.ceil(addrParts.length / 2);
   const contacts = [];
   if (f.show_phone !== false && f.phone) contacts.push(["phone", f.phone]);
   if (f.show_email !== false && f.email) contacts.push(["mail", f.email]);
-  if (addrParts.length) contacts.push(["pin", addrParts.slice(-2).join(", ")]);
+  // Full address (it used to keep only the last two comma parts).
+  if (addrParts.length) contacts.push(["pin", addrParts.join(", ")]);
   if (f.enrollment_number) contacts.push(["scale", `Enrol. No. ${f.enrollment_number}`]);
   const pay = f.payment || {};
   return {

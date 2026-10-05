@@ -60,7 +60,7 @@ for (const f of fs.readdirSync(path.join(src, "tokens"))) {
 }
 copy(path.join(vendor, "react.production.min.js"), path.join(out, "react.production.min.js"));
 copy(path.join(vendor, "react-dom.production.min.js"), path.join(out, "react-dom.production.min.js"));
-copy(path.join(vendor, "html-to-image.js"), path.join(out, "html-to-image.js"));
+// html-to-image is no longer used: the card picture is drawn on the server (api/vakilcard/card-image.js, 5 Oct 2026).
 copy(path.join(vendor, "qrcode.js"), path.join(out, "qrcode.js")); // desktop UPI QR (mount.js, lazy)
 
 console.log("VakilCard DS bundle built -> public/ds/");

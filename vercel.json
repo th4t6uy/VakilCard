@@ -1,6 +1,9 @@
 {
   "version": 2,
   "regions": ["bom1"],
+  "functions": {
+    "api/vakilcard/card-image.js": { "includeFiles": "api/vakilcard/_cardAssets/**", "memory": 1024, "maxDuration": 15 }
+  },
   "rewrites": [
     { "source": "/api/vakilcard/track", "destination": "/api/vakilcard/profile" },
     { "source": "/api/:path*", "destination": "/api/:path*" },

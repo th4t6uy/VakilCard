@@ -111,8 +111,13 @@ async function platformCall(action, payload) {
  * the prices — the catalogue is. Changing a number here changes nothing that
  * is charged; change supracore.billing_plans.
  */
+// Catalogue prices are BEFORE GST; Account's checkout charges price + GST
+// (Account/src/lib/billing/catalogue.ts GST_RATE_PERCENT). Display-only here.
+const GST_PERCENT = 18;
+
 const LEGACY_PRICING = Object.freeze({
   ...FALLBACK_PRICING,
+  gst_percent: GST_PERCENT,
   founder_available: true,
   founder_plan_key: PLAN_KEYS.founder,
   regular_plan_key: PLAN_KEYS.regular,
@@ -142,6 +147,7 @@ function pricingFromPlans(rows, env) {
     founder_inr: founder ? founder.price_paise / 100 : LEGACY_PRICING.founder_inr,
     regular_inr: regular.price_paise / 100,
     period_days: periodDays(regular.billing_period),
+    gst_percent: GST_PERCENT,
     founder_available: !!(founder && founder.active !== false && envFounderOpen),
     founder_plan_key: PLAN_KEYS.founder,
     regular_plan_key: PLAN_KEYS.regular,

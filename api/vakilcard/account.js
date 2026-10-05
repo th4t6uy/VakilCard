@@ -15,6 +15,8 @@ const {
 const { audit } = require("./_verify");
 const { requirePro, primePaidPlans } = require("./_entitlements");
 const { generateAutoUsername } = require("./_usernames");
+const { usernameTakenBy, switchUsername, holdUsername, applyPendingUsername } = require("./_usernameSwitch");
+const { isProActive } = require("./_entitlements");
 
 function json(res, status, data) {
   res.statusCode = status;
@@ -25,18 +27,9 @@ function json(res, status, data) {
 
 async function ownProfile(accountId) {
   const rows = await db(
-    `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,full_name,phone,username_source,created_username,subscription_plan,subscription_status,subscription_expires_at,founder_pricing`
+    `vakilcard_profiles?account_id=eq.${accountId}&select=id,username,full_name,phone,username_source,created_username,subscription_plan,subscription_status,subscription_expires_at,founder_pricing,pending_username,pending_username_until`
   );
   return rows[0] || null;
-}
-
-async function usernameTakenBy(uname) {
-  if (await isReservedUsername(uname)) return { reason: "reserved" };
-  const prof = await db(`vakilcard_profiles?username=eq.${encodeURIComponent(uname)}&select=id`);
-  if (prof.length) return { reason: "taken", profileId: prof[0].id };
-  const alias = await db(`vakilcard_aliases?alias=eq.${encodeURIComponent(uname)}&select=profile_id`);
-  if (alias.length) return { reason: "taken", profileId: alias[0].profile_id };
-  return null;
 }
 
 module.exports = async function handler(req, res) {
@@ -70,39 +63,29 @@ module.exports = async function handler(req, res) {
     // Order matters for crash-safety: history first, then the new alias,
     // then the profile switch, then flag flips — every step is idempotent
     // or harmless to re-run.
-    async function performUsernameSwitch(profile, uname, { aliasKind, source, extra = {} }) {
-      await db("vakilcard_username_history", {
-        method: "POST",
-        body: { profile_id: profile.id, old_username: profile.username, new_username: uname },
-        prefer: "return=minimal",
-      });
-      await db("vakilcard_aliases?on_conflict=alias", {
-        method: "POST",
-        body: { alias: uname, profile_id: profile.id, kind: aliasKind, is_primary: true },
-        prefer: "resolution=merge-duplicates,return=minimal",
-      });
-      await db(`vakilcard_profiles?id=eq.${profile.id}`, {
-        method: "PATCH",
-        body: { username: uname, username_source: source, ...extra },
-        prefer: "return=minimal",
-      });
-      // Old username stays as a permanent redirect.
-      await db(`vakilcard_aliases?alias=eq.${encodeURIComponent(profile.username)}`, {
-        method: "PATCH",
-        body: { is_primary: false },
-        prefer: "return=minimal",
-      });
-      await audit("username_changed", {
-        accountId,
-        meta: { from: profile.username, to: uname, profile_id: profile.id, source },
-      });
-      return json(res, 200, {
-        ok: true,
-        username: uname,
-        username_source: source,
-        card_url: `https://www.vakilpedia.com/${uname}`,
-        previous_redirects: true,
-      });
+    async function performUsernameSwitch(profile, uname, opts) {
+      return json(res, 200, await switchUsername(accountId, profile, uname, opts));
+    }
+
+    // HOLD a custom link while a Free lawyer pays for Pro (founder, 5 Oct 2026:
+    // "if user wants pro username accept payment there itself"). The client
+    // then opens the normal Pro checkout; payment success applies the link.
+    if (action === "hold_username") {
+      const profile = await ownProfile(accountId);
+      if (!profile) return json(res, 404, { error: "no_profile" });
+      const out = await holdUsername(profile, body.username);
+      if (!out.ok) return json(res, out.error === "username_held" || out.error === "username_taken" ? 409 : 400, { error: out.error });
+      return json(res, 200, out);
+    }
+
+    // Pro already (e.g. paid, tab closed before the app applied the link):
+    // apply the held link now. Harmless no-op otherwise.
+    if (action === "apply_pending_username") {
+      const profile = await ownProfile(accountId);
+      if (!profile) return json(res, 404, { error: "no_profile" });
+      if (!isProActive(profile)) return json(res, 402, { error: "pro_required" });
+      const uname = await applyPendingUsername(accountId, profile);
+      return json(res, 200, { ok: true, username: uname || profile.username, applied: !!uname });
     }
 
     // CUSTOM username — Pro only. Reserved for as long as Pro stays active;
@@ -117,7 +100,7 @@ module.exports = async function handler(req, res) {
       const uname = v.uname;
       if (profile.username === uname) return json(res, 200, { ok: true, username: uname });
 
-      const taken = await usernameTakenBy(uname);
+      const taken = await usernameTakenBy(uname, profile.id);
       // Reclaiming one of your own aliases is allowed.
       if (taken && !(taken.reason === "taken" && taken.profileId === profile.id))
         return json(res, 409, { error: "username_" + taken.reason });
@@ -142,7 +125,7 @@ module.exports = async function handler(req, res) {
       }
       if (profile.username === uname)
         return json(res, 200, { ok: true, username: uname, username_source: "AUTO" });
-      const taken = await usernameTakenBy(uname);
+      const taken = await usernameTakenBy(uname, profile.id);
       if (taken && !(taken.reason === "taken" && taken.profileId === profile.id))
         return json(res, 409, { error: "username_" + taken.reason });
       return performUsernameSwitch(profile, uname, {
@@ -162,7 +145,7 @@ module.exports = async function handler(req, res) {
       if (!digits) return json(res, 400, { error: "no_phone" });
       if (profile.username === digits)
         return json(res, 200, { ok: true, username: digits, username_source: "PHONE" });
-      const taken = await usernameTakenBy(digits);
+      const taken = await usernameTakenBy(digits, profile.id);
       if (taken && !(taken.reason === "taken" && taken.profileId === profile.id))
         return json(res, 409, { error: "username_" + taken.reason });
       return performUsernameSwitch(profile, digits, { aliasKind: "phone", source: "PHONE" });

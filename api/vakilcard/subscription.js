@@ -45,7 +45,8 @@
 // Coupon checkouts always price off the REGULAR plan — a coupon bypasses the
 // founder window.
 const { db, resolveAccount } = require("./_lib");
-const { entitlementsFor } = require("./_entitlements");
+const { entitlementsFor, isProActive } = require("./_entitlements");
+const { applyPendingUsername } = require("./_usernameSwitch");
 const { audit } = require("./_verify");
 const billing = require("./_billing");
 const controls = require("./_controls");
@@ -61,7 +62,7 @@ function json(res, status, data) {
 }
 
 const PROFILE_SEL =
-  "id,username,full_name,subscription_plan,subscription_status,subscription_expires_at,founder_pricing";
+  "id,username,full_name,subscription_plan,subscription_status,subscription_expires_at,founder_pricing,pending_username,pending_username_until";
 
 async function ownProfile(accountId) {
   const rows = await db(`vakilcard_profiles?account_id=eq.${accountId}&select=${PROFILE_SEL}`);
@@ -387,9 +388,15 @@ module.exports = async function handler(req, res) {
       // Spread FIRST — expires_at from this activation must win even if the
       // profile re-read races a replica lag.
       const fresh = await ownProfile(who.accountId);
+      // A custom link held while paying (UsernamePicker) becomes theirs now.
+      let username_applied = null;
+      if (fresh && fresh.pending_username && isProActive(fresh)) {
+        username_applied = await applyPendingUsername(who.accountId, fresh);
+      }
       return json(res, 200, {
         ...entitlementsFor(fresh, pricing),
         ok: true,
+        ...(username_applied ? { username: username_applied } : {}),
         expires_at: out.periodEnd || (fresh && fresh.subscription_expires_at) || null,
         ...(out.idempotent ? { idempotent: true } : {}),
       });

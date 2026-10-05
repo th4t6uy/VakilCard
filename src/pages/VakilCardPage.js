@@ -31,6 +31,7 @@ import {
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
 import LiveCardPreview from "../components/LiveCardPreview";
 import UpgradeSheet from "../components/UpgradeSheet";
+import UsernamePicker from "../components/UsernamePicker";
 import SignupPage, { PasswordInput, StrengthBar } from "./vakilcard/SignupPage";
 import SiteNav from "../components/SiteNav";
 import SiteFooter from "../components/SiteFooter";
@@ -703,6 +704,7 @@ export default function VakilCardPage() {
   const [savingBranding, setSavingBranding] = useState(false);
   const [ent, setEnt] = useState(null); // entitlements from GET /me
   const [upgradeFeature, setUpgradeFeature] = useState(null); // null | feature key
+  const [linkOpen, setLinkOpen] = useState(false); // "Your card's link" picker
 
   // Change Password (Account panel) — hasPassword null until we know;
   // account.js reports it via has_password so the UI can say "Set a
@@ -1189,6 +1191,28 @@ export default function VakilCardPage() {
                    className={`text-lg sm:text-xl font-black break-words inline-flex flex-wrap items-center gap-1.5 leading-tight ${published ? "text-[#635BFF] dark:text-[#a5a0ff] hover:underline" : "text-slate-400 dark:text-slate-500 cursor-default"}`}>
                   <span>vakilpedia.com/<wbr />{profile.username}</span>{published && <ExternalLink className="h-4 w-4 flex-none" />}
                 </a>
+                <button
+                  type="button"
+                  onClick={() => setLinkOpen((v) => !v)}
+                  className="ml-0 mt-2 sm:mt-0 sm:ml-3 inline-flex items-center rounded-full border border-[#635BFF]/40 bg-[#635BFF]/10 px-3 py-1 text-xs font-black text-[#635BFF] dark:text-[#a5a0ff]"
+                >
+                  {linkOpen ? "Close" : "Change link"}
+                </button>
+                {linkOpen && (
+                  <div className="mt-3">
+                    <UsernamePicker
+                      compact
+                      profile={profile}
+                      pro={!!(ent && ent.pro)}
+                      onChanged={(u) => {
+                        // Update in place (no full reload flash); the URL
+                        // follows via the canonical-dashboard effect.
+                        if (u) setProfile((p) => (p ? { ...p, username: u } : p));
+                        else load();
+                      }}
+                    />
+                  </div>
+                )}
                 <div className="mt-4">
                   <div className="flex justify-between text-xs font-bold text-slate-500 dark:text-slate-400 mb-1">
                     <span>Card completion</span><span className="text-[#635BFF] dark:text-[#a5a0ff]">{pct}%</span>

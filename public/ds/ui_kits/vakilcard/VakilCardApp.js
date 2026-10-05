@@ -791,11 +791,13 @@ function VisitingCard({
     }
   }, profile.firmShort), /*#__PURE__*/React.createElement("div", {
     style: {
-      fontSize: 8.5,
-      letterSpacing: '0.34em',
+      fontSize: (profile.firmSub || '').length > 24 ? 7.5 : 8.5,
+      letterSpacing: /[\u0900-\u097F]/.test(profile.firmSub || '') ? 0 : (profile.firmSub || '').length > 24 ? '0.22em' : '0.34em',
+      lineHeight: 1.35,
       color: '#060606',
       fontWeight: 700,
-      marginTop: 4
+      marginTop: 4,
+      overflowWrap: 'anywhere'
     }
   }, profile.firmSub), /*#__PURE__*/React.createElement("div", {
     style: {
@@ -898,10 +900,11 @@ function VisitingCard({
       fontFamily: 'var(--font-accent)',
       fontStyle: 'normal',
       fontWeight: 400,
-      fontSize: 13,
+      fontSize: k === 'mail' && t.length > 27 ? 12 : 13,
       lineHeight: 1.28,
       color: '#33313e',
-      minWidth: 0
+      minWidth: 0,
+      overflowWrap: 'anywhere'
     }
   }, t)))))), /*#__PURE__*/React.createElement("div", {
     style: {

@@ -190,6 +190,11 @@ export const changeUsername = (username) =>
   call("account", { method: "POST", body: { action: "change_username", username } }); // Pro-only (402 pro_required)
 export const setUsernameAuto = (full_name) =>
   call("account", { method: "POST", body: { action: "set_username_auto", full_name } });
+// Hold a custom link while a Free user pays for Pro; applied on payment.
+export const holdUsername = (username) =>
+  call("account", { method: "POST", body: { action: "hold_username", username } });
+export const applyPendingUsername = () =>
+  call("account", { method: "POST", body: { action: "apply_pending_username" } });
 export const setUsernamePhone = () =>
   call("account", { method: "POST", body: { action: "set_username_phone", consent: true } });
 export const linkGoogle = (id_token) =>

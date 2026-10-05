@@ -13,18 +13,19 @@
 import React, { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { ArrowLeft, ArrowRight, Check, Eye, Loader2, Rocket, Trash2, User, X } from "lucide-react";
-import { getMe, saveProfile, checkUsername, changeUsername, track, ApiError } from "../../lib/vakilcardApi";
+import { getMe, saveProfile, track, ApiError } from "../../lib/vakilcardApi";
 import { uploadOptimized, removeUpload } from "../../lib/vakilcardImage";
 import {
   normalizeWebsite, isValidWebsite, isValidUpi, isValidIndianMobile,
   normalizeSocial, publishBlockers, chamberNameError, CHAMBER_NAME_MAX,
-  chamberTypeError, CHAMBER_TYPE_MAX,
+  firmNameOf,
 } from "../../lib/vakilcardNormalize";
 import { qaActive, qaPreviewSrc, QaBadge } from "../../lib/vakilcardQa";
 import { trackPageView } from "../../lib/ga4";
 import QaStepJumper from "../../components/QaStepJumper";
 import LiveCardPreview from "../../components/LiveCardPreview";
 import UpgradeSheet from "../../components/UpgradeSheet";
+import UsernamePicker from "../../components/UsernamePicker";
 
 const PRACTICE_AREAS = [
   "Civil", "Criminal", "Property", "Corporate", "Family", "Taxation",
@@ -139,7 +140,9 @@ export function profileToForm(p) {
     show_email: p.show_email !== false, show_phone: p.show_phone !== false,
     practice_areas: (p.vakilcard_practice_areas || []).sort((a, b) => a.position - b.position).map((x) => x.area),
     office: {
-      chamber_name: office.chamber_name || "", chamber_type: office.chamber_type || "",
+      // One "Firm name" box (5 Oct 2026): an older second "Firm type" box is
+      // merged in here and cleared on the next save, without losing text.
+      chamber_name: firmNameOf(office), chamber_type: "",
       address: office.address || "",
       maps_url: office.maps_url || "", timings: office.timings || "",
     },
@@ -202,6 +205,7 @@ export default function SetupWizard() {
   const [f, setF] = useState(null);
   const [previewToken, setPreviewToken] = useState(null);
   const [ent, setEnt] = useState(null); // entitlements from GET /me
+  const [rawProfile, setRawProfile] = useState(null); // for the link picker (created_username, phone)
   const [upgradeFeature, setUpgradeFeature] = useState(null);
   const [published, setPublished] = useState(false);
   const [step, setStep] = useState(sectionMode ? sectionStep : 0);
@@ -220,8 +224,6 @@ export default function SetupWizard() {
   const profileId = useRef(null);
   // Username editing lives inside the wizard (Details step) — one edit area.
   const originalUsername = useRef("");
-  const [unameStatus, setUnameStatus] = useState("ok"); // ok|checking|taken|reserved|invalid
-  const unameTimer = useRef();
 
   const load = useCallback(async () => {
     setLoadError(false);
@@ -233,6 +235,7 @@ export default function SetupWizard() {
       setPublished(r.profile.is_published === true);
       setPreviewToken(r.preview_token);
       setEnt(r.entitlements || null);
+      setRawProfile(r.profile);
       const form = profileToForm(r.profile);
       setF(form);
       // Draft resume (full mode): exact step from this device, else the
@@ -279,23 +282,7 @@ export default function SetupWizard() {
     return r;
   };
 
-  const onUsernameInput = (value) => {
-    clearTimeout(unameTimer.current);
-    const u = value.toLowerCase().trim();
-    set("username", value);
-    if (u === originalUsername.current) return setUnameStatus("ok");
-    if (!/^(?=.{3,30}$)[a-z0-9]+([._-][a-z0-9]+)*$/.test(u) || /^[0-9]+$/.test(u))
-      return setUnameStatus("invalid");
-    setUnameStatus("checking");
-    unameTimer.current = setTimeout(async () => {
-      try {
-        const r = await checkUsername(u);
-        setUnameStatus(r.available ? "ok" : r.reason);
-      } catch {
-        setUnameStatus("ok"); // don't block editing on a network blip
-      }
-    }, 400);
-  };
+
 
   /* -------- normalize-on-blur: accept anything, store the canonical form -------- */
 
@@ -351,19 +338,6 @@ export default function SetupWizard() {
     setError("");
     setSaving(true);
     try {
-      // Username change (Details step): claim the new link first — the old
-      // one becomes a permanent redirect, links never break.
-      const uname = (f.username || "").toLowerCase().trim();
-      if (uname && uname !== originalUsername.current) {
-        if (unameStatus !== "ok") {
-          setError("Please pick an available link before continuing.");
-          setSaving(false);
-          return;
-        }
-        await changeUsername(uname);
-        originalUsername.current = uname;
-        set("username", uname);
-      }
       await persist(); // autosave draft on every advance
       setStep((s) => Math.min(s + 1, STEPS.length - 1));
       window.scrollTo(0, 0);
@@ -509,6 +483,17 @@ export default function SetupWizard() {
       {step === 0 && !sectionMode && (
         <>
           <StepHeader title="Your card, in 10 seconds" desc="Just the essentials — your card can go live right now. Everything else is optional and editable any time." />
+          <UsernamePicker
+            profile={rawProfile ? { ...rawProfile, full_name: f.full_name || rawProfile.full_name } : null}
+            pro={!!(ent && ent.pro)}
+            onChanged={(u) => {
+              if (u) {
+                originalUsername.current = u;
+                set("username", u);
+                setRawProfile((p) => (p ? { ...p, username: u } : p));
+              } else load();
+            }}
+          />
           <div className="flex items-center gap-5">
             {f.photo_url ? (
               <img src={f.photo_url} alt="Profile" className="h-24 w-24 rounded-full object-cover border-2 border-[#635BFF] flex-none" />
@@ -577,35 +562,7 @@ export default function SetupWizard() {
       {step === 1 && (
         <>
           <StepHeader title="Professional details" />
-          {ent && !ent.pro ? (
-            // Custom usernames are Pro — the field never dead-ends: tapping
-            // it opens the standard upgrade sheet.
-            <Field label="Your VakilCard link">
-              <button
-                type="button"
-                onClick={() => setUpgradeFeature("custom_username")}
-                className="w-full flex items-center justify-between rounded-2xl border border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-4 py-3 text-left"
-              >
-                <span className="text-sm text-slate-600 dark:text-slate-300 break-all">vakilpedia.com/<b className="text-slate-900 dark:text-white">{f.username}</b></span>
-                <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5 flex-none ml-3">Custom · Pro</span>
-              </button>
-            </Field>
-          ) : (
-            <Field label="Your VakilCard link" hint="Change it anytime — old links redirect forever.">
-              <div className="flex items-center">
-                <span className="rounded-l-2xl border border-r-0 border-slate-200 dark:border-white/10 bg-slate-50 dark:bg-white/[0.05] px-3 py-3 text-sm text-slate-500 dark:text-slate-400">vakilpedia.com/</span>
-                <input className={inputCls + " rounded-l-none"} autoCapitalize="none" autoCorrect="off" value={f.username} onChange={(e) => onUsernameInput(e.target.value)} />
-              </div>
-              {unameStatus !== "ok" && (
-                <p className={`mt-1.5 text-xs font-semibold text-left hyphens-none ${unameStatus === "checking" ? "text-slate-500 dark:text-slate-400" : "text-rose-700 dark:text-rose-300"}`}>
-                  {unameStatus === "checking" ? "Checking availability…" :
-                   unameStatus === "taken" ? "Already taken." :
-                   unameStatus === "reserved" ? "Reserved — please pick another." :
-                   "3–30 chars: letters, numbers, dots, hyphens, underscores. Not only numbers."}
-                </p>
-              )}
-            </Field>
-          )}
+          {/* The card's link is picked on the first step (UsernamePicker). */}
           <Field label="Full name"><input className={inputCls} value={f.full_name} onChange={(e) => set("full_name", e.target.value)} placeholder="Adv. Sidharth Gautam" /></Field>
           <Field label="Designation" hint="Pick one or write your own.">
             <div className="flex flex-wrap gap-2 mb-2.5">
@@ -687,7 +644,7 @@ export default function SetupWizard() {
       {step === 4 && (
         <>
           <StepHeader title="Your chamber" />
-          <Field label="Chamber name" hint="Any name you like — firm, chamber, or your own name." error={fieldErrors.chamber_name}>
+          <Field label="Firm name" hint="Exactly as it should appear on your card — e.g. Gujral Law Chambers, or Raya & Co. — Solicitors & Advocates." error={fieldErrors.chamber_name}>
             <input
               className={fieldErrors.chamber_name ? inputErrCls : inputCls}
               maxLength={CHAMBER_NAME_MAX}
@@ -695,20 +652,6 @@ export default function SetupWizard() {
               onChange={(e) => { setNested("office", "chamber_name", e.target.value); if (fieldErrors.chamber_name) setFieldError("chamber_name", chamberNameError(e.target.value)); }}
               onBlur={(e) => setFieldError("chamber_name", chamberNameError(e.target.value))}
               placeholder="e.g. Sidharth Gautam Law Chambers"
-            />
-          </Field>
-          {/* 2026-08-16: was implicit (any words after the first in Chamber
-              name, else a forced "LAW CHAMBERS") — not every practice IS a
-              chambers. Now its own optional field; leave blank for no
-              caption at all. */}
-          <Field label="Firm type" hint="Shown as a small label under your name. Not every practice is a “chambers” — use whatever fits (Associates, Advocates, & Co.), or leave blank for none." error={fieldErrors.chamber_type}>
-            <input
-              className={fieldErrors.chamber_type ? inputErrCls : inputCls}
-              maxLength={CHAMBER_TYPE_MAX}
-              value={f.office.chamber_type}
-              onChange={(e) => { setNested("office", "chamber_type", e.target.value); if (fieldErrors.chamber_type) setFieldError("chamber_type", chamberTypeError(e.target.value)); }}
-              onBlur={(e) => setFieldError("chamber_type", chamberTypeError(e.target.value))}
-              placeholder="e.g. Law Chambers, Legal Associates, Advocates"
             />
           </Field>
           <Field label="Office timings" hint="Pick one or write your own.">

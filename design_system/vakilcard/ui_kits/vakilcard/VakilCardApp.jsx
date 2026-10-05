@@ -301,7 +301,9 @@ function VisitingCard({ compact, onSave, profile }) {
             </div>
           </div>
           <div style={{ fontFamily: 'var(--font-sans)', fontSize: 24, color: '#1c1c26', fontWeight: 700, letterSpacing: '-0.02em', marginTop: 12, lineHeight: 1 }}>{profile.firmShort}</div>
-          <div style={{ fontSize: 8.5, letterSpacing: '0.34em', color: '#060606', fontWeight: 700, marginTop: 4 }}>{profile.firmSub}</div>
+          {/* Full firm name now (5 Oct 2026) — long ones get a little tighter, and
+              Devanagari never gets letter-spacing (it breaks the joined letters). */}
+          <div style={{ fontSize: (profile.firmSub || '').length > 24 ? 7.5 : 8.5, letterSpacing: /[\u0900-\u097F]/.test(profile.firmSub || '') ? 0 : (profile.firmSub || '').length > 24 ? '0.22em' : '0.34em', lineHeight: 1.35, color: '#060606', fontWeight: 700, marginTop: 4, overflowWrap: 'anywhere' }}>{profile.firmSub}</div>
           <div style={{ fontFamily: 'var(--font-accent)', fontStyle: 'italic', fontWeight: 400, fontSize: 10.5, color: '#5b5766', marginTop: 12 }}>{profile.tagline}</div>
         </div>
 
@@ -316,7 +318,7 @@ function VisitingCard({ compact, onSave, profile }) {
             {profile.contacts.map(([k, t], i) => (
               <div key={i} style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
                 <span style={{ color: '#2a2732', flexShrink: 0, marginTop: 2 }}>{Icons[k](14)}</span>
-                <span style={{ fontFamily: 'var(--font-accent)', fontStyle: 'normal', fontWeight: 400, fontSize: 13, lineHeight: 1.28, color: '#33313e', minWidth: 0 }}>{t}</span>
+                <span style={{ fontFamily: 'var(--font-accent)', fontStyle: 'normal', fontWeight: 400, fontSize: k === 'mail' && t.length > 27 ? 12 : 13, lineHeight: 1.28, color: '#33313e', minWidth: 0, overflowWrap: 'anywhere' }}>{t}</span>
               </div>
             ))}
           </div>

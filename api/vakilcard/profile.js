@@ -18,6 +18,7 @@ const {
 } = require("./_lib");
 const { verify: verifyJwt } = require("./_jwt");
 const { isProActive, lockedCardFeatures, primePaidPlans } = require("./_entitlements");
+const { cardFace } = require("./_cardFace");
 
 const SITE = "https://www.vakilpedia.com";
 // Owner dashboard's own domain (cut over 2026-08-04) — see auth.js.
@@ -198,31 +199,16 @@ function socialList(social_links) {
  *  System component's `profile` prop shape (see the handoff README). */
 function toDsProfile(p) {
   const office = p.offices[0] || {};
-  const chamber = (office.chamber_name || "").trim();
-  const chamberWords = chamber.split(/\s+/).filter(Boolean);
-  const nameParts = (p.full_name || "")
-    .replace(/^adv(ocate)?\.?\s*/i, "")
-    .trim()
-    .split(/\s+/);
-  const firmShort = chamberWords[0] || nameParts[nameParts.length - 1] || "Chambers";
-  // 2026-08-16: firmSub used to default to the literal "LAW CHAMBERS"
-  // whenever chamber_name had 0 or 1 words — wrong for solo practitioners,
-  // associates, or any non-chambers practice, and impossible to opt out of.
-  // Now: an explicit chamber_type field wins when the lawyer has set one
-  // (the intentional, discoverable way to customize this caption); falls
-  // back to any extra words already typed into chamber_name (unchanged
-  // legacy behavior for existing users relying on that); otherwise the
-  // caption is omitted entirely rather than fabricated. Mirrored client-side
-  // in src/lib/vakilcardNormalize.js formToDsProfile() — keep both in sync.
-  const chamberType = (office.chamber_type || "").trim();
-  const firmSub = (chamberType || chamberWords.slice(1).join(" ")).toUpperCase();
+  // Front of the card (firm, name, contact rows) comes from ONE function shared
+  // with the downloadable picture (card-image.js), so the two never disagree.
+  // Firm name is one box now; older two-box rows are merged there (5 Oct 2026).
+  const face = cardFace(p, office);
+  const chamber = face.firm;
+  const firmShort = face.firmShort;
+  const firmSub = face.firmSub;
+  const contacts = face.contacts;
   const addrParts = (office.address || "").split(/,\s*/).filter(Boolean);
   const mid = Math.ceil(addrParts.length / 2);
-  const contacts = [];
-  if (p.show_phone !== false && p.phone) contacts.push(["phone", p.phone]);
-  if (p.show_email !== false && p.email) contacts.push(["mail", p.email]);
-  if (addrParts.length) contacts.push(["pin", addrParts.slice(-2).join(", ")]);
-  if (p.enrollment_number) contacts.push(["scale", `Enrol. No. ${p.enrollment_number}`]);
   const pay = p.payment;
   // Exposed directly to the client component (2026-08-16 fix batch): the
   // merged payment pill needs to know Free vs Pro itself now (QR shown only
@@ -239,6 +225,8 @@ function toDsProfile(p) {
     title: "ADVOCATE",
     name: p.full_name,
     username: p.username,
+    // Cache key for the server-drawn card picture (double-tap save).
+    cardVersion: String(Date.parse(p.updated_at || "") || ""),
     photoUrl: p.photo_url || "",
     contacts,
     about: p.bio || "",

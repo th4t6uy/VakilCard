@@ -2,15 +2,19 @@
   "name": "vakilcard",
   "version": "1.0.0",
   "private": true,
-  "description": "VakilCard — standalone digital chamber card product, extracted from Apps/Vakilpedia-website. Consumes SupraCore services where available; currently self-contained pending that integration.",
+  "description": "VakilCard \u2014 standalone digital chamber card product, extracted from Apps/Vakilpedia-website. Consumes SupraCore services where available; currently self-contained pending that integration.",
   "dependencies": {
+    "@resvg/resvg-js": "^2.6.2",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.507.0",
+    "opentype.js": "^1.3.4",
     "qrcode-generator": "^1.4.4",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-router-dom": "^7.5.1",
-    "react-scripts": "5.0.1"
+    "react-scripts": "5.0.1",
+    "satori": "^0.35.0",
+    "sharp": "^0.34.5"
   },
   "scripts": {
     "start": "craco start",
@@ -18,7 +22,7 @@
     "prebuild": "node scripts/build-vakilcard-ds.cjs",
     "build": "DISABLE_ESLINT_PLUGIN=true CI=false craco build",
     "dev:api": "node scripts/dev-api-server.cjs",
-    "test": "node tests/vakilcard-legal.test.js && node tests/vakilcard-nfc-consent.test.js && node tests/vakilcard-verification.test.js && node tests/vakilcard-entitlements.test.js && node tests/vakilcard-billing.test.js && node tests/vakilcard-onboarding.test.js && node tests/vakilcard-upload.test.js && node tests/vakilcard-booking-payments.test.js && node tests/vakilcard-controls.test.js"
+    "test": "node tests/vakilcard-legal.test.js && node tests/vakilcard-nfc-consent.test.js && node tests/vakilcard-verification.test.js && node tests/vakilcard-entitlements.test.js && node tests/vakilcard-billing.test.js && node tests/vakilcard-onboarding.test.js && node tests/vakilcard-upload.test.js && node tests/vakilcard-booking-payments.test.js && node tests/vakilcard-controls.test.js && node tests/vakilcard-card-and-link.test.js"
   },
   "browserslist": {
     "production": [

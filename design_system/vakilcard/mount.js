@@ -1229,183 +1229,75 @@
     }
   }
 
-  /* ---------- Real card-image save (double-tap) — live cards only ----------
-     Captures ONLY the glass visiting-card element as a PNG: rounded corners
-     stay transparent, the pearl glass fill is preserved. Renderer
-     (/ds/html-to-image.js) loads lazily on first use. */
+  /* ---------- Card picture save (double-tap) — live cards only ----------
+     Founder, 5 Oct 2026. The picture is drawn on OUR server
+     (/api/vakilcard/card-image — fonts shipped with it, photo fetched by the
+     server, every line measured before drawing), so it comes out the same on
+     every phone. The old in-phone screenshot (html-to-image) drew the card in
+     the phone's fallback fonts — the email ran off the edge, the address
+     overlapped the Enrol. No. — and iPhones dropped the DP on some saves.
+     The picture is fetched as soon as the card is first touched, so by the
+     second tap it is usually ready and the Share sheet ("Save Image" -> Photos)
+     still counts as part of the tap. */
   if (!visualOnly) {
+    var cardPicture = null; // Promise<Blob>
+    var pictureUrl = function () {
+      var p = boot.profile || {};
+      return "/api/vakilcard/card-image?u=" + encodeURIComponent(p.username || "") +
+        (p.cardVersion ? "&v=" + encodeURIComponent(p.cardVersion) : "");
+    };
+    var fetchPicture = function () {
+      if (!cardPicture) {
+        cardPicture = fetch(pictureUrl()).then(function (r) {
+          if (!r.ok) throw new Error("card-image " + r.status);
+          return r.blob();
+        });
+        cardPicture.catch(function () { cardPicture = null; }); // allow a retry
+      }
+      return cardPicture;
+    };
+    var warm = function (e) {
+      if (e.target && e.target.closest && e.target.closest('[title*="Double-tap"]')) fetchPicture().catch(function () {});
+    };
+    document.addEventListener("touchstart", warm, { passive: true });
+    document.addEventListener("mousedown", warm);
+
     document.addEventListener("dblclick", function (e) {
       var card = e.target.closest('[title*="Double-tap"]');
       if (!card) return;
-      var run = function () {
-        // Faithful export of the on-screen card:
-        //  1) html-to-image can't render backdrop-filter, so the live glass
-        //     would export flat — bake a self-contained pearl-glass paint for
-        //     the capture only.
-        //  2) Freeze the card's exact on-screen width (+box-sizing) so the
-        //     cloned node can't reflow — reflow made every line wrap a word
-        //     early and the gold divider overlap the name.
-        //  3) Wait for web fonts (document.fonts.ready) so the clone measures
-        //     text in the real Google fonts, not a wider fallback.
-        // Every touched inline style is restored so the on-screen card is
-        // unchanged.
-        var rect = card.getBoundingClientRect();
-        var touched = ["background", "backdropFilter", "webkitBackdropFilter", "boxShadow", "transform", "transition", "boxSizing", "width"];
-        var saved = {};
-        touched.forEach(function (p) { saved[p] = card.style[p]; });
-        // The name is single-line shrink-to-fit in the component; give the
-        // export one extra notch of headroom so a wider fallback font in the
-        // capture clone can never clip or collide with the gold divider.
-        var nameEl = card.querySelector("[data-card-name]");
-        var savedNameFs = nameEl ? nameEl.style.fontSize : null;
-        if (nameEl) {
-          var fs = parseFloat(getComputedStyle(nameEl).fontSize) || 22;
-          nameEl.style.fontSize = Math.max(12, fs - 1) + "px";
-        }
-        // The gold avatar ring's own box-shadow renders oversized/misplaced
-        // through html-to-image's SVG capture path (a known renderer quirk
-        // with shadows on circular clipped elements) even though it looks
-        // fine live — drop it for the capture only, restore after.
-        var ringEl = card.querySelector("[data-card-avatar-ring]");
-        var savedRingShadow = ringEl ? ringEl.style.boxShadow : null;
-        if (ringEl) ringEl.style.boxShadow = "none";
-        // The photo, if any, is hosted off-origin (Supabase Storage). It
-        // displays fine live via crossOrigin="anonymous", but html-to-image
-        // fetches images through its own path when inlining them into the
-        // capture and can silently drop one that fetch can't read (opaque/
-        // CORS-blocked response) — the export comes out with the DP missing
-        // even though nothing else looks wrong. Swap in a same-origin data:
-        // URL for the capture only; any failure here just leaves the photo
-        // as before, never worse than the pre-fix behaviour.
-        //
-        // 2026-08-16: the previous approach here (fetch(url,{mode:'cors'})
-        // + FileReader) still left the DP missing for at least one real
-        // user despite the Storage bucket sending a correct
-        // access-control-allow-origin:* header (verified directly) — most
-        // likely a Safari-specific quirk where fetch() and an <img
-        // crossorigin> load of the SAME URL don't share a cache/CORS
-        // decision cleanly. Switched to the more standard, more broadly
-        // reliable technique for this exact problem: load a FRESH Image()
-        // with crossOrigin set, draw it to an offscreen <canvas>, and read
-        // it back with canvas.toDataURL() — a different browser code path
-        // than fetch, and the one most cross-origin-export tools rely on.
-        // The old fetch+blob approach is kept as a second fallback in case
-        // toDataURL throws (e.g. a genuinely tainted canvas).
-        var photoEl = card.querySelector("[data-card-photo]");
-        var savedPhotoSrc = photoEl ? photoEl.src : null;
-        var photoToDataUrl = function (url) {
-          return new Promise(function (resolve, reject) {
-            var img = new Image();
-            img.crossOrigin = "anonymous";
-            img.onload = function () {
-              try {
-                var canvas = document.createElement("canvas");
-                canvas.width = img.naturalWidth || 200;
-                canvas.height = img.naturalHeight || 200;
-                canvas.getContext("2d").drawImage(img, 0, 0);
-                resolve(canvas.toDataURL("image/png"));
-              } catch (e) { reject(e); }
-            };
-            img.onerror = function () { reject(new Error("photo image load failed")); };
-            img.src = url;
-          });
-        };
-        var photoFetchFallback = function (url) {
-          return fetch(url, { mode: "cors", cache: "force-cache" })
-            .then(function (r) { if (!r.ok) throw new Error("photo fetch " + r.status); return r.blob(); })
-            .then(function (blob) {
-              return new Promise(function (resolve, reject) {
-                var reader = new FileReader();
-                reader.onload = function () { resolve(reader.result); };
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-              });
-            });
-        };
-        var photoSwap = Promise.resolve();
-        if (photoEl && savedPhotoSrc) {
-          photoSwap = photoToDataUrl(savedPhotoSrc)
-            .catch(function () { return photoFetchFallback(savedPhotoSrc); })
-            .then(function (dataUrl) { photoEl.src = dataUrl; })
-            .catch(function () { /* both methods failed — keep the original src, no worse than before */ });
-        }
-        var restore = function () {
-          touched.forEach(function (p) { card.style[p] = saved[p]; });
-          if (nameEl) nameEl.style.fontSize = savedNameFs;
-          if (ringEl) ringEl.style.boxShadow = savedRingShadow;
-          if (photoEl && savedPhotoSrc) photoEl.src = savedPhotoSrc;
-        };
-        // Premium frosted-glass export: a diagonal top-left sheen + pearl tint
-        // over a lightly-frosted base. Kept opaque enough (≈0.9) that dark text
-        // stays crisp, but far less "flat white" than before — reads as glass.
-        card.style.background =
-          "linear-gradient(135deg, rgba(255,255,255,0.5) 0%, rgba(255,255,255,0.06) 34%, rgba(255,255,255,0) 56%), " +
-          "linear-gradient(125deg, rgba(251,231,212,0.5), rgba(230,221,246,0.5) 48%, rgba(219,233,247,0.55)), " +
-          "linear-gradient(180deg, rgba(255,255,255,0.92), rgba(244,246,252,0.9))";
-        card.style.backdropFilter = "none";
-        card.style.webkitBackdropFilter = "none";
-        card.style.boxShadow =
-          "0 14px 34px rgba(20,22,40,0.20), inset 0 1px 0 rgba(255,255,255,0.9), inset 0 0 0 1px rgba(255,255,255,0.5)";
-        card.style.transform = "none";
-        card.style.transition = "none";
-        card.style.boxSizing = "border-box";
-        card.style.width = Math.round(rect.width) + "px";
-        var fileName =
-          ((boot.profile && boot.profile.name) || "vakilcard")
-            .toLowerCase().replace(/[^a-z0-9]+/g, "-") + "-vakilcard.png";
-        var download = function (url) {
-          var a = document.createElement("a");
-          a.href = url;
-          a.download = fileName;
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        };
-        var shoot = function () {
-          // High-res PNG (pixelRatio 3). On phones we hand the file to the Web
-          // Share sheet, whose "Save Image" writes to Photos (iOS) / Gallery
-          // (Android) — the only web path that reaches the photo library rather
-          // than the Downloads folder. Desktop / unsupported → normal download.
-          window.htmlToImage
-            .toBlob(card, { pixelRatio: 3, cacheBust: true })
-            .then(function (blob) {
-              restore();
-              if (!blob) return;
-              var file = null;
-              try { file = new File([blob], fileName, { type: "image/png" }); } catch (e) {}
-              if (file && navigator.canShare && navigator.canShare({ files: [file] })) {
-                navigator.share({ files: [file], title: "VakilCard" }).catch(function () {
-                  download(URL.createObjectURL(blob));
-                });
-              } else {
-                download(URL.createObjectURL(blob));
-              }
-            })
-            .catch(function (err) {
-              restore();
-              console.warn("[VakilCard] save image failed:", err && err.message);
-            });
-        };
-        var fontsReady = (document.fonts && document.fonts.ready) ? document.fonts.ready : Promise.resolve();
-        // Wait for BOTH web fonts and the swapped-in photo blob to actually
-        // decode before shooting — setting .src is async, and capturing one
-        // frame too early is exactly how a DP goes missing from the export.
-        var photoDecoded = photoSwap.then(function () {
-          if (!photoEl || typeof photoEl.decode !== "function") return;
-          return photoEl.decode().catch(function () {});
-        });
-        Promise.all([fontsReady, photoDecoded]).then(
-          function () { requestAnimationFrame(shoot); },
-          shoot
-        );
+      var fileName =
+        ((boot.profile && boot.profile.name) || "vakilcard")
+          .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") + "-vakilcard.png";
+      var download = function (blob) {
+        var a = document.createElement("a");
+        a.href = URL.createObjectURL(blob);
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        setTimeout(function () { URL.revokeObjectURL(a.href); }, 30000);
       };
-      if (window.htmlToImage) run();
-      else {
-        var sc = document.createElement("script");
-        sc.src = "/ds/html-to-image.js";
-        sc.onload = run;
-        document.head.appendChild(sc);
-      }
+      fetchPicture()
+        .then(function (blob) {
+          var file = null;
+          try { file = new File([blob], fileName, { type: "image/png" }); } catch (err) {}
+          // Phones: the Share sheet's "Save Image" reaches Photos / Gallery —
+          // the only web path that does. Desktop / unsupported: normal download.
+          var phone = /iPhone|iPad|Android/i.test(navigator.userAgent || "");
+          if (phone && file && navigator.canShare && navigator.canShare({ files: [file] })) {
+            navigator.share({ files: [file], title: "VakilCard" }).catch(function (err) {
+              if (!err || err.name !== "AbortError") download(blob);
+            });
+          } else {
+            download(blob);
+          }
+          track("share");
+        })
+        .catch(function (err) {
+          console.warn("[VakilCard] card picture failed:", err && err.message);
+          // Last resort: open the picture itself; long-press saves it.
+          window.open(pictureUrl(), "_blank", "noopener");
+        });
     });
   }
 

@@ -167,8 +167,9 @@ const FEATURE_PREVIEWS = {
  * open: bool · onClose() · feature: highlighted feature key (optional) ·
  * onUpgraded(): called if checkout activates immediately (QA/dev session).
  */
-export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
-  const [pricing, setPricing] = useState({ founder_inr: 199, regular_inr: 299 });
+/** heldLink: a custom link held for this user while they pay (UsernamePicker). */
+export default function UpgradeSheet({ open, onClose, feature, onUpgraded, heldLink }) {
+  const [pricing, setPricing] = useState({ founder_inr: 199, regular_inr: 299, gst_percent: 18 });
   // false until GET /subscription answers, so a stale founder price never flashes (founder, 3 Oct 2026: Pro ₹299/year).
   const [founderAvailable, setFounderAvailable] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -200,6 +201,13 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
   }, [open]);
 
   if (!open) return null;
+
+  // Prices in the catalogue are before GST; the platform charges price + GST
+  // (Account checkout, withGst). Show the amount that will actually be charged.
+  const gstPct = Number(pricing.gst_percent) || 18;
+  const withGst = (inr) => Math.round(Number(inr || 0) * (100 + gstPct)) / 100;
+  const rupees = (n) => (Number.isInteger(n) ? String(n) : n.toFixed(2));
+  const payInr = coupon ? coupon.final_inr : founderAvailable ? pricing.founder_inr : pricing.regular_inr;
 
   const COUPON_ERRORS = {
     invalid_code: "That code isn't valid.",
@@ -335,7 +343,14 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
 
         {/* The feature the user just tapped — shown greyed out, exactly as it
             would look unlocked, so they see what they're missing. */}
-        {PreviewBlock && (
+        {heldLink && (
+          <div className="rounded-2xl border-2 border-emerald-300 dark:border-emerald-500/30 bg-emerald-50 dark:bg-emerald-500/10 p-4 mb-5 text-left">
+            <p className="text-[10px] font-black uppercase tracking-widest text-emerald-700 dark:text-emerald-300">Held for you · 30 minutes</p>
+            <p className="text-lg font-black text-slate-900 dark:text-white break-all mt-1">vakilpedia.com/{heldLink}</p>
+            <p className="text-xs text-slate-600 dark:text-slate-300 hyphens-none mt-1">Nobody else can take it while you pay. It becomes your card's link the moment payment goes through.</p>
+          </div>
+        )}
+        {!heldLink && PreviewBlock && (
           <div className="relative mb-5">
             <span className="absolute -top-2 left-3 z-10 rounded-full bg-[#635BFF] text-white text-[9px] font-black uppercase tracking-widest px-2 py-0.5">Pro preview</span>
             <div className="opacity-70 grayscale-[35%]">
@@ -382,7 +397,7 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
           </div>
         ) : done === "pending" ? (
           <div className="rounded-2xl bg-amber-50 dark:bg-amber-500/10 border border-amber-200 dark:border-amber-500/30 p-4 text-center">
-            <p className="text-sm font-bold text-amber-900 dark:text-amber-300 hyphens-none">Payments are launching shortly — your Founder price is noted. We'll message you on WhatsApp the moment checkout opens.</p>
+            <p className="text-sm font-bold text-amber-900 dark:text-amber-300 hyphens-none">Paid plans aren't open yet — nothing was charged. Your card keeps every free feature in the meantime.</p>
             <button className="mt-3 w-full rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-white/10 px-6 py-3 font-bold text-slate-700 dark:text-slate-300" onClick={onClose}>Okay</button>
           </div>
         ) : (
@@ -422,6 +437,10 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
               </div>
             )}
 
+            <p className="text-[11px] font-bold text-slate-500 dark:text-slate-400 text-center hyphens-none -mt-1 mb-4">
+              Prices above are before {gstPct}% GST · you pay ₹{rupees(withGst(payInr))} {coupon ? "for the first year" : "a year"} by UPI Autopay · cancel anytime
+            </p>
+
             {/* Coupon entry — applied BEFORE any payment starts. */}
             {!coupon && (
               <div className="mb-4">
@@ -454,9 +473,11 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded }) {
               onClick={upgrade}
             >
               {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <Sparkles className="h-5 w-5" />}
-              {coupon
-                ? `Upgrade — ₹${coupon.final_inr} first year`
-                : `Upgrade — ₹${founderAvailable ? pricing.founder_inr : pricing.regular_inr}/year`}
+              {heldLink
+                ? `Pay ₹${rupees(withGst(payInr))} & get this link`
+                : coupon
+                ? `Upgrade — ₹${rupees(withGst(payInr))} first year`
+                : `Upgrade — ₹${rupees(withGst(payInr))}/year`}
             </button>
             <button className="mt-3 w-full text-sm font-bold text-slate-500 dark:text-slate-400" onClick={onClose}>Maybe later</button>
           </>
