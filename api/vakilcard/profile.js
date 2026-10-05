@@ -247,7 +247,8 @@ function toDsProfile(p) {
     // card_theme (default/midnight/ivory) is exposed for the component/CSS
     // layer to consume; the DS's visual theme variants themselves are a
     // separate design-system task — see the phase report's open items.
-    cardTheme: p.card_theme || "default",
+    // Premium themes are Pro: a lapsed Pro falls back to the default look.
+    cardTheme: pro ? p.card_theme || "default" : "default",
     // Google Business tile — shown to FREE AND PRO alike. Founder, 29 Aug
     // 2026: "I wanted the user's Google Business profile visible in the
     // VakilCard for both free and pro users." Pro does not buy the tile; it
@@ -524,7 +525,9 @@ function renderPage(p, themeOverride, mode = "live") {
   // opted out now shows "VakilCard Pro ✦". remove_branding stays a real Pro
   // feature: only Pro can set hide_branding (Pro-only write, guarded in me.js),
   // so only Pro can turn the badge off. Free cannot.
-  const hideBranding = demo ? true : p.hide_branding === true;
+  // Pro-only on READ as well as write (6 Oct 2026): a Pro that lapses to Free
+  // gets the "VakilCard Free" badge back, whatever was saved while Pro.
+  const hideBranding = demo ? true : pro && p.hide_branding === true;
   const tierLabel = pro ? "VakilCard Pro ✦" : "VakilCard Free";
   const boot = demo
     ? { demo: true, theme, pro: true }
