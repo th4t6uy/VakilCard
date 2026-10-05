@@ -53,7 +53,8 @@ async function refreshTokens() {
         body: JSON.stringify({ action: "refresh", refresh_token }),
       });
       if (!r.ok) {
-        clearTokens(); // revoked/expired/reused — session is over
+        // revoked/expired/reused — session is over. A server hiccup (5xx) keeps the tokens for next time.
+        if (r.status < 500) clearTokens();
         return null;
       }
       const data = await r.json();
@@ -85,7 +86,10 @@ export async function logout() {
     try {
       await fetch("/api/vakilcard/auth", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          ...(localStorage.getItem(ACCESS_KEY) ? { Authorization: `Bearer ${localStorage.getItem(ACCESS_KEY)}` } : {}),
+        },
         body: JSON.stringify({ action: "logout", refresh_token }),
       });
     } catch {

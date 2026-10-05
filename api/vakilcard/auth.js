@@ -30,6 +30,7 @@ const {
 } = require("./_jwt");
 const verification = require("./_verify");
 const legal = require("./_legal");
+const session = require("./_session");
 const controls = require("./_controls");
 const messaging = require("./_messaging");
 const { generateAutoUsername } = require("./_usernames");
@@ -229,6 +230,11 @@ async function didCaseLinxAlreadyConsume(phoneE164) {
 
 /** Issue an access+refresh pair; stores only the refresh hash. */
 async function issueTokens(accountId, profileId, req) {
+  // One Vakilpedia identity: hand out the shared Supabase session (see _session.js). If that is not
+  // possible for any reason, fall back to the older VakilCard token so nobody is ever locked out.
+  const shared = await session.mintSession(accountId);
+  if (shared.ok) return { access: shared.access_token, refresh: shared.refresh_token, shared: true };
+  console.warn("[vakilcard/auth] shared session not issued, using the older token:", shared.reason, accountId);
   const refresh = newRefreshToken();
   await db("refresh_tokens", {
     method: "POST",
@@ -920,7 +926,23 @@ module.exports = async function handler(req, res) {
 
     if (action === "refresh") {
       const presented = String(body.refresh_token || "");
-      if (!presented.startsWith("vkr_")) return json(res, 400, { error: "invalid_refresh_token" });
+      if (!presented.startsWith("vkr_")) {
+        // The shared Vakilpedia session: Supabase checks and rotates its own refresh token.
+        const r = await session.refreshSession(presented);
+        if (!r.ok) {
+          // A Supabase outage must not sign anybody out: the app keeps its tokens on a 5xx.
+          if (r.status >= 500) return json(res, 503, { error: "try_again" });
+          return json(res, 401, { error: "invalid_refresh_token" });
+        }
+        return json(res, 200, {
+          ok: true,
+          token: r.access_token,
+          access_token: r.access_token,
+          refresh_token: r.refresh_token,
+          expires_in: r.expires_in || ACCESS_TTL_SEC,
+          account_id: r.user_id,
+        });
+      }
       const hash = hashRefreshToken(presented);
       const rows = await db(
         `refresh_tokens?token_hash=eq.${encodeURIComponent(hash)}&select=id,account_id,expires_at,revoked_at`
@@ -968,6 +990,10 @@ module.exports = async function handler(req, res) {
 
     if (action === "logout") {
       const presented = String(body.refresh_token || "");
+      if (presented && !presented.startsWith("vkr_")) {
+        // End this device's shared session (best effort; the app clears its own copy regardless).
+        await session.revokeSession(String(req.headers.authorization || "").replace(/^Bearer\s+/i, ""));
+      }
       if (presented.startsWith("vkr_")) {
         await db(
           `refresh_tokens?token_hash=eq.${encodeURIComponent(hashRefreshToken(presented))}&revoked_at=is.null`,

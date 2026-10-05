@@ -394,8 +394,7 @@ async function resolveProfileOrAlias(segment) {
 
 /**
  * Resolve the authenticated account from a Bearer token.
- * Accepts a VakilCard session JWT (phone-first identity, the only
- * supported identity — Google/Firebase auth was removed).
+ * Accepts the shared Vakilpedia session (Supabase) or, during the move, an older VakilCard session JWT.
  * Returns { accountId, profileId?, via } or null.
  */
 async function resolveAccount(req) {
@@ -406,6 +405,16 @@ async function resolveAccount(req) {
   const claims = verifyJwt(token);
   if (claims && claims.sub) {
     return { accountId: claims.sub, profileId: claims.pid || null, via: "jwt" };
+  }
+  // The shared Vakilpedia session (Supabase). Accepted only when the person already has a VakilCard
+  // account under the same id; any other Vakilpedia user is simply "not signed in to VakilCard".
+  if (token.split(".").length === 3) {
+    const { verifyAccessToken } = require("./_session");
+    const user = await verifyAccessToken(token);
+    if (user && user.id) {
+      const rows = await db(`vakilpedia_accounts?id=eq.${encodeURIComponent(user.id)}&select=id`);
+      if (rows && rows.length) return { accountId: user.id, profileId: null, via: "supabase" };
+    }
   }
   return null;
 }
