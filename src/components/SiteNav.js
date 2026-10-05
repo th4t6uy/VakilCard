@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from "react";
 import { Menu, X, ChevronDown, ArrowRight, Sun, Moon } from "lucide-react";
 import BrandWordmark from "./BrandWordmark";
+import { CreditsPill } from "./CreditsPill";
 import { useTheme } from "../lib/useTheme";
 import { LAUNCHER_ITEMS, WWW, wwwHref } from "../config/ecosystem";
 
@@ -248,6 +249,7 @@ export default function SiteNav({ cta = null }) {
               </a>
             ))}
             <div className="relative flex items-center gap-2 ml-1 pl-2 border-l border-slate-200/70 dark:border-white/10">
+              <CreditsPill compact={scrolled} />
               <ThemeToggle compact={scrolled} theme={theme} toggle={toggle} />
               {cta && (
                 <CtaButton
@@ -262,6 +264,7 @@ export default function SiteNav({ cta = null }) {
               Below lg the desktop cluster (and its theme switch) is hidden, so
               the switch sits here, beside the menu button, always visible. */}
           <div className="lg:hidden flex items-center gap-2 flex-shrink-0">
+          <CreditsPill compact />
           <ThemeToggle mobile scrolled={scrolled} theme={theme} toggle={toggle} />
           <button
             type="button"
