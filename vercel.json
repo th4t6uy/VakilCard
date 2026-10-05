@@ -2,7 +2,7 @@
   "version": 2,
   "regions": ["bom1"],
   "functions": {
-    "api/vakilcard/card-image.js": { "includeFiles": "api/vakilcard/_cardAssets/**", "memory": 1024, "maxDuration": 15 }
+    "api/vakilcard/card-image.js": { "includeFiles": "{api/vakilcard/_cardAssets/**,node_modules/harfbuzzjs/*.wasm,node_modules/satori/*.wasm}", "memory": 1024, "maxDuration": 15 }
   },
   "rewrites": [
     { "source": "/api/vakilcard/track", "destination": "/api/vakilcard/profile" },
