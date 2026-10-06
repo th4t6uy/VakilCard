@@ -264,7 +264,6 @@ export default function SiteNav({ cta = null }) {
               Below lg the desktop cluster (and its theme switch) is hidden, so
               the switch sits here, beside the menu button, always visible. */}
           <div className="lg:hidden flex items-center gap-2 flex-shrink-0">
-          <CreditsPill compact />
           <ThemeToggle mobile scrolled={scrolled} theme={theme} toggle={toggle} />
           <button
             type="button"
@@ -286,6 +285,10 @@ export default function SiteNav({ cta = null }) {
           }`}
         >
           <div className="rounded-[2rem] border border-slate-200/70 dark:border-white/10 bg-white/95 dark:bg-[#0f172a]/95 backdrop-blur-2xl shadow-2xl px-5 py-5 max-h-[80vh] overflow-y-auto">
+            {/* Credits live here on phones (founder, 6 Oct 2026): the top bar is too narrow for logo + credits + switch + menu. */}
+            <div className="mb-3 flex items-center justify-center gap-2 empty:hidden">
+              <CreditsPill />
+            </div>
             {cta && (
               <div className="flex flex-col gap-3 mb-3 pb-3 border-b border-slate-100 dark:border-white/10">
                 <CtaButton
