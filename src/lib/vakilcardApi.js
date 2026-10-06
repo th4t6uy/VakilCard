@@ -193,6 +193,10 @@ export const linkGoogle = (id_token) =>
 
 // Booking (Free + Pro; owner-side calls, all authed)
 export const getBookingConfig = () => call("booking");
+// Which calendar appointments go into: "vakilcard" (connected here) or a CaseLinx workspace
+// calendar ("caselinx" + firm_id), shared with hearings. Pro; CaseLinx needs the connection.
+export const setCalendarSource = (source, firm_id) =>
+  call("booking", { method: "POST", body: { action: "set_calendar_source", source, firm_id: firm_id || null } });
 export const saveBookingWindows = (windows) =>
   call("booking", { method: "POST", body: { action: "save_windows", windows } });
 export const manageBooking = (request_id, op) =>

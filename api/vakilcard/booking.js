@@ -1,15 +1,10 @@
 // VakilCard appointment booking.
-//   Free : fixed weekly windows, one-way requests, no calendar check, no
-//          payment — overlapping placeholders are documented behaviour.
-//   Pro  : same windows PLUS Google Calendar free/busy cross-check (no
-//          double-booking), and payment-before-confirmation for two booking
-//          types — "consultation" (owner's configured fee) or "custom"
-//          (visitor-entered amount) — via a native UPI deep link.
-//
-// "booking" in PRO_FEATURES gates only the Pro upgrade (calendar sync +
-// payment). Fixed-window booking itself is Free-tier from day one — see
-// me.js's booking_windows field (no entitlement guard there) and the
-// GENERAL RULES in the product spec ("Free = fixed windows... no payment").
+//   PRO ONLY since 6 Oct 2026 (founder): weekly slots, client requests, and the calendar sync.
+//   The lawyer picks the calendar in the slot builder: the one connected inside VakilCard, or a
+//   CaseLinx workspace calendar (firm or personal) -- shared with hearings, needs the Rs100/month
+//   VakilCard-CaseLinx connection (_calendarSource.js).
+//   Free cards: the Book button opens WhatsApp to the lawyer with a ready-made message
+//   (public/ds mount.js) -- public_slots / request answer "Pro only" for a Free card.
 //
 // Endpoints (all on this one handler, disambiguated by method + action):
 //   GET  ?action=config                      owner auth  — windows, requests, calendar status
@@ -42,6 +37,7 @@
 // than having no state at all.
 const { db, readJsonBody, resolveAccount, trackEvent, sanitizeBookingWindows, expandBookingSlots } = require("./_lib");
 const { isProActive, requirePro, primePaidPlans } = require("./_entitlements");
+const { calendarChoices, cardLinkAllowed, caselinxCalendarAccess } = require("./_calendarSource");
 const { sign, verify } = require("./_jwt");
 const messaging = require("./_messaging");
 const email = require("./_email");
@@ -276,13 +272,38 @@ async function gcalValidAccessToken(profileId) {
   }
 }
 
+/**
+ * The calendar this card's appointments use, with a valid token -- or null (windows only).
+ * 'caselinx': a CaseLinx workspace calendar (firm or personal), shared with hearings, only while
+ * the VakilCard-CaseLinx connection is held; otherwise falls back to VakilCard's own connection.
+ * Never throws.
+ */
+async function calendarAccess(profile) {
+  try {
+    if (profile && profile.calendar_source === "caselinx" && profile.calendar_firm_id && profile.account_id) {
+      if (await cardLinkAllowed(profile.account_id)) {
+        const a = await caselinxCalendarAccess(profile.account_id, profile.calendar_firm_id);
+        if (a) return { token: a.token, calendarId: a.calendarId, canWrite: true, source: "caselinx" };
+      }
+    }
+    if (!calendarConfigured()) return null;
+    const rows = await db(`vakilcard_calendar_connections?profile_id=eq.${profile.id}&select=calendar_id,granted_scopes`);
+    const conn = rows[0];
+    if (!conn) return null;
+    const token = await gcalValidAccessToken(profile.id);
+    if (!token) return null;
+    return { token, calendarId: conn.calendar_id || "primary", canWrite: scopeAllowsWrite(conn.granted_scopes), source: "vakilcard" };
+  } catch {
+    return null;
+  }
+}
+
 /** Free/busy ranges for the next `days` days, or [] on any failure/absence
  *  — treated identically to "not connected" (windows-only). */
-async function freeBusy(profileId, { days = 14 } = {}) {
-  const token = await gcalValidAccessToken(profileId);
-  if (!token) return [];
-  const rows = await db(`vakilcard_calendar_connections?profile_id=eq.${profileId}&select=calendar_id`);
-  const calendarId = (rows[0] && rows[0].calendar_id) || "primary";
+async function freeBusy(profile, { days = 14 } = {}) {
+  const access = await calendarAccess(profile);
+  if (!access) return [];
+  const { token, calendarId } = access;
   const timeMin = new Date().toISOString();
   const timeMax = new Date(Date.now() + days * 86400000).toISOString();
   try {
@@ -320,7 +341,7 @@ async function loadOwnerProfile(req) {
   const who = await resolveAccount(req);
   if (!who || !who.accountId) return { error: 401 };
   const rows = await db(
-    `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,subscription_plan,subscription_status,subscription_expires_at,booking_windows`
+    `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,account_id,subscription_plan,subscription_status,subscription_expires_at,booking_windows,calendar_source,calendar_firm_id`
   );
   const profile = rows[0];
   if (!profile) return { error: 404 };
@@ -333,7 +354,7 @@ async function loadPublicProfile(username) {
   if (!uname) return null;
   const rows = await db(
     `vakilcard_profiles?username=eq.${encodeURIComponent(uname)}&is_published=eq.true` +
-      `&select=id,username,full_name,email,account_id,phone,whatsapp,subscription_plan,subscription_status,subscription_expires_at,booking_windows,vakilcard_payment_prefs(*)`
+      `&select=id,username,full_name,email,account_id,phone,whatsapp,subscription_plan,subscription_status,subscription_expires_at,booking_windows,calendar_source,calendar_firm_id,vakilcard_payment_prefs(*)`
   );
   const p = rows[0];
   if (!p) return null;
@@ -464,20 +485,13 @@ function scopeAllowsWrite(grantedScopes) {
  */
 async function gcalCreateEvent(profile, appointment) {
   try {
-    if (!calendarConfigured()) return { ok: false, reason: "not_configured" };
-    const rows = await db(
-      `vakilcard_calendar_connections?profile_id=eq.${profile.id}&select=calendar_id,granted_scopes`
-    );
-    const conn = rows[0];
-    if (!conn) return { ok: false, reason: "not_connected" };
-    if (!scopeAllowsWrite(conn.granted_scopes)) {
+    const access = await calendarAccess(profile);
+    if (!access) return { ok: false, reason: "not_connected" };
+    if (!access.canWrite) {
       console.error(`[vakilcard/booking] calendar write skipped pid=${profile.id} — grant is read-only, reconnect required`);
       return { ok: false, reason: "reconnect_required" };
     }
-    const token = await gcalValidAccessToken(profile.id);
-    if (!token) return { ok: false, reason: "no_token" };
-
-    const calendarId = conn.calendar_id || "primary";
+    const { token, calendarId } = access;
     const start = new Date(appointment.starts_at);
     // Fall back to a 30-minute block when the slot carried no explicit end —
     // Google rejects an event without one.
@@ -930,8 +944,12 @@ module.exports = async function handler(req, res) {
       const profile = await loadPublicProfile(req.query.username);
       if (!profile) return json(res, 404, { error: "not_found" });
       const pro = isProActive(profile);
+      // Appointments are Pro (founder, 6 Oct 2026). A Free card's Book button opens WhatsApp in the
+      // browser instead; an older cached card that still asks here gets no slots and falls back to
+      // its WhatsApp/Call sheet.
+      if (!pro) return json(res, 200, { pro: false, slots: [], whatsapp_only: true, payment: { required: false, amount_due: null } });
       const windows = sanitizeBookingWindows(profile.booking_windows);
-      const busy = pro && calendarConfigured() ? await freeBusy(profile.id, { days: 14 }) : [];
+      const busy = await freeBusy(profile, { days: 14 });
       const slots = expandBookingSlots(windows, { days: 14, busy });
       return json(res, 200, {
         pro,
@@ -957,6 +975,7 @@ module.exports = async function handler(req, res) {
       const clientPhone = str(b.client_phone, 20);
       if (!clientName || !clientPhone) return json(res, 400, { error: "name_and_phone_required" });
       const pro = isProActive(profile);
+      if (!pro) return json(res, 402, { error: "pro_required", feature: "booking", whatsapp_only: true });
       const startsAt = b.start ? new Date(b.start) : null;
       const endsAt = b.end ? new Date(b.end) : null;
       if (!startsAt || isNaN(startsAt.getTime())) return json(res, 400, { error: "invalid_slot" });
@@ -1068,11 +1087,18 @@ module.exports = async function handler(req, res) {
       // nothing reads them (the dashboard's Business row went with it), so the
       // third query was a round-trip on every dashboard load to answer a
       // question with one possible answer.
-      const [requests, connRows] = await Promise.all([
+      const [requests, connRows, caselinx, choices, cardLink] = await Promise.all([
         db(`vakilcard_appointment_requests?profile_id=eq.${profile.id}&select=*&order=created_at.desc&limit=100`),
         pro
           ? db(`vakilcard_calendar_connections?profile_id=eq.${profile.id}&select=profile_id`)
           : Promise.resolve([]),
+        // Same Vakilpedia account in CaseLinx (founder, 6 Oct 2026): joined? bookings sync on?
+        // Never breaks the dashboard -- null just hides the CaseLinx card.
+        db("rpc/vakilcard_caselinx_status", { method: "POST", body: { p_account_id: profile.account_id } })
+          .catch(() => null),
+        // Which calendar appointments go into -- shown in the slot builder (founder, 6 Oct 2026).
+        calendarChoices(profile.account_id),
+        cardLinkAllowed(profile.account_id),
       ]);
       return json(res, 200, {
         pro,
@@ -1080,10 +1106,47 @@ module.exports = async function handler(req, res) {
         calendar_platform_configured: calendarConfigured(),
         calendar_connected: connRows.length > 0,
         requests,
+        caselinx: caselinx && typeof caselinx === "object" && !Array.isArray(caselinx) ? caselinx : null,
+        calendar: {
+          source: profile.calendar_source === "caselinx" ? "caselinx" : "vakilcard",
+          firm_id: profile.calendar_firm_id || null,
+          caselinx_choices: choices,
+          card_link: !!cardLink,
+        },
       });
     }
 
+    // Pick the calendar appointments go into (slot builder switcher). Pro only; a CaseLinx
+    // workspace calendar also needs the VakilCard-CaseLinx connection.
+    if (req.method === "POST" && action === "set_calendar_source") {
+      if (!requirePro(res, profile, "booking")) return;
+      const b = await readJsonBody(req);
+      if (b.source === "caselinx") {
+        const firmId = String(b.firm_id || "");
+        const choices = await calendarChoices(profile.account_id);
+        const pick = choices.find((c) => c.firm_id === firmId);
+        if (!pick) return json(res, 400, { error: "unknown_workspace" });
+        if (!pick.connected) return json(res, 409, { error: "calendar_not_connected_in_caselinx" });
+        if (!(await cardLinkAllowed(profile.account_id)))
+          return json(res, 402, { error: "card_link_required", feature: "card_link" });
+        await db(`vakilcard_profiles?id=eq.${profile.id}`, {
+          method: "PATCH",
+          body: { calendar_source: "caselinx", calendar_firm_id: firmId },
+          prefer: "return=minimal",
+        });
+        return json(res, 200, { ok: true, source: "caselinx", firm_id: firmId });
+      }
+      await db(`vakilcard_profiles?id=eq.${profile.id}`, {
+        method: "PATCH",
+        body: { calendar_source: "vakilcard", calendar_firm_id: null },
+        prefer: "return=minimal",
+      });
+      return json(res, 200, { ok: true, source: "vakilcard", firm_id: null });
+    }
+
     if (req.method === "POST" && action === "save_windows") {
+      // Appointment slots are Pro (founder, 6 Oct 2026).
+      if (!requirePro(res, profile, "booking")) return;
       const b = await readJsonBody(req);
       const windows = sanitizeBookingWindows(b.windows);
       await db(`vakilcard_profiles?id=eq.${profile.id}`, {

@@ -137,6 +137,19 @@ store.vakilcard_profiles = [
     subscription_expires_at: null,
     booking_windows: null,
   },
+  {
+    id: "prof-nofee",
+    username: "nofeeadvocate",
+    full_name: "No Fee Advocate",
+    account_id: null,
+    phone: null,
+    whatsapp: null,
+    is_published: true,
+    subscription_plan: "PRO",
+    subscription_status: "ACTIVE",
+    subscription_expires_at: future,
+    booking_windows: null,
+  },
 ];
 
 const book = (username) =>
@@ -188,12 +201,20 @@ test("the to-ONE payment_prefs embed is unwrapped — the bug that zeroed every 
   assert.equal(r.data.payment.required, false, "nothing is ever required up front");
 });
 
-test("no fee configured still books, and owes nothing", async () => {
-  const r = await book("freeadvocate");
+test("no fee configured still books (Pro), and owes nothing", async () => {
+  const r = await book("nofeeadvocate");
   assert.equal(r.status, 200);
   assert.equal(r.data.payment_status, "not_required");
   assert.equal(r.data.amount_due, null);
-  assert.equal(rowFor("prof-free").payment_status, "not_required");
+  assert.equal(rowFor("prof-nofee").payment_status, "not_required");
+});
+
+test("a Free card cannot take a booking request -- its Book button opens WhatsApp (6 Oct 2026)", async () => {
+  const r = await book("freeadvocate");
+  assert.equal(r.status, 402);
+  assert.equal(r.data.error, "pro_required");
+  assert.equal(r.data.whatsapp_only, true);
+  assert.equal(rowFor("prof-free"), undefined, "no row is written for a Free card");
 });
 
 test("the visitor can no longer self-report payment, and cannot move a row", async () => {

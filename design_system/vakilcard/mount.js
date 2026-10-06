@@ -749,16 +749,10 @@
   }
 
   /* ---------- Book Appointment ----------
-     Free: pick one of the owner's fixed weekly windows, submit name+phone —
-     no calendar check, no payment (documented Free behaviour; overlapping
-     placeholder requests are expected, not a bug).
-     Pro: same slot list but Google-Calendar-aware (server excludes busy
-     ranges), then a Consultation-fee-vs-Custom-amount choice, a native UPI
-     app chooser for payment, and an honest two-step "I've paid" self-report
-     — there is no gateway webhook for upi:// deep links, so the owner
-     confirms receipt manually from their dashboard afterward.
-     Any fetch failure, or a profile with no windows configured, falls back
-     to WhatsApp/Call — a booking sheet must never be a dead end. */
+     Pro: pick one of the owner's weekly slots (Google-Calendar-aware on the server), then name,
+     phone and purpose; the fee, if any, is paid to the advocate at the appointment.
+     Free (6 Oct 2026): no slots -- the Book button opens WhatsApp to the lawyer with a ready-made
+     message. Any fetch failure, or no slots, falls back to WhatsApp/Call -- never a dead end. */
 
   function showBookSheet() {
     var fallbackBody =
@@ -766,6 +760,25 @@
       (links.whatsapp ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center">' + nounIcon("whatsapp") + "Message on WhatsApp</a>" : "") +
       (links.tel ? '<a href="' + links.tel + '" style="' + sheetBtnCss + ';justify-content:center">' + nounIcon("call") + "Call instead</a>" : "");
     var showFallback = function () { openSheet("Book an appointment", fallbackBody); };
+
+    // FREE CARD (founder, 6 Oct 2026): appointment slots are Pro. The client goes straight to
+    // WhatsApp with a ready-made message to the lawyer, and fills in their name and purpose.
+    if (!(boot.profile && boot.profile.pro)) {
+      var p = boot.profile || {};
+      var nm = String(p.name || "").trim();
+      var who = /^adv(ocate)?\.?\s/i.test(nm) ? nm : nm ? "Adv. " + nm : "Advocate";
+      var cardUrl = "vakilpedia.com/" + (p.username || "");
+      var msg =
+        "Hello " + who + ", I found you on VakilCard (" + cardUrl + ") and would like to book a time to meet you. " +
+        "Please let me know when you are available.\n\nMy name: \nRegarding: ";
+      if (links.whatsapp) {
+        track("whatsapp");
+        window.open(links.whatsapp + (links.whatsapp.indexOf("?") === -1 ? "?" : "&") + "text=" + encodeURIComponent(msg), "_blank", "noopener");
+      } else {
+        showFallback();
+      }
+      return;
+    }
 
     var username = (boot.profile && boot.profile.username) || "";
     if (!username || !boot.profileId) { showFallback(); return; }

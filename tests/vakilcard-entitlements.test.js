@@ -91,10 +91,10 @@ test("lockedCardFeatures: Pro locks nothing, Free locks only REAL card-visible f
     "google_review is live via the Places API and must be offered to Free owners"
   );
 
-  // google_business is shown to Free and Pro alike (founder, 2026-08-29), and
-  // booking is a Free-tier feature. Neither is a lock.
+  // google_business is shown to Free and Pro alike (founder, 2026-08-29). Appointments became Pro
+  // on 6 Oct 2026 (founder): a Free card's Book button opens WhatsApp, so booking IS offered.
   assert.ok(!keys.includes("google_business"), "the Business tile is not Pro-gated");
-  assert.ok(!keys.includes("booking"), "Free has booking — fixed weekly windows");
+  assert.ok(keys.includes("booking"), "appointments are Pro since 6 Oct 2026");
 
   // Every lockable key must still be a real Pro feature, or the gate is a lie.
   for (const k of keys) {

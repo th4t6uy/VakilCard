@@ -23,7 +23,7 @@ import {
   getMe, getMyAnalytics, saveProfile, deleteProfile,
   logout as apiLogout,
   hasPhoneSession, track, ApiError,
-  getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus,
+  getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus, setCalendarSource,
   placesSearch, placesLink, placesUnlink, newPlacesSession,
   googleConnectUrl, googleCalendarConnectUrl, disconnectGoogleCalendar,
   linkPhoneStart, linkPhoneVerify,
@@ -41,6 +41,52 @@ import { LAUNCHER_ITEMS } from "../config/ecosystem";
 
 // CaseLinx address from the shared ecosystem list (one place for app URLs).
 const CASELINX_HREF = (LAUNCHER_ITEMS.find((a) => a.id === "caselinx") || {}).href || "https://caselinx.vakilpedia.com";
+
+/**
+ * VakilCard and CaseLinx (founder, 6 Oct 2026): one Vakilpedia account, so a lawyer JOINS CaseLinx with
+ * the same login -- nothing to link. Joining is free (CaseLinx trial). Client bookings sync into CaseLinx
+ * only with VakilCard Pro + the VakilCard-CaseLinx connection (₹100/month per lawyer on top of the
+ * CaseLinx plan). Prices come from the plan catalogue (api booking.js -> vakilcard_caselinx_status).
+ */
+function CaseLinxJoinCard({ cfg }) {
+  const c = cfg && cfg.caselinx;
+  if (!c) return null;
+  const p = c.prices || {};
+  const rs = (x) => (x ? `₹${Math.round(x.inr).toLocaleString("en-IN")}/${x.period === "yearly" ? "year" : "month"}` : null);
+  const link = rs(p.connect_vakilcard);
+  const pro = !!cfg.pro;
+  const syncing = c.caselinx && pro && c.card_link;
+  let title, text, cta;
+  if (!c.caselinx) {
+    title = "Join CaseLinx";
+    text = "Your cases, hearing dates and clients in one place — with the same login you use here. Start free; no new sign-up.";
+    cta = "Join CaseLinx";
+  } else if (syncing) {
+    title = "Bookings sync to CaseLinx";
+    text = "Every request here also shows in CaseLinx, next to your hearings.";
+    cta = "Open CaseLinx";
+  } else if (!pro) {
+    title = "You're on CaseLinx";
+    text = `Bookings sync into CaseLinx with VakilCard Pro${link ? ` and the CaseLinx connection (${link} per lawyer)` : ""}.`;
+    cta = "Open CaseLinx";
+  } else {
+    title = "Turn on bookings sync in CaseLinx";
+    text = `Your card is Pro. Turn on the VakilCard + CaseLinx connection${link ? ` (${link} per lawyer)` : ""} in CaseLinx and every booking shows next to your hearings.`;
+    cta = "Turn it on in CaseLinx";
+  }
+  return (
+    <div className="mb-3 rounded-2xl border border-[#635BFF]/20 bg-[#635BFF]/5 px-3 py-2.5 flex items-center gap-3 flex-wrap">
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-100">{title}</p>
+        <p className="text-xs text-slate-600 dark:text-slate-300">{text}</p>
+      </div>
+      <a href={`${CASELINX_HREF}/dashboard`} target="_blank" rel="noopener noreferrer"
+        className="inline-flex items-center gap-1 rounded-full px-3 py-1.5 text-xs font-bold bg-[#635BFF] text-white flex-shrink-0">
+        {cta} →
+      </a>
+    </div>
+  );
+}
 
 const CARD_ORIGIN = "https://www.vakilpedia.com";
 const btn = "rounded-full bg-white dark:bg-[#1c1c1e] border border-slate-200 dark:border-white/10 hover:border-slate-300 dark:hover:border-white/20 px-4 py-2 text-sm font-bold text-slate-700 dark:text-slate-300 inline-flex items-center gap-1.5 transition-colors";
@@ -233,6 +279,77 @@ function GoogleStatusChip({ pro }) {
   );
 }
 
+/**
+ * "Appointments go to" -- the calendar switcher in the slot builder (founder, 6 Oct 2026).
+ * The calendar connected here in VakilCard, or one of the lawyer's CaseLinx workspace calendars
+ * (firm or personal). A CaseLinx calendar is the one CaseLinx puts hearings in, so hearings and
+ * appointments show together; it needs the VakilCard + CaseLinx connection (bought in CaseLinx).
+ */
+function CalendarSwitcher({ cfg, onChanged, connectHere }) {
+  const [busy, setBusy] = useState(null);
+  const [err, setErr] = useState("");
+  const cal = (cfg && cfg.calendar) || { source: "vakilcard", firm_id: null, caselinx_choices: [], card_link: false };
+  const choices = Array.isArray(cal.caselinx_choices) ? cal.caselinx_choices : [];
+  const p = (cfg && cfg.caselinx && cfg.caselinx.prices) || {};
+  const linkPrice = p.connect_vakilcard ? `₹${Math.round(p.connect_vakilcard.inr).toLocaleString("en-IN")}/month` : "monthly";
+  const pick = async (source, firmId) => {
+    setBusy(firmId || source); setErr("");
+    try { await setCalendarSource(source, firmId); onChanged(); }
+    catch (e) {
+      setErr(e && e.code === "card_link_required"
+        ? "Turn on the VakilCard + CaseLinx connection in CaseLinx first."
+        : e && e.code === "calendar_not_connected_in_caselinx"
+        ? "Connect Google in CaseLinx for this workspace first."
+        : "Couldn't switch the calendar — please try again.");
+    } finally { setBusy(null); }
+  };
+  const row = (key, active, title, sub, action) => (
+    <div key={key} className={`flex items-center gap-3 rounded-2xl border px-3 py-2.5 ${active ? "border-[#635BFF] bg-[#635BFF]/5" : "border-slate-200 dark:border-white/10"}`}>
+      <span className={`h-4 w-4 rounded-full border-2 flex-none ${active ? "border-[#635BFF] bg-[#635BFF]" : "border-slate-300 dark:border-white/20"}`} aria-hidden="true" />
+      <div className="min-w-0 flex-1">
+        <p className="text-sm font-bold text-slate-900 dark:text-white truncate">{title}</p>
+        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{sub}</p>
+      </div>
+      {action}
+    </div>
+  );
+  const useBtn = (onClick, id) => (
+    <button type="button" onClick={onClick} disabled={!!busy} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold disabled:opacity-50 flex-none">
+      {busy === id ? "…" : "Use"}
+    </button>
+  );
+  return (
+    <div className="mb-4">
+      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">Appointments go to</p>
+      <div className="space-y-2">
+        {row("vakilcard", cal.source !== "caselinx", "Google Calendar connected here",
+          cfg && cfg.calendar_connected ? "Connected in VakilCard" : "Not connected yet",
+          cal.source === "caselinx"
+            ? useBtn(() => pick("vakilcard"), "vakilcard")
+            : !(cfg && cfg.calendar_connected)
+            ? <button type="button" onClick={connectHere} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 px-3 py-1.5 text-xs font-bold flex-none">Connect</button>
+            : null)}
+        {choices.map((c) => {
+          const active = cal.source === "caselinx" && cal.firm_id === c.firm_id;
+          const kind = c.kind === "personal" ? "Personal" : "Firm";
+          const sub = c.connected ? `${kind} calendar in CaseLinx · ${c.calendar} · shows with your hearings` : `${kind} workspace in CaseLinx · Google not connected there yet`;
+          let action = null;
+          if (!active) {
+            if (!c.connected) action = <a href={`${CASELINX_HREF}/dashboard/settings`} target="_blank" rel="noopener noreferrer" className="text-xs font-bold text-[#635BFF] dark:text-[#a5a0ff] flex-none">Connect in CaseLinx →</a>;
+            else if (!cal.card_link) action = <a href={`${CASELINX_HREF}/dashboard`} target="_blank" rel="noopener noreferrer" className="rounded-full bg-[#635BFF] text-white px-3 py-1.5 text-xs font-bold flex-none" title={`VakilCard + CaseLinx connection, ${linkPrice}`}>Turn on · {linkPrice}</a>;
+            else action = useBtn(() => pick("caselinx", c.firm_id), c.firm_id);
+          }
+          return row(c.firm_id, active, c.name, sub, action);
+        })}
+      </div>
+      {!choices.length && (
+        <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 hyphens-none">On CaseLinx too? Join it with this same login and you can put appointments in your firm or personal CaseLinx calendar, next to your hearings.</p>
+      )}
+      {err && <p className="text-xs font-bold text-rose-600 dark:text-rose-400 mt-2">{err}</p>}
+    </div>
+  );
+}
+
 const DAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
 // Booking & Reviews — the one panel covering Phase 3 (Free windows-based
@@ -347,7 +464,12 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
   const load = useCallback(() => {
     setLoading(true);
     getBookingConfig()
-      .then((c) => { setCfg(c); setGroups(groupWindows(c && c.windows)); })
+      .then((c) => {
+        setCfg(c);
+        const g = groupWindows(c && c.windows);
+        // Free sees an example row in the (locked) slot builder, so they can see what Pro gives.
+        setGroups(g.length || (c && c.pro) ? g : [{ id: "example", days: [1, 2, 3, 4, 5], start: "17:00", end: "19:00", slot_minutes: 30 }]);
+      })
       .catch(() => setCfg(null))
       .finally(() => setLoading(false));
   }, []);
@@ -409,7 +531,35 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
     <div className={panel}>
       <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white mb-4">Booking &amp; Reviews</h2>
 
-      <p className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-2">Weekly availability</p>
+      {!pro && (
+        <div className="mb-4 rounded-2xl border border-[#635BFF]/30 bg-[#635BFF]/5 p-4">
+          <div className="flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff]" />
+            <p className="text-sm font-black text-slate-900 dark:text-white">Appointments are a Pro feature</p>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 hyphens-none">
+            Right now, when a client taps Book on your card, WhatsApp opens with a message to you asking for a time. With Pro, clients pick a free slot themselves and it lands in your Google Calendar — or your CaseLinx calendar, next to your hearings.
+          </p>
+          <button type="button" onClick={() => onUpgrade("booking")} className="mt-3 rounded-full bg-[#635BFF] text-white px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5">
+            <Sparkles className="h-4 w-4" />Unlock appointments
+          </button>
+        </div>
+      )}
+      {pro && !loading && cfg && (
+        <CalendarSwitcher cfg={cfg} onChanged={load} connectHere={async () => { window.location.href = await googleConnectUrl(); }} />
+      )}
+
+      <div className="flex items-center justify-between mb-2">
+        <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Weekly availability</p>
+        {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
+      </div>
+      {/* Free sees the real slot builder (users only buy what they can see); any tap opens the upgrade. */}
+      <div className={!pro ? "relative" : undefined}>
+      {!pro && (
+        <button type="button" aria-label="Unlock appointments with VakilCard Pro" onClick={() => onUpgrade("booking")}
+          className="absolute inset-0 z-10 rounded-2xl cursor-pointer bg-white/30 dark:bg-black/20" />
+      )}
+      <div className={!pro ? "opacity-50 pointer-events-none select-none" : undefined} aria-hidden={!pro || undefined}>
       {loading ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
       ) : (
@@ -451,7 +601,9 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
           </div>
         </div>
       )}
-      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 hyphens-none">Live on your card today — no calendar check on Free, so avoid double-listing the same hours elsewhere. Tap the day circles to pick which days a time range applies to (e.g. Mon–Fri in one row).</p>
+      </div>
+      </div>
+      <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 hyphens-none">Tap the day circles to pick which days a time range applies to (e.g. Mon–Fri in one row). Times you are busy in the chosen calendar are never offered to clients.</p>
 
       <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
         <div className="flex items-center justify-between">
@@ -614,13 +766,8 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
       <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
         <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
           <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Appointment requests</p>
-          {/* Cross-sell (3 Oct 2026): the same bookings show in CaseLinx, beside the lawyer's hearings,
-              read from this same table — nothing is copied. */}
-          <a href={`${CASELINX_HREF}/dashboard/cause-list`} target="_blank" rel="noopener noreferrer"
-            className="inline-flex items-center gap-1 rounded-full px-3 py-1 text-xs font-bold bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff]">
-            See them next to your hearings in CaseLinx →
-          </a>
         </div>
+        <CaseLinxJoinCard cfg={cfg} />
         {loading ? (
           <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
         ) : !cfg || !cfg.requests || !cfg.requests.length ? (

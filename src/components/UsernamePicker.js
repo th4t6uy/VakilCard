@@ -46,6 +46,7 @@ export default function UsernamePicker({ profile, pro, onChanged, compact = fals
   const [msg, setMsg] = useState("");
   const [held, setHeld] = useState(null); // link held while paying
   const [price, setPrice] = useState(null); // ₹ incl. GST, for the button
+  const [upsell, setUpsell] = useState(false); // "Your own name: Pro" tapped
   const timer = useRef();
 
   useEffect(() => {
@@ -241,9 +242,9 @@ export default function UsernamePicker({ profile, pro, onChanged, compact = fals
               </button>
             )}
             {!pro && (
-              <span className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-400 px-1">
-                <Lock className="h-3 w-3" /> Your own name: Pro
-              </span>
+              <button type="button" onClick={() => setUpsell(true)} className="inline-flex items-center gap-1 rounded-full border border-[#635BFF]/30 bg-[#635BFF]/10 px-3 py-2 text-[11px] font-black text-[#635BFF] dark:text-[#a5a0ff]">
+                <Lock className="h-3 w-3" /> Your own name — Pro
+              </button>
             )}
           </div>
         </div>
@@ -251,6 +252,12 @@ export default function UsernamePicker({ profile, pro, onChanged, compact = fals
 
       {msg && <p className="mt-3 text-sm font-bold text-slate-700 dark:text-slate-200 text-left hyphens-none">{msg}</p>}
 
+      <UpgradeSheet
+        open={upsell && !held}
+        feature="custom_username"
+        onClose={() => setUpsell(false)}
+        onUpgraded={() => { setUpsell(false); if (onChanged) onChanged(null); }}
+      />
       <UpgradeSheet
         open={!!held}
         feature="custom_username"

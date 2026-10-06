@@ -300,6 +300,13 @@ function safeWebsite(raw) {
   }
 }
 
+function waDigits(raw) {
+  const d = String(raw || "").replace(/\D/g, "");
+  if (/^[6-9]\d{9}$/.test(d)) return "91" + d;
+  if (/^0[6-9]\d{9}$/.test(d)) return "91" + d.slice(1);
+  return d;
+}
+
 function buildLinks(p, pro = false) {
   const office = p.offices[0] || {};
   const phone = p.show_phone !== false ? cleanPhone(p.phone) : "";
@@ -316,7 +323,9 @@ function buildLinks(p, pro = false) {
   }
   return {
     tel: phone ? `tel:${phone}` : null,
-    whatsapp: wa ? `https://wa.me/${wa.replace(/^\+/, "")}` : null,
+    // wa.me needs the country code: a bare 10-digit Indian mobile (how most cards store it) opened
+    // the wrong number/no chat. 0XXXXXXXXXX and 10 digits get 91 in front (6 Oct 2026).
+    whatsapp: wa ? `https://wa.me/${waDigits(wa)}` : null,
     mailto: p.show_email !== false && p.email ? `mailto:${p.email}` : null,
     upi,
     maps:

@@ -71,7 +71,8 @@ const PRO_FEATURES = [
  * DELIBERATELY NARROWER THAN PRO_FEATURES, and each omission is a decision:
  *   google_business — founder decision 2026-08-29: the Business tile is shown
  *                     to Free and Pro alike. Not a Pro feature on the card.
- *   booking         — Free has booking (fixed weekly windows). Not locked.
+ *   (booking is lockable since 6 Oct 2026: appointments are Pro; a Free card's Book
+ *    button opens WhatsApp instead.)
  *   custom_username — decided at signup, not a card surface.
  *   analytics       — dashboard surface, never rendered on a card.
  */
@@ -86,6 +87,11 @@ const CARD_LOCKABLE_FEATURES = [
     title: "One-tap Google reviews",
     detail:
       "Clients leave you a Google review straight from the card. Link your Google Business listing and Pro turns on the one-tap link; without it they reach your listing and review from there.",
+  },
+  {
+    key: "booking",
+    title: "Clients book appointments on your card",
+    detail: "Clients pick a free slot themselves and it lands in your Google Calendar — or your CaseLinx calendar, next to your hearings. Today, Book opens WhatsApp to you instead.",
   },
   {
     key: "website",
