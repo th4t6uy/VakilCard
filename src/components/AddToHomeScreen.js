@@ -117,7 +117,13 @@ function hasSavedSession() {
 function installed() {
   if (typeof window === 'undefined') return true;
   const standalone =
-    window.matchMedia?.('(display-mode: standalone)').matches ||
+    // Any app-like window counts: the installed app can open standalone,
+    // minimal-ui, fullscreen or with a title-bar overlay (desktop).
+    ['standalone', 'minimal-ui', 'fullscreen', 'window-controls-overlay'].some(
+      (m) => window.matchMedia?.(`(display-mode: ${m})`).matches
+    ) ||
+    // Android app / trusted web activity opened it
+    document.referrer.startsWith('android-app://') ||
     // iOS predates the media query and reports it here instead
     window.navigator.standalone === true;
   return Boolean(standalone);
@@ -195,7 +201,13 @@ export function AddToHomeScreen({
         .then(checkForNewVersionOnReturn)
         .catch(() => {});
     }
-    if (installed() || alreadyShown()) return;
+    // Running as the installed app: remember it, so the same browser's normal
+    // tabs (which share this storage on Android and desktop) never offer it.
+    if (installed()) {
+      remember('installed');
+      return;
+    }
+    if (alreadyShown()) return;
     setEligible(true);
     if (savedEvt) setEvt(savedEvt);
     const onEvt = (e) => setEvt(e);
