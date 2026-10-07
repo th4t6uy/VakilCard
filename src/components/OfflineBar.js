@@ -39,6 +39,16 @@ export function OfflineBar({ translate }) {
   const wasOffline = useRef(false);
   const [newer, setNewer] = useState(false);
   useEffect(() => {
+    // Drop the throw-away "?_r=" value that "Reload app" put on the address.
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.has('_r')) {
+        u.searchParams.delete('_r');
+        window.history.replaceState(window.history.state, '', u.pathname + u.search + u.hash);
+      }
+    } catch {
+      // fine
+    }
     setOnline(navigator.onLine);
     const up = () => setOnline(true);
     const down = () => {
@@ -144,7 +154,7 @@ export function OfflineBar({ translate }) {
         <div style={{ ...pill, pointerEvents: 'auto' }}>
           <span aria-hidden style={{ ...dotStyle, background: '#38bdf8' }} />
           <b style={{ fontWeight: 700, minWidth: 0 }}>{t('A newer version is ready')}</b>
-          <button type="button" onClick={() => window.location.reload()} style={refreshBtn}>
+          <button type="button" onClick={() => void fixAndReload()} style={refreshBtn}>
             {t('Refresh')}
           </button>
         </div>
@@ -210,4 +220,61 @@ const dotStyle = {
   height: 8,
   borderRadius: 999,
 };
+/**
+ * "Reload app" (7 Oct 2026): the fix for a page that will not show the newest version.
+ * It makes this browser forget what it saved for the app (saved pages, saved files and the background
+ * worker sw.js) and then loads the page fresh from the server. It does NOT sign anyone out, and it does
+ * NOT touch changes waiting to sync (those live in the app's own database, not in the saved pages).
+ * The same helper and button ship in every Vakilpedia app, from this file.
+ */
+export async function fixAndReload() {
+  try {
+    const regs = (await navigator.serviceWorker?.getRegistrations?.()) ?? [];
+    await Promise.all(regs.map((r) => r.unregister()));
+  } catch {
+    // browser without service workers: nothing to forget
+  }
+  try {
+    if (typeof caches !== 'undefined') {
+      const keys = await caches.keys();
+      await Promise.all(keys.map((k) => caches.delete(k)));
+    }
+  } catch {
+    // nothing saved: fine
+  }
+  try {
+    document.cookie = 'vp_auth_wait=; Path=/; Max-Age=0; SameSite=Lax';
+    sessionStorage.removeItem('vp-auth-recover');
+  } catch {
+    // storage blocked: fine
+  }
+  try {
+    // A throw-away value on the address makes the browser ask the server instead of using its own copy.
+    const u = new URL(window.location.href);
+    u.searchParams.set('_r', Date.now().toString(36));
+    window.location.replace(u.toString());
+  } catch {
+    window.location.reload();
+  }
+}
+
+export function ReloadAppButton({ className, style, label = 'Reload app' }) {
+  const [busy, setBusy] = useState(false);
+  return (
+    <button
+      type="button"
+      className={className}
+      style={style}
+      disabled={busy}
+      title="Fixes a page that is stuck on an old version. You stay signed in."
+      onClick={() => {
+        setBusy(true);
+        void fixAndReload();
+      }}
+    >
+      {busy ? 'Reloading…' : label}
+    </button>
+  );
+}
+
 export default OfflineBar;

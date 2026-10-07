@@ -38,6 +38,7 @@ import SiteFooter from "../components/SiteFooter";
 import EcosystemRail from "../components/EcosystemRail";
 import SEOHead from "../components/SEOHead";
 import { LAUNCHER_ITEMS } from "../config/ecosystem";
+import { ReloadAppButton } from "../components/OfflineBar";
 
 // CaseLinx address from the shared ecosystem list (one place for app URLs).
 const CASELINX_HREF = (LAUNCHER_ITEMS.find((a) => a.id === "caselinx") || {}).href || "https://caselinx.vakilpedia.com";
@@ -1264,6 +1265,7 @@ export default function VakilCardPage() {
           </span>
           <GoogleStatusChip pro={pro} />
         </div>
+        <ReloadAppButton label="Reload app" className={btn} />
         <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
       </div>
 
@@ -1411,7 +1413,8 @@ export default function VakilCardPage() {
               {!pro && <> · <button className="text-[#635BFF] dark:text-[#a5a0ff] font-bold" onClick={() => setUpgradeFeature("pro")}>Upgrade</button></>}
             </p>
             <div className="flex flex-wrap gap-2">
-              <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
+              <ReloadAppButton label="Reload app" className={btn} />
+        <button onClick={doLogout} className={btn}><LogOut className="h-4 w-4" />Sign out</button>
               <button onClick={remove} className="rounded-full bg-white dark:bg-[#1c1c1e] border border-rose-200 dark:border-rose-500/30 hover:border-rose-300 dark:hover:border-rose-500/30 px-4 py-2 text-sm font-bold text-rose-700 dark:text-rose-300 inline-flex items-center gap-1.5"><Trash2 className="h-4 w-4" />Delete card</button>
             </div>
 
