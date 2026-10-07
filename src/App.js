@@ -113,6 +113,27 @@ function Loading() {
   return <div style={{ padding: 40, textAlign: "center", color: "var(--vc-ink-muted)" }}>Loading…</div>;
 }
 
+// The install popup waits for a signed-in person. VakilCard keeps its own
+// sign-in (phone/WhatsApp, or traded in from the Vakilpedia session) in
+// browser storage, and signing in does not re-render App, so look again each
+// second instead of reading it once.
+function InstallPopup() {
+  const [signedIn, setSignedIn] = useState(false);
+  useEffect(() => {
+    const check = () => {
+      try {
+        setSignedIn(hasPhoneSession());
+      } catch {
+        setSignedIn(false); // storage blocked
+      }
+    };
+    check();
+    const id = setInterval(check, 1000);
+    return () => clearInterval(id);
+  }, []);
+  return <AddToHomeScreen appName="VakilCard" signedIn={signedIn} />;
+}
+
 function App() {
   useFragmentTokenBridge();
   const suiteInvite = useSuiteSessionBridge();
@@ -151,7 +172,7 @@ function App() {
           <Route path="/admin" element={<><ThemeCornerToggle /><Suspense fallback={<Loading />}><VakilCardAdmin /></Suspense></>} />
         </Routes>
       </BrowserRouter>
-      <AddToHomeScreen appName="VakilCard" />
+      <InstallPopup />
       <OfflineBar />
     </div>
   );

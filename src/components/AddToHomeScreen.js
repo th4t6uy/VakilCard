@@ -19,8 +19,8 @@
  *     navigator.standalone on iOS);
  *   - show on a non-Safari iOS browser, where Add to Home Screen does not
  *     exist and the instruction would be a lie;
- *   - come back the day after someone dismissed it. Dismissal is remembered
- *     for 7 days (founder, 30 Sept 2026), and installing hides it for good.
+ *   - come back after it has been shown once (founder, 7 Oct 2026 — this
+ *     replaced the 7-day reminder of 30 Sept); installing hides it for good.
  *
  * 2026-09-20 — redesigned to fix a real collision: this used to render as a
  * persistent, full-width bar pinned to the bottom of the viewport at
@@ -38,6 +38,13 @@
  * floating actions; this button is the guest, so it takes the other corner.
  * Matches CaseLinx's copy, which was already bottom-left.
  *
+ * 2026-10-07 — founder: "no more repeating PWA popups". Rules now, in every
+ * app that carries this file:
+ *   - it appears ONCE, after 30 seconds of use (tab on screen and the person
+ *     signed in), and never again once it has been shown: closing it,
+ *     ignoring it, or installing all count. The old weekly reminder, the
+ *     iPhone auto-open, the idle round button and the sign-in nudge are gone.
+ *
  * Everything is inline-styled on purpose: this same file ships into eight
  * repos on three different CSS toolchains, and a banner that silently loses
  * its styling in one of them is worse than no banner.
@@ -45,10 +52,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 
-const KEY = 'vp-a2hs-dismissed';
-const SNOOZE_DAYS = 7; // 2026-09-30 founder: remind weekly until installed
-const AUTO_KEY = 'vp-a2hs-auto-opened';
-const AUTO_OPEN_MS = 2500;
+// 2026-10-07 founder: ONE popup, once. It shows after 30 seconds of use, and
+// closing it (or installing) means it never comes back on this browser.
+const KEY = 'vp-a2hs-dismissed'; // set the moment the card is shown; 'installed' once installed
+const AUTO_KEY = 'vp-a2hs-auto-opened'; // older builds' "already auto-opened" flag: counts as seen
+const USE_KEY = 'vp-a2hs-use-ms'; // milliseconds of use so far, kept across page loads
+const DELAY_MS = 30_000;
 // Shared stacking convention for floating chrome (install prompt, toasts,
 // future non-modal banners): stay in the 300–500 band, comfortably above
 // normal content but nowhere near a MAX_INT arms race with anything else
@@ -56,12 +65,11 @@ const AUTO_OPEN_MS = 2500;
 // still outrank this.
 const Z_FLOAT = 400;
 
-function snoozed() {
+// Seen before on this browser (shown, dismissed or installed)? Any value
+// counts, including the 7-day timestamps older builds stored.
+function alreadyShown() {
   try {
-    const raw = localStorage.getItem(KEY);
-    if (!raw) return false;
-    if (raw === 'installed') return true;
-    return Date.now() - Number(raw) < SNOOZE_DAYS * 864e5;
+    return Boolean(localStorage.getItem(KEY) || localStorage.getItem(AUTO_KEY));
   } catch {
     return false; // private mode: show it rather than swallow the feature
   }
@@ -71,8 +79,39 @@ function remember(value) {
   try {
     localStorage.setItem(KEY, value);
   } catch {
-    /* nothing to do — the banner just reappears next visit */
+    /* nothing to do — worst case the card shows again next visit */
   }
+}
+
+function readUseMs() {
+  try {
+    return Number(localStorage.getItem(USE_KEY) || 0) || 0;
+  } catch {
+    return 0;
+  }
+}
+
+function writeUseMs(ms) {
+  try {
+    localStorage.setItem(USE_KEY, String(ms));
+  } catch {
+    /* private mode: the clock restarts on every page load */
+  }
+}
+
+// Is someone signed in on this browser? Apps that know for sure pass the
+// `signedIn` prop. Otherwise look for the saved sign-in the Vakilpedia apps
+// all keep (a Supabase session: a cookie or storage key starting "sb-").
+function hasSavedSession() {
+  try {
+    if (/(?:^|;\s*)sb-/.test(document.cookie)) return true;
+    for (let i = 0; i < window.localStorage.length; i += 1) {
+      if ((window.localStorage.key(i) || '').startsWith('sb-')) return true;
+    }
+  } catch {
+    /* storage blocked: treat as signed out */
+  }
+  return false;
 }
 
 function installed() {
@@ -95,6 +134,22 @@ function isIosSafari() {
   return !/FxiOS|EdgiOS|OPiOS/.test(ua);
 }
 
+// Chrome fires `beforeinstallprompt` once, early. Catch it at module load so a
+// page that mounts the card later (after sign-in, after 30 s) still has it.
+let savedEvt = null;
+const evtListeners = new Set();
+if (typeof window !== 'undefined') {
+  window.addEventListener('beforeinstallprompt', (e) => {
+    e.preventDefault();
+    savedEvt = e;
+    evtListeners.forEach((fn) => fn(e));
+  });
+  window.addEventListener('appinstalled', () => {
+    remember('installed');
+    savedEvt = null;
+  });
+}
+
 // An installed app can stay open for days, and the browser only looks for a
 // new service worker on a full page load. Look again whenever the app comes
 // back on screen (at most every 30 minutes).
@@ -110,9 +165,22 @@ function checkForNewVersionOnReturn(reg) {
   });
 }
 
-export function AddToHomeScreen({ appName = 'this app' }) {
+/**
+ * Props:
+ *   signedIn       true/false when the app knows; leave out to detect a saved sign-in.
+ *   requireSignIn  default true — the 30 seconds only count while signed in.
+ *   icon           image shown on the card.
+ */
+export function AddToHomeScreen({
+  appName = 'this app',
+  signedIn,
+  requireSignIn = true,
+  icon = '/icons/icon-192.png',
+}) {
   const [evt, setEvt] = useState(null);
   const [ios, setIos] = useState(false);
+  const [eligible, setEligible] = useState(false); // not installed, never shown before
+  const [used, setUsed] = useState(false); // 30 seconds of use reached
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -127,46 +195,57 @@ export function AddToHomeScreen({ appName = 'this app' }) {
         .then(checkForNewVersionOnReturn)
         .catch(() => {});
     }
-    if (installed() || snoozed()) return;
-
-    const onPrompt = (e) => {
-      e.preventDefault();
-      setEvt(e);
-    };
-    window.addEventListener('beforeinstallprompt', onPrompt);
-    window.addEventListener('appinstalled', () => {
-      remember('installed');
+    if (installed() || alreadyShown()) return;
+    setEligible(true);
+    if (savedEvt) setEvt(savedEvt);
+    const onEvt = (e) => setEvt(e);
+    evtListeners.add(onEvt);
+    const onInstalled = () => {
       setEvt(null);
       setIos(false);
       setOpen(false);
-    });
-
+      setEligible(false);
+    };
+    window.addEventListener('appinstalled', onInstalled);
     if (isIosSafari()) setIos(true);
-    return () => window.removeEventListener('beforeinstallprompt', onPrompt);
+    return () => {
+      evtListeners.delete(onEvt);
+      window.removeEventListener('appinstalled', onInstalled);
+    };
   }, []);
 
-  // 2026-09-30 founder: "the add to home screen animation is nowhere to be
-  // seen". It only opened after tapping the small round button, which most
-  // people never notice. On iPhone it now opens by itself (2.5 s after the
-  // page loads) once a week until the app is installed; ✕ snoozes 7 days.
+  // The 30-second clock: counts only while the tab is on screen and, where
+  // sign-in is required, only while someone is signed in. Kept across page
+  // loads so moving around the app does not restart it.
   useEffect(() => {
-    if (!ios || open) return;
-    let last = 0;
-    try { last = Number(localStorage.getItem(AUTO_KEY) || 0); } catch { /* private mode */ }
-    if (Date.now() - last < SNOOZE_DAYS * 864e5) return;
-    const id = setTimeout(() => {
-      try { localStorage.setItem(AUTO_KEY, String(Date.now())); } catch { /* ignore */ }
-      setOpen(true);
-    }, AUTO_OPEN_MS);
-    return () => clearTimeout(id);
-  }, [ios, open]);
+    if (!eligible || used) return;
+    const id = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const ok = requireSignIn ? (signedIn === undefined ? hasSavedSession() : signedIn) : true;
+      if (!ok) return;
+      const ms = readUseMs() + 1000;
+      writeUseMs(ms);
+      if (ms >= DELAY_MS) setUsed(true);
+    }, 1000);
+    return () => clearInterval(id);
+  }, [eligible, used, signedIn, requireSignIn]);
 
-  if (!evt && !ios) return null;
-
-  const snooze = () => {
+  // Show once. The moment it appears it is remembered, so a reload or a
+  // later visit never shows it again, whether or not it was dismissed.
+  const canShow = eligible && used && Boolean(evt || ios);
+  useEffect(() => {
+    if (!canShow || open) return;
     remember(String(Date.now()));
+    setOpen(true);
+  }, [canShow, open]);
+
+  if (!open) return null;
+
+  const dismiss = () => {
+    remember('done');
     setEvt(null);
     setIos(false);
+    setEligible(false);
     setOpen(false);
   };
 
@@ -174,40 +253,25 @@ export function AddToHomeScreen({ appName = 'this app' }) {
     if (!evt) return;
     await evt.prompt();
     const { outcome } = await evt.userChoice;
-    remember(outcome === 'accepted' ? 'installed' : String(Date.now()));
+    remember(outcome === 'accepted' ? 'installed' : 'done');
     setEvt(null);
+    setEligible(false);
     setOpen(false);
   };
 
-  // Idle state: a small round button, clear of any centred bottom action bar
-  // (a sticky "Sign", "Pay" or "Submit" button an app may have on the same
-  // screen). This is the state the banner spends nearly all its time in.
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={evt ? install : () => setOpen(true)}
-        aria-label={evt ? `Install ${appName}` : `Add ${appName} to your home screen`}
-        style={pillBtn}
-      >
-        <img src="/icons/icon-192.png" alt="" width={26} height={26} style={pillIcon} />
-      </button>
-    );
-  }
-
-  // iOS: no install API exists, so the open state is a walkthrough that
-  // shows each tap (IosInstallCard, below). 2026-09-29.
+  // iOS: no install API exists, so the card is a walkthrough that shows each
+  // tap (IosInstallCard, below). 2026-09-29.
   if (ios) {
-    return <IosInstallCard appName={appName} onClose={snooze} />;
+    return <IosInstallCard appName={appName} icon={icon} onClose={dismiss} />;
   }
 
-  // Open state: a capped-width card anchored to the same corner, never a
-  // full-width strip — so even while open it can only ever cover the
-  // right-hand edge of a bottom action bar, not the button on it.
+  // A capped-width card in the bottom-left corner, never a full-width strip —
+  // so it can only ever cover the left edge of a bottom action bar, not the
+  // button on it.
   return (
     <div role="dialog" aria-label={`Add ${appName} to your home screen`} style={wrap}>
       <div style={bar}>
-        <img src="/icons/icon-192.png" alt="" width={34} height={34} style={icon} />
+        <img src={icon} alt="" width={34} height={34} style={iconStyle} />
         <div style={{ minWidth: 0, flex: 1 }}>
           <div style={title}>Add {appName} to your home screen</div>
           <div style={sub}>
@@ -217,7 +281,7 @@ export function AddToHomeScreen({ appName = 'this app' }) {
         <button type="button" onClick={install} style={cta}>
             Install
           </button>
-        <button type="button" onClick={snooze} aria-label="Not now" style={close}>
+        <button type="button" onClick={dismiss} aria-label="Not now" style={close}>
           ✕
         </button>
       </div>
@@ -225,28 +289,6 @@ export function AddToHomeScreen({ appName = 'this app' }) {
   );
 }
 
-
-const pillBtn = {
-  position: 'fixed',
-  left: 'max(14px, env(safe-area-inset-left))',
-  bottom: 'max(14px, env(safe-area-inset-bottom))',
-  zIndex: Z_FLOAT,
-  width: 48,
-  height: 48,
-  padding: 0,
-  borderRadius: '50%',
-  border: '1px solid var(--vc-hairline)',
-  background: 'var(--vc-pill-bg)',
-  backdropFilter: 'saturate(180%) blur(14px)',
-  WebkitBackdropFilter: 'saturate(180%) blur(14px)',
-  boxShadow: '0 6px 20px rgba(16,24,40,0.20)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  cursor: 'pointer',
-};
-
-const pillIcon = { borderRadius: 7, display: 'block' };
 
 const wrap = {
   position: 'fixed',
@@ -273,7 +315,7 @@ const bar = {
   font: '500 13px/1.35 system-ui, -apple-system, "Segoe UI", sans-serif',
 };
 
-const icon = { borderRadius: 9, flex: '0 0 auto' };
+const iconStyle = { borderRadius: 9, flex: '0 0 auto' };
 const title = {
   fontWeight: 650,
   fontSize: 13.5,
@@ -355,7 +397,7 @@ const IOS_STEPS = {
 };
 const IOS_CLIP = '/a2hs/ios-add-to-home.mp4';
 const IOS_POSTER = '/a2hs/ios-add-to-home.jpg';
-function IosInstallCard({ appName, onClose, boxRef }) {
+function IosInstallCard({ appName, icon, onClose }) {
   const [flow] = useState(iosFlow);
   const steps = IOS_STEPS[flow];
   const hasClip = flow === 'safari26';
@@ -394,10 +436,10 @@ function IosInstallCard({ appName, onClose, boxRef }) {
     setCur(i);
   };
   return (
-    <div ref={boxRef} role="dialog" aria-label={`Add ${appName} to your Home Screen`} style={iosWrap}>
+    <div role="dialog" aria-label={`Add ${appName} to your Home Screen`} style={iosWrap}>
       <div style={iosCard}>
         <div style={iosHead}>
-          <img src="/icons/icon-192.png" alt="" width={26} height={26} style={icon} />
+          <img src={icon} alt="" width={26} height={26} style={iconStyle} />
           <div style={{ minWidth: 0, flex: 1 }}>
             <div style={title}>Add {appName} to Home Screen</div>
             <div style={sub}>Opens like an app. Here’s how:</div>
