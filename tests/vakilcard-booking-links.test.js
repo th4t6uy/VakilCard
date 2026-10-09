@@ -77,4 +77,7 @@ assert(/body\.only_profile[\s\S]{0,400}found: false[\s\S]{0,600}owner: true/.tes
 assert(/only_profile[\s\S]{0,700}const \{ access, refresh \} = await issueTokens/.test(authSrc), "owner probe returns before any refresh token is issued");
 assert(/trySuite/.test(mountSrc) && /only_profile: boot\.profileId/.test(mountSrc), "mount.js falls back to the Vakilpedia login");
 assert(/Pick my own times/.test(mountSrc) && /custom_windows/.test(mountSrc), "send sheet lets the lawyer pick his own times");
+// The link URL is built from the OWNER profile, so that select must include the username (9 Oct 2026:
+// links went out as /undefined?book=...).
+assert(/async function loadOwnerProfile[\s\S]{0,400}select=id,account_id,username,full_name,/.test(src), "owner profile select includes username and full_name");
 console.log("vakilcard-booking-links: ok");

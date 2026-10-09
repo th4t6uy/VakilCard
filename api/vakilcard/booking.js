@@ -343,7 +343,7 @@ async function loadOwnerProfile(req) {
   const who = await resolveAccount(req);
   if (!who || !who.accountId) return { error: 401 };
   const rows = await db(
-    `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,account_id,subscription_plan,subscription_status,subscription_expires_at,booking_windows,booking_buffer_minutes,booking_min_notice_hours,calendar_source,calendar_firm_id`
+    `vakilcard_profiles?account_id=eq.${who.accountId}&select=id,account_id,username,full_name,subscription_plan,subscription_status,subscription_expires_at,booking_windows,booking_buffer_minutes,booking_min_notice_hours,calendar_source,calendar_firm_id`
   );
   const profile = rows[0];
   if (!profile) return { error: 404 };
