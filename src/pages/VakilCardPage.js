@@ -56,7 +56,10 @@ function CaseLinxJoinCard({ cfg }) {
   const rs = (x) => (x ? `₹${Math.round(x.inr).toLocaleString("en-IN")}/${x.period === "yearly" ? "year" : "month"}` : null);
   const link = rs(p.connect_vakilcard);
   const pro = !!cfg.pro;
-  const syncing = c.caselinx && pro && c.card_link;
+  // While Paid plans are OFF (beta) the connection is open to every Pro card -- the server says so in
+  // cfg.calendar.card_link (booking.js cardLinkAllowed) -- so the banner must not ask a beta lawyer to
+  // buy or "turn on" something that has no button yet (founder, 9 Oct 2026: the button led nowhere).
+  const syncing = c.caselinx && pro && (c.card_link || !!(cfg.calendar && cfg.calendar.card_link));
   let title, text, cta;
   if (!c.caselinx) {
     title = "Join CaseLinx";
