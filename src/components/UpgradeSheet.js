@@ -10,6 +10,7 @@
 import React, { useEffect, useState } from "react";
 import { BadgeCheck, Banknote, BarChart3, CalendarClock, Check, Globe2, Loader2, MapPin, Palette, Sparkles, Star, Ticket, X } from "lucide-react";
 import { checkoutPro, getSubscription, loadRazorpay, previewCoupon, verifyProPayment } from "../lib/vakilcardApi";
+import { trackEvent } from "../lib/analytics";
 
 const FEATURES = [
   [BadgeCheck, "Custom Username", "vakilpedia.com/yourname"],
@@ -284,6 +285,7 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded, heldL
             try {
               const v = await verifyProPayment(resp);
               if (v && v.ok) {
+                trackEvent("purchase", { plan: "pro", purchase_kind: "plan_term", value: Number(r.first_charge_inr) || undefined, currency: "INR", transaction_id: resp && resp.razorpay_payment_id });
                 setDone("activated");
                 if (onUpgraded) onUpgraded();
               } else {
@@ -295,9 +297,10 @@ export default function UpgradeSheet({ open, onClose, feature, onUpgraded, heldL
               setBusy(false);
             }
           },
-          modal: { ondismiss: () => setBusy(false) },
+          modal: { ondismiss: () => { trackEvent("payment_cancelled", { plan: "pro", purchase_kind: "plan_term" }); setBusy(false); } },
         });
-        modal.on("payment.failed", () => setBusy(false));
+        trackEvent("begin_checkout", { plan: "pro", purchase_kind: "plan_term", value: Number(r.first_charge_inr) || undefined, currency: "INR" });
+        modal.on("payment.failed", () => { trackEvent("payment_failed", { plan: "pro", purchase_kind: "plan_term" }); setBusy(false); });
         modal.open();
         return; // busy stays true until the modal resolves/dismisses
       } else if (r.checkout_url) {

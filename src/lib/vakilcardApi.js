@@ -12,6 +12,7 @@
 // `qaCall()` returns undefined (the normal case), execution falls through to
 // the real fetch below, completely unchanged.
 import { qaCall, qaActive } from "./vakilcardQa";
+import { trackEvent } from "./analytics";
 
 const ACCESS_KEY = "vc_access_token";
 const REFRESH_KEY = "vc_refresh_token";
@@ -330,6 +331,7 @@ export const adminRegistryExport = async (params = {}) => {
 /** Fire-and-forget funnel/profile analytics beacon. Skipped during a QA session. */
 export function track(event_type, profile_id = null) {
   if (qaActive()) return;
+  trackEvent(event_type); // same name to GA4 and Vercel's counter
   try {
     navigator.sendBeacon("/api/vakilcard/track", JSON.stringify({ event_type, profile_id }));
   } catch {

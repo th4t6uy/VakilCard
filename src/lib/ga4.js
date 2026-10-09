@@ -60,6 +60,9 @@ const GA4_LINKER_DOMAINS = [
 ];
 
 let initialized = false;
+// GA4's own history tracking (Enhanced measurement) already sends a page_view for every in-app navigation, so this app
+// sends ONE by hand for the first screen of a page load and no more. Sending both counted every navigation twice.
+let pageViewSentThisLoad = false;
 
 function isProductionHost() {
   if (typeof window === "undefined") return false;
@@ -109,6 +112,8 @@ export function initGa4() {
 export function trackPageView(title) {
   if (typeof window === "undefined") return;
   if (!isProductionHost()) return;
+  if (pageViewSentThisLoad) return;
+  pageViewSentThisLoad = true;
 
   window.dataLayer = window.dataLayer || [];
   window.gtag =
