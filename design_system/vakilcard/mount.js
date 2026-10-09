@@ -1777,14 +1777,24 @@
       }
       var win = null;
       // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
-      if (channel === "wa") { try { win = window.open("", "_blank"); } catch (e) {} }
+      // Email on a computer opens Gmail's own compose window with everything filled in. A plain mailto: link
+      // handed to a browser whose mail handler is Gmail often arrives as an EMPTY draft (founder, 9 Oct 2026);
+      // phones keep mailto: so the phone's own mail app opens.
+      var mailOnPc = channel === "mail" && !/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || "");
+      if (channel === "wa" || mailOnPc) { try { win = window.open("", "_blank"); } catch (e) {} }
       getLink(f, wins).then(function (url) {
         track("share");
         if (channel === "wa") {
           var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(msgFor(f, url));
           if (win) win.location.href = href; else window.location.href = href;
         } else if (channel === "mail") {
-          window.location.href = "mailto:" + blEnc(f.mail) + "?subject=" + blEnc("Book a time to meet — " + blWho()) + "&body=" + blEnc(msgFor(f, url));
+          var subj = "Book a time to meet — " + blWho(), mbody = msgFor(f, url);
+          if (mailOnPc) {
+            var g = "https://mail.google.com/mail/?view=cm&fs=1&to=" + blEnc(f.mail) + "&su=" + blEnc(subj) + "&body=" + blEnc(mbody);
+            if (win) win.location.href = g; else window.location.href = g;
+          } else {
+            window.location.href = "mailto:" + blEnc(f.mail) + "?subject=" + blEnc(subj) + "&body=" + blEnc(mbody);
+          }
         } else {
           var done = function () { var sp = $("#vc-sl-copy span"); if (sp) { sp.textContent = "Copied ✓"; setTimeout(function () { sp.textContent = "Copy link"; }, 1800); } };
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { window.prompt("Copy this link", url); });
