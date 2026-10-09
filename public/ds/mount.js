@@ -1057,6 +1057,28 @@
     if (img && img.src) showQrZoom(img.src, (slot.getAttribute("data-qr-name") || "qr") + ".png", slot.getAttribute("data-qr-caption") || "");
   });
 
+  /* ---------- Phone view: zoom locked, fields big enough (founder, 9 Oct 2026) ----------
+     Safari kept zooming in whenever a field was tapped. Two things together stop it for good on phones:
+     (1) the viewport is locked at maximum-scale=1 / no pinch-zoom for the whole visit (the old clamp only held while a
+     field was focused and let go 300 ms later), and (2) every field is sized so it PAINTS at 17px or more even after the
+     phone scales the 412px design down (390px screen: 18px, 375px: 19px). Phones only; computers are untouched. */
+  (function () {
+    var w = Math.min(window.innerWidth || 0, (window.screen && window.screen.width) || 9999);
+    var phone = w > 0 && w < 768 && (window.matchMedia ? window.matchMedia("(pointer:coarse)").matches : true);
+    if (!phone) return;
+    var vp = document.querySelector('meta[name="viewport"]');
+    if (vp) {
+      var c = (vp.getAttribute("content") || "").replace(/,?\s*(maximum-scale|user-scalable)=[^,]*/g, "");
+      vp.setAttribute("content", c + ",maximum-scale=1,user-scalable=no");
+    }
+    var scale = Math.min(1, w / 412);
+    var px = Math.max(17, Math.ceil(17 / scale));
+    var st = document.createElement("style");
+    st.id = "vc-field-font";
+    st.textContent = "input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=file]),select,textarea{font-size:" + px + "px !important}";
+    document.head.appendChild(st);
+  })();
+
   /* ---------- iOS focus-zoom guard ----------
      Tapping a field in any sheet made iOS Safari zoom the page in and never
      zoom back out, which breaks the illusion the card is an app.
@@ -1567,7 +1589,7 @@
 
   function showSendLinkSheet() {
     var isPro = !!(boot.profile && boot.profile.pro);
-    var minutes = 30, reusable = false, when = "usual";
+    var minutes = 30, reusable = false, when = "usual", feeOn = false;
     var CY = "#22d3ee"; // cyan = calendar things
     var whenChip = function (on) {
       return "padding:9px 0;flex:1;border-radius:12px;font-family:var(--font-sans);font-size:12.5px;font-weight:800;cursor:pointer;border:1.5px solid " +
@@ -1592,6 +1614,12 @@
       '<button type="button" id="vc-sl-addwin" style="width:100%;padding:9px 0;border-radius:12px;border:1.5px dashed ' + CY + ';background:transparent;color:var(--text-hi);font-family:var(--font-sans);font-size:12.5px;font-weight:800;cursor:pointer">+ Add another time</button>' +
       '<div style="font-size:11px;color:var(--text-dim);line-height:1.45;margin-top:7px">These can be outside your usual hours. Only times your Google Calendar shows free are offered. Clients who book from your card still use your usual hours.</div>' +
       "</div>" +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:2px 0 6px">Fee for this meeting</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:8px" id="vc-sl-fee"><button type="button" data-fee="0">No fee</button><button type="button" data-fee="1">Ask for a fee</button></div>' +
+      '<div id="vc-sl-feebox" style="display:none;margin-bottom:10px"><div style="display:flex;gap:6px;margin-bottom:8px" id="vc-sl-fees">' +
+      [500, 1000, 2000, 5000].map(function (a) { return '<button type="button" data-a="' + a + '">₹' + a + "</button>"; }).join("") + "</div>" +
+      '<input id="vc-sl-feeamt" type="number" inputmode="numeric" min="1" max="1000000" placeholder="Other amount (₹)" style="' + blInput + ';margin-bottom:6px">' +
+      '<div style="font-size:11px;color:var(--text-dim);line-height:1.45">Your client is told the fee and that it is payable to you at the meeting. VakilCard does not collect the money.</div></div>' +
       '<div style="display:flex;gap:6px;align-items:center;margin:0 0 12px;flex-wrap:wrap">' +
       '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:800;border:1px solid var(--violet-400);color:var(--text-hi)">' + blIco.video + "Google Meet</span>" +
       '<span style="padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px dashed var(--hairline-strong);color:var(--text-dim)">Zoom · soon</span>' +
@@ -1601,7 +1629,7 @@
       '<button id="vc-sl-wa" style="' + sheetBtnCss + blVioletBtn + ';margin-top:4px">' + nounIcon("whatsapp") + "Send on WhatsApp</button>" +
       '<div style="display:flex;gap:8px">' +
       '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.link + "<span>Copy link</span></button>" +
-      '<button id="vc-sl-msg" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/></svg>' + "<span>Get message</span></button>" +
+      '<button id="vc-sl-email" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.mail + "<span>Send email</span></button>" +
       "</div>" +
       '<div id="vc-sl-ready" style="display:none"></div>' +
       '<div id="vc-sl-err" style="font-size:12px;color:var(--danger,#f66);margin-top:10px;line-height:1.45;display:none"></div>';
@@ -1620,6 +1648,34 @@
     $("#vc-sl-mins").querySelectorAll("button").forEach(function (b) {
       b.addEventListener("click", function () { minutes = +b.getAttribute("data-m"); paintMins(); if (typeof syncAllRows === "function") syncAllRows(); });
     });
+    /* ---- fee for this meeting (founder, 9 Oct 2026): none, or an amount the lawyer chooses ---- */
+    var feeIn = $("#vc-sl-feeamt");
+    var feeAmount = function () { var n = Math.round(Number(feeIn.value)); return isFinite(n) && n > 0 ? n : 0; };
+    var paintFee = function () {
+      $("#vc-sl-fee").querySelectorAll("button").forEach(function (b) { b.style.cssText = chip((b.getAttribute("data-fee") === "1") === feeOn); });
+      $("#vc-sl-feebox").style.display = feeOn ? "block" : "none";
+      var cur = feeAmount();
+      $("#vc-sl-fees").querySelectorAll("button").forEach(function (b) { b.style.cssText = chip(+b.getAttribute("data-a") === cur); });
+    };
+    $("#vc-sl-fee").querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        feeOn = b.getAttribute("data-fee") === "1";
+        if (feeOn && !feeAmount()) feeIn.value = "1000";
+        paintFee();
+      });
+    });
+    $("#vc-sl-fees").querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () { feeIn.value = b.getAttribute("data-a"); paintFee(); });
+    });
+    feeIn.addEventListener("input", paintFee);
+    paintFee();
+    var readFee = function () {
+      if (!feeOn) return { fee: 0 };
+      var n = Math.round(Number(feeIn.value));
+      if (!isFinite(n) || n < 1) return { err: "Enter the fee amount, or choose No fee." };
+      if (n > 1000000) return { err: "That fee looks too high. Please check the amount." };
+      return { fee: n };
+    };
     /* ---- the lawyer's own times for this link ---- */
     var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
     var ymd = function (d) { return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
@@ -1733,10 +1789,10 @@
       $("#vc-sl-name").placeholder = reusable ? "Label for you (optional)" : "Client's name";
     });
 
-    function getLink(f, wins) {
-      var key = [f.name, f.phone, f.mail, minutes, reusable, wins ? JSON.stringify(wins) : ""].join("|");
+    function getLink(f, wins, fee) {
+      var key = [f.name, f.phone, f.mail, minutes, reusable, wins ? JSON.stringify(wins) : "", fee || 0].join("|");
       if (made && made.key === key) return Promise.resolve(made.url);
-      var payload = { action: "create_link", client_name: f.name, client_phone: f.phone, client_email: f.mail, duration_minutes: minutes, reusable: reusable };
+      var payload = { action: "create_link", client_name: f.name, client_phone: f.phone, client_email: f.mail, duration_minutes: minutes, reusable: reusable, fee_inr: fee || 0 };
       if (wins) payload.custom_windows = wins;
       return ownerCall(payload).then(function (r) {
         if (r.d && r.d.ok) { made = { key: key, url: r.d.url }; draftClear(slDraft); sentOk = true; return r.d.url; }
@@ -1753,11 +1809,14 @@
       var d = String(raw || "").replace(/\D/g, "").replace(/^0+/, "");
       return d.length === 10 ? "91" + d : d;
     }
+    var curFee = 0;
     function msgFor(f, url) {
       return (f.name && !reusable ? "Hello " + f.name + ", this is " : "Hello, this is ") + blWho() + ". Please pick a time that suits you for our " + minutes + "-minute video meeting (Google Meet):\n\n" + url +
+        (curFee ? "\n\nThe consultation fee is ₹" + curFee + ", payable to me at the meeting." : "") +
         "\n\n" + (when === "own" ? "I have opened these times just for you." : reusable ? "You can use this link any time." : "This private link works for 7 days.");
     }
     function failMsg(code) {
+      if (code === "bad_fee") return "That fee does not look right. Please check the amount.";
       if (code === "calendar_not_connected" || code === "reconnect_required")
         return "Connect your Google Calendar first — that is where the Meet link is made. " + blDashLink("Open dashboard →");
       if (code === "no_hours") return "Set the days and hours you take meetings first. " + blDashLink("Open dashboard →");
@@ -1779,18 +1838,36 @@
     function showReady(f, url, mbody) {
       var box = $("#vc-sl-ready");
       var lbl = "font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin:10px 0 4px";
+      var subj = "Book a time to meet — " + blWho();
+      var ua = navigator.userAgent || "";
+      var ios = /iPhone|iPad|iPod/i.test(ua), android = /Android/i.test(ua);
+      var to = f.mail || "";
+      // Real <a> taps (not script redirects). iPhone: Gmail's own link is the most reliable way to land in a FILLED Gmail draft,
+      // and the phone's Mail app sits beside it. Android: the default mail app. Computer: Gmail in a new tab.
+      var mt = "mailto:" + blEnc(to).replace(/%40/g, "@") + "?subject=" + blEnc(subj) + "&body=" + blEnc(mbody).replace(/%0A/g, "%0D%0A");
+      var gm = "googlegmail:///co?to=" + blEnc(to) + "&subject=" + blEnc(subj) + "&body=" + blEnc(mbody);
+      var gw = "https://mail.google.com/mail/?view=cm&fs=1&to=" + blEnc(to) + "&su=" + blEnc(subj) + "&body=" + blEnc(mbody);
+      var aBtn = function (href, label, primary, web) {
+        return '<a href="' + esc(href) + '"' + (web ? ' target="_blank" rel="noopener"' : "") + ' data-vc-native-link style="' + sheetBtnCss + (primary ? blVioletBtn : ";justify-content:center") + ';flex:1;margin-top:0">' + blIco.mail + "<span>" + label + "</span></a>";
+      };
+      var mailRow = ios ? aBtn(gm, "Open Gmail", true) + aBtn(mt, "Open Mail", false)
+        : android ? aBtn(mt, "Open email app", true)
+        : aBtn(gw, "Open Gmail", true, true);
       box.innerHTML =
         '<div style="margin-top:12px;padding:12px;border-radius:16px;border:1px solid #22d3ee;background:var(--glass-thick)">' +
-        '<div style="font-size:12.5px;font-weight:800;color:var(--text-hi)">Ready to send ✓</div>' +
-        (f.name && !reusable ? '<div style="' + lbl + '">For</div><div style="font-size:14px;font-weight:700;color:var(--text-hi);word-break:break-word">' + esc(f.name) + (f.phone ? " · " + esc(f.phone) : f.mail ? " · " + esc(f.mail) : "") + "</div>" : "") +
+        '<div style="font-size:12.5px;font-weight:800;color:var(--text-hi)">Email ready ✓</div>' +
+        '<div style="' + lbl + '">To</div><div style="font-size:14px;font-weight:700;color:var(--text-hi);word-break:break-all">' + (to ? esc(to) : '<span style="font-weight:600;color:var(--text-low)">type it in your mail app</span>') + "</div>" +
+        '<div style="' + lbl + '">Subject</div><div style="font-size:13px;color:var(--text-hi)">' + esc(subj) + "</div>" +
         '<div style="' + lbl + '">Message</div><div style="font-size:12.5px;line-height:1.5;color:var(--text-low);white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto">' + esc(mbody) + "</div>" +
-        '<div style="display:flex;gap:8px"><button id="vc-sl-cpm" style="' + sheetBtnCss + blVioletBtn + ';flex:1">Copy message</button>' +
-        '<button id="vc-sl-cpl" style="' + sheetBtnCss + ';justify-content:center;flex:1">Copy link</button></div>' +
-        '<div style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.45">Paste it into WhatsApp, SMS, email or anywhere else.</div></div>';
+        '<div style="display:flex;gap:8px;margin-top:10px" id="vc-sl-mailrow">' + mailRow + "</div>" +
+        '<div style="display:flex;gap:8px;margin-top:8px"><button id="vc-sl-cpm" style="' + sheetBtnCss + ';justify-content:center;flex:1;margin-top:0">Copy message</button>' +
+        '<button id="vc-sl-cpl" style="' + sheetBtnCss + ';justify-content:center;flex:1;margin-top:0">Copy link</button></div>' +
+        '<div style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.45">Did not open, or opened empty? Tap a button above, or Copy message and paste it in.</div></div>';
       box.style.display = "block";
       $("#vc-sl-cpm").addEventListener("click", function () { copyText(mbody, this, "Copy message"); });
       $("#vc-sl-cpl").addEventListener("click", function () { copyText(url, this, "Copy link"); });
       if (box.scrollIntoView) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      return { mt: mt, gm: gm, gw: gw, ios: ios, android: android };
     }
     function run(channel) {
       errEl.style.display = "none";
@@ -1803,19 +1880,34 @@
         if (w.err) { showErr(w.err); return; }
         wins = w.list;
       }
+      var fe = readFee();
+      if (fe.err) { showErr(fe.err); return; }
+      curFee = fe.fee;
       var win = null;
       // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
-      if (channel === "wa") { try { win = window.open("", "_blank"); } catch (e) {} }
+      // Email on a computer opens Gmail's compose window in a tab opened inside the tap.
+      var mailPc = channel === "mail" && !/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || "");
+      if (channel === "wa" || mailPc) { try { win = window.open("", "_blank"); } catch (e) {} }
       // Making the link takes a moment: say so on the button that was tapped, so nobody wonders if anything is happening.
-      var tapped = $(channel === "wa" ? "#vc-sl-wa" : channel === "msg" ? "#vc-sl-msg" : "#vc-sl-copy");
+      var tapped = $(channel === "wa" ? "#vc-sl-wa" : channel === "mail" ? "#vc-sl-email" : "#vc-sl-copy");
       var tappedHtml = tapped.innerHTML;
       tapped.disabled = true; tapped.style.opacity = ".75"; tapped.innerHTML = "<span>Making your link…</span>";
       var unbusy = function () { tapped.disabled = false; tapped.style.opacity = ""; tapped.innerHTML = tappedHtml; };
-      getLink(f, wins).then(function (url) {
+      getLink(f, wins, curFee).then(function (url) {
         unbusy();
         track("share");
         var mbody = msgFor(f, url);
-        if (channel === "msg") { showReady(f, url, mbody); return; }
+        if (channel === "mail") {
+          // The message is already written into the email: To, subject and body, ready to press send.
+          var L = showReady(f, url, mbody);
+          if (mailPc) { if (win) win.location.href = L.gw; else window.location.href = L.gw; }
+          else if (L.ios) {
+            // Gmail's own link fills the draft properly; if Gmail is not installed the page stays visible, so fall back to Mail.
+            window.location.href = L.gm;
+            setTimeout(function () { if (!document.hidden) window.location.href = L.mt; }, 1600);
+          } else window.location.href = L.mt;
+          return;
+        }
         if (channel === "wa") {
           var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(mbody);
           if (win) win.location.href = href; else window.location.href = href;
@@ -1838,12 +1930,13 @@
       for (var i = 0; i < rows.length; i++) {
         wins.push({ d: rows[i].querySelector('[data-f="d"]').value, s: rows[i].querySelector('[data-f="s"]').value, e: rows[i].querySelector('[data-f="e"]').value, r: !!rows[i].__range });
       }
-      draftSave(slDraft, { name: $("#vc-sl-name").value, to: $("#vc-sl-to").value, minutes: minutes, when: when, wins: wins });
+      draftSave(slDraft, { name: $("#vc-sl-name").value, to: $("#vc-sl-to").value, minutes: minutes, when: when, wins: wins, feeOn: feeOn, fee: $("#vc-sl-feeamt").value });
     };
     var dr = draftLoad(slDraft);
     if (dr.name && !$("#vc-sl-name").value) $("#vc-sl-name").value = dr.name;
     if (dr.to && !$("#vc-sl-to").value) $("#vc-sl-to").value = dr.to;
     if ([15, 30, 45, 60].indexOf(+dr.minutes) > -1) { minutes = +dr.minutes; paintMins(); }
+    if (dr.feeOn && Number(dr.fee) > 0) { feeOn = true; feeIn.value = String(Math.round(Number(dr.fee))); paintFee(); }
     if (dr.when === "own" && dr.wins && dr.wins.length) {
       var today = ymd(new Date());
       dr.wins.forEach(function (w) { if (w && w.d >= today) addRow(w.d, w.s || "10:00", w.e || "", !!w.r); });
@@ -1853,7 +1946,7 @@
     s.panel.addEventListener("click", function () { setTimeout(saveSend, 0); });
     $("#vc-sl-wa").addEventListener("click", function () { run("wa"); });
     $("#vc-sl-copy").addEventListener("click", function () { run("copy"); });
-    $("#vc-sl-msg").addEventListener("click", function () { run("msg"); });
+    $("#vc-sl-email").addEventListener("click", function () { run("mail"); });
     return s;
   }
 
@@ -2087,7 +2180,8 @@
       '<div style="width:56px;height:56px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 12px">✓</div>' +
       '<div class="vcw-h1" style="margin:0 0 6px">You\'re booked</div>' +
       '<div style="font-size:16px;font-weight:800">' + esc(blWhen(d.start)) + "</div>" +
-      '<div style="font-size:13.5px;color:var(--text-low);margin-top:4px">with ' + esc(who) + " · " + esc(d.meeting || "Google Meet") + "</div>" + b +
+      '<div style="font-size:13.5px;color:var(--text-low);margin-top:4px">with ' + esc(who) + " · " + esc(d.meeting || "Google Meet") + "</div>" +
+      (d.amount_due ? '<div style="font-size:13.5px;color:var(--text-hi);font-weight:700;margin-top:6px">Fee ₹' + esc(String(d.amount_due)) + ' <span style="font-weight:500;color:var(--text-low)">· payable to ' + esc(who) + " at the meeting</span></div>" : "") + b +
       (d.meet_url ? "" : '<div style="font-size:13px;color:var(--text-low);line-height:1.5;margin-top:14px">' + esc(who) + " will send you the meeting link shortly.</div>") +
       '<div style="font-size:12px;color:var(--text-dim);margin-top:14px;line-height:1.5">' + esc(who) + " has been told." + (mail ? " A calendar invite is on its way to " + esc(mail) + "." : "") + "</div></div></div>";
   }
@@ -2199,7 +2293,8 @@
         renderPicker({
           title: "Book a meeting", minutes: d.minutes || 0,
           who: d.advocate ? (/^adv(ocate)?\.?\s/i.test(d.advocate) ? d.advocate : "Adv. " + d.advocate) : blWho(),
-          intro: (first ? "Hi <b style=\"color:var(--text-hi)\">" + esc(first) + "</b>, pick" : "Pick") + " a time for your video meeting with <b style=\"color:var(--text-hi)\">" + esc(d.advocate || "your advocate") + "</b>.",
+          intro: (first ? "Hi <b style=\"color:var(--text-hi)\">" + esc(first) + "</b>, pick" : "Pick") + " a time for your video meeting with <b style=\"color:var(--text-hi)\">" + esc(d.advocate || "your advocate") + "</b>." +
+            (d.amount_due ? ' <span style="display:block;margin-top:8px;padding:8px 10px;border-radius:12px;border:1px solid var(--hairline-strong);background:var(--glass-thick);color:var(--text-hi);font-weight:700">Fee: ₹' + esc(String(d.amount_due)) + ' <span style="font-weight:500;color:var(--text-low)">· payable to the advocate at the meeting</span></span>' : ""),
           slots: d.slots,
           badge: (d.minutes ? d.minutes + " min · " : "") + (d.meeting || "Google Meet") + " link is created for you",
           askDetails: true, nameVal: d.client_name, hasEmail: d.has_email, cta: "Confirm meeting",
@@ -2228,7 +2323,8 @@
       '<div style="width:46px;height:46px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px">✓</div>' +
       '<div style="font-size:16px;font-weight:800;margin-top:6px">You\'re booked</div>' +
       '<div style="font-size:14px;font-weight:700;color:var(--text-hi)">' + esc(blWhen(d.start)) + "</div>" +
-      '<div style="font-size:12.5px;color:var(--text-low)">with ' + esc(who) + " · " + esc(d.meeting || "Google Meet") + "</div></div>";
+      '<div style="font-size:12.5px;color:var(--text-low)">with ' + esc(who) + " · " + esc(d.meeting || "Google Meet") + "</div>" +
+      (d.amount_due ? '<div style="font-size:12.5px;color:var(--text-hi);font-weight:700;margin-top:4px">Fee ₹' + esc(String(d.amount_due)) + ' <span style="font-weight:500;color:var(--text-low)">· payable to ' + esc(who) + " at the meeting</span></div>" : "") + "</div>";
     if (d.meet_url) {
       body += '<a href="' + esc(d.meet_url) + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + blVioletBtn + ';margin-top:14px">' + blIco.video + "Join " + esc(d.meeting || "Google Meet") + "</a>";
     } else {

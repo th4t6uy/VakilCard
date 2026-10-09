@@ -757,6 +757,20 @@ function linkBusyDays(customWindows) {
   return Math.max(14, Math.min(31, Math.ceil((last - Date.now()) / 86400000) + 1));
 }
 
+// The fee a booking link asks for (founder, 9 Oct 2026). When the lawyer chose a fee for THIS link (fee_set) that choice wins,
+// including "no fee"; links made before this existed keep falling back to his usual consultation fee on the card.
+// VakilCard never collects it: it is payable to the advocate at the meeting.
+function linkFee(link, profile) {
+  if (link && link.fee_set) return Number(link.fee_inr) > 0 ? Math.round(Number(link.fee_inr)) : null;
+  return profile && profile.payment ? Number(profile.payment.consultation_fee) || null : null;
+}
+function cleanFee(raw) {
+  if (raw === undefined || raw === null || raw === "") return { ok: true, patch: {} };
+  const n = Math.round(Number(raw));
+  if (!isFinite(n) || n < 0 || n > 1000000) return { ok: false };
+  return { ok: true, patch: { fee_set: true, fee_inr: n > 0 ? n : null } };
+}
+
 async function loadLink(username, token) {
   const profile = await loadPublicProfile(username);
   const tk = String(token || "").replace(/[^A-Za-z0-9_-]/g, "").slice(0, 40);
@@ -1174,7 +1188,7 @@ module.exports = async function handler(req, res) {
         timezone: "Asia/Kolkata",
         expires_at: L.link.expires_at,
         slots,
-        amount_due: L.profile.payment ? Number(L.profile.payment.consultation_fee) || null : null,
+        amount_due: linkFee(L.link, L.profile),
       });
     }
 
@@ -1209,7 +1223,7 @@ module.exports = async function handler(req, res) {
         if (!claimed || !claimed.length) return json(res, 409, { error: "link_used" });
       }
 
-      const amountInr = profile.payment ? Number(profile.payment.consultation_fee) || null : null;
+      const amountInr = linkFee(link, profile);
       const manageToken = newToken(12);
       let saved;
       try {
@@ -1587,6 +1601,8 @@ module.exports = async function handler(req, res) {
       // The lawyer may pick his own times for this link (even outside his weekly hours); then no weekly hours are needed.
       const custom = cleanCustomWindows(b.custom_windows).filter((w) => new Date(w.end).getTime() > Date.now() && new Date(w.start).getTime() < Date.now() + MAX_AHEAD_MS);
       if (Array.isArray(b.custom_windows) && b.custom_windows.length && !custom.length) return json(res, 400, { error: "bad_windows" });
+      const fee = cleanFee(b.fee_inr);
+      if (!fee.ok) return json(res, 400, { error: "bad_fee" });
       if (!custom.length && !sanitizeBookingWindows(profile.booking_windows).length) return json(res, 409, { error: "no_hours" });
       const access = await calendarAccess(profile);
       if (!access) return json(res, 409, { error: "calendar_not_connected" });
@@ -1606,6 +1622,7 @@ module.exports = async function handler(req, res) {
           duration_minutes: DURATIONS.includes(Number(b.duration_minutes)) ? Number(b.duration_minutes) : null,
           reusable,
           ...(custom.length ? { custom_windows: custom } : {}),
+          ...fee.patch,
           ...(reusable
             ? { expires_at: new Date(Date.now() + 90 * 86400000).toISOString() }
             : custom.length

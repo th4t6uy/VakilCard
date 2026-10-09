@@ -82,11 +82,29 @@ assert(/Pick my own times/.test(mountSrc) && /custom_windows/.test(mountSrc), "s
 assert(/async function loadOwnerProfile[\s\S]{0,400}select=id,account_id,username,full_name,/.test(src), "owner profile select includes username and full_name");
 // Send sheet (9 Oct 2026): the Email button opened a blank mail app on iPhone, so it is gone; after the link is made a
 // "Ready to send" card shows the message with Copy buttons.
-assert(!/id="vc-sl-mail"/.test(mountSrc) && !/mailto:/.test(mountSrc.slice(mountSrc.indexOf("function showSendLinkSheet"), mountSrc.indexOf("CLIENT: one picker"))), "no Email button or mailto link in the send sheet");
-assert(/id="vc-sl-msg"/.test(mountSrc) && /Making your link/.test(mountSrc), "Get message button shows progress while the link is made");
-assert(/showReady\(f, url, mbody\)/.test(mountSrc) && /Ready to send/.test(mountSrc) && /Copy message/.test(mountSrc), "Ready-to-send card with Copy message");
+assert(!/id="vc-sl-mail"/.test(mountSrc) && /googlegmail:\/\/\/co\?to=/.test(mountSrc) && /"mailto:" \+ blEnc\(to\)/.test(mountSrc), "no blank-opening Email button; Ready box offers Gmail and the mail app as real links");
+assert(/id="vc-sl-email"/.test(mountSrc) && /run\("mail"\)/.test(mountSrc) && /Making your link/.test(mountSrc), "Send email button makes the link, opens the email with the message filled in, and shows progress");
+assert(/showReady\(f, url, mbody\)/.test(mountSrc) && /Email ready/.test(mountSrc) && /Copy message/.test(mountSrc), "Email ready card with Copy message");
 // Wide-screen booking page (9 Oct 2026): Calendly-style page for computers, apps cross-sell, phones keep the sheet.
 assert(/function isWide\(\)/.test(mountSrc) && /if \(isWide\(\)\) return renderWebPicker\(opts\)/.test(mountSrc), "picker switches to the web page on wide screens");
 assert(/VP_APPS = \[/.test(mountSrc) && /Get your own free VakilCard/.test(mountSrc) && /utm_source=vakilcard/.test(mountSrc), "web page and done sheet carry the Vakilpedia apps and a VakilCard sign-up link");
 assert(/if \(isWide\(\)\) return renderWebDone/.test(mountSrc) && /if \(isWide\(\)\) return webDead/.test(mountSrc), "done and dead-link screens have wide versions");
+// Fee per link (9 Oct 2026): the lawyer chooses no fee or an amount for each link; it overrides his usual fee for that link only.
+{
+  const from = src.indexOf("function linkFee");
+  const to = src.indexOf("async function loadLink");
+  assert(from > 0 && to > from, "fee helpers exist");
+  const fh = new Function(src.slice(from, to) + "\nreturn { linkFee, cleanFee };")();
+  const prof = { payment: { consultation_fee: 2000 } };
+  assert.strictEqual(fh.linkFee({ fee_set: false }, prof), 2000, "old links keep the usual fee");
+  assert.strictEqual(fh.linkFee({ fee_set: true, fee_inr: null }, prof), null, "no fee chosen for this link wins over the usual fee");
+  assert.strictEqual(fh.linkFee({ fee_set: true, fee_inr: 750 }, prof), 750, "chosen amount wins");
+  assert.deepStrictEqual(fh.cleanFee(undefined), { ok: true, patch: {} });
+  assert.deepStrictEqual(fh.cleanFee(0), { ok: true, patch: { fee_set: true, fee_inr: null } });
+  assert.deepStrictEqual(fh.cleanFee("1500"), { ok: true, patch: { fee_set: true, fee_inr: 1500 } });
+  assert.strictEqual(fh.cleanFee(-5).ok, false);
+  assert.strictEqual(fh.cleanFee(99999999).ok, false);
+  assert(/amount_due: linkFee\(L\.link, L\.profile\)/.test(src) && /const amountInr = linkFee\(link, profile\)/.test(src), "link_info and link_book use the link's fee");
+  assert(/id="vc-sl-fee"/.test(mountSrc) && /fee_inr: fee \|\| 0/.test(mountSrc) && /payable to me at the meeting/.test(mountSrc), "send sheet lets the lawyer choose a fee and tells the client");
+}
 console.log("vakilcard-booking-links: ok");
