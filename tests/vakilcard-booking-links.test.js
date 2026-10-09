@@ -32,11 +32,11 @@ assert(src.indexOf('action === "link_book"') > 0 && src.indexOf('action === "lin
 assert(src.indexOf('action === "create_link"') > gate, "create_link must need the owner session");
 // Creating a link is Pro and needs a writable calendar.
 const cl = src.slice(src.indexOf('action === "create_link"'));
-const clBody = cl.slice(0, 3000);
+const clBody = cl.slice(0, 4000);
 assert(!/requirePro\(res, profile, "booking"\)/.test(clBody.split("reusable")[0]), "a plain booking link is FREE: no Pro check before the reusable branch");
 assert(/reusable[\s\S]{0,200}requirePro/.test(clBody), "reusable links stay Pro");
 assert(/no_hours/.test(clBody) && /calendar_not_connected/.test(clBody), "needs weekly hours and a connected calendar");
-assert(/calendar_not_connected/.test(cl.slice(0, 900)));
+assert(/calendar_not_connected/.test(cl.slice(0, 2200)));
 // The link is claimed atomically (status=eq.open) before a booking row is written.
 assert(/vakilcard_booking_links\?id=eq\.\$\{link\.id\}&status=eq\.open/.test(src));
 // Owner bridge: a card shown on www must still recognise its owner (sign-in lives on the dashboard host).
@@ -46,4 +46,35 @@ assert(!/refresh_token:\s*rt\s*\)?\s*[,}]\s*\n?\s*\}?\s*,\s*"/.test(bridge) && !
 const mountSrc = fs.readFileSync(path.join(__dirname, "../design_system/vakilcard/mount.js"), "utf8");
 assert(/owner-bridge\.html/.test(mountSrc) && /askDashboard\(\)/.test(mountSrc), "mount.js asks the dashboard host when the card is on another origin");
 assert(/owner-bridge\.html/.test(fs.readFileSync(path.join(__dirname, "../scripts/build-vakilcard-ds.cjs"), "utf8")), "build copies the bridge");
+
+// Per-link "my own times" (9 Oct 2026): functional check of the pure helpers pulled out of booking.js.
+{
+  const from = src.indexOf("const MAX_CUSTOM_WINDOWS");
+  const to = src.indexOf("function linkBusyDays");
+  assert(from > 0 && to > from, "custom-window helpers exist");
+  const helpers = new Function(src.slice(from, to) + "\nreturn { cleanCustomWindows, customLinkSlots };")();
+  const t0 = Date.now() + 3 * 86400000; // three days ahead, so nothing is in the past
+  const w = (h1, h2) => ({ start: new Date(t0 + h1 * 3600000).toISOString(), end: new Date(t0 + h2 * 3600000).toISOString() });
+  assert.strictEqual(helpers.cleanCustomWindows("nope").length, 0);
+  assert.strictEqual(helpers.cleanCustomWindows([{ start: "x", end: "y" }, w(2, 1)]).length, 0, "bad or reversed windows are dropped");
+  assert.strictEqual(helpers.cleanCustomWindows([w(0, 20)]).length, 0, "a window longer than 14 hours is dropped");
+  assert.strictEqual(helpers.cleanCustomWindows(Array.from({ length: 20 }, (_, i) => w(i, i + 1))).length, 10, "at most ten windows");
+  const slots = helpers.customLinkSlots([w(0, 2)], 30, []);
+  assert.strictEqual(slots.length, 4, "a two hour window gives four 30-minute slots");
+  const blocked = helpers.customLinkSlots([w(0, 2)], 30, [{ start: w(0.5, 1).start, end: w(0.5, 1).end }]);
+  assert.strictEqual(blocked.length, 3, "a busy half hour removes exactly one slot");
+  assert.strictEqual(helpers.customLinkSlots([w(0, 2)], 60, []).length, 2, "meeting length sets the step");
+  const past = helpers.customLinkSlots([{ start: new Date(Date.now() - 3600000).toISOString(), end: new Date(Date.now() + 3600000).toISOString() }], 30, []);
+  assert(past.every((x) => new Date(x.start).getTime() > Date.now()), "never offers a slot already past");
+  // create_link takes custom windows in place of weekly hours; link_info / link_book both honour them.
+  assert(/custom\.length && !sanitizeBookingWindows|!custom\.length && !sanitizeBookingWindows/.test(src), "no weekly hours needed when the lawyer picks his own times");
+  assert(/linkSlots\(L\.profile, L\.link\.duration_minutes,[^;]*L\.link\.custom_windows\)/.test(src), "link_info uses the link's own windows");
+  assert(/linkSlots\(profile, link\.duration_minutes,[^;]*link\.custom_windows\)/.test(src), "link_book re-checks against the link's own windows");
+}
+// The card recognises its owner who is signed in to Vakilpedia only (shared cookie), without making anyone an account.
+const authSrc = fs.readFileSync(path.join(__dirname, "../api/vakilcard/auth.js"), "utf8");
+assert(/body\.only_profile[\s\S]{0,400}found: false[\s\S]{0,600}owner: true/.test(authSrc), "owner probe returns only for the card's owner");
+assert(/only_profile[\s\S]{0,700}const \{ access, refresh \} = await issueTokens/.test(authSrc), "owner probe returns before any refresh token is issued");
+assert(/trySuite/.test(mountSrc) && /only_profile: boot\.profileId/.test(mountSrc), "mount.js falls back to the Vakilpedia login");
+assert(/Pick my own times/.test(mountSrc) && /custom_windows/.test(mountSrc), "send sheet lets the lawyer pick his own times");
 console.log("vakilcard-booking-links: ok");

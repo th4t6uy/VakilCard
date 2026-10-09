@@ -681,8 +681,8 @@ const newToken = (n = 9) => crypto.randomBytes(n).toString("base64url");
 
 /** Busy ranges that block a link slot: the lawyer's calendar PLUS meetings we already hold (so a
  *  calendar hiccup can never double-book). `exceptId` keeps a meeting from blocking its own move. */
-async function profileBusy(profile, exceptId) {
-  const busy = await freeBusy(profile, { days: 14 });
+async function profileBusy(profile, exceptId, days = 14) {
+  const busy = await freeBusy(profile, { days });
   try {
     const rows = await db(
       `vakilcard_appointment_requests?profile_id=eq.${profile.id}&status=in.(pending,confirmed)` +
@@ -700,17 +700,61 @@ async function profileBusy(profile, exceptId) {
 
 /** Bookable slots for one link: lawyer's weekly hours, the link's meeting length, the gap between
  *  meetings and the minimum notice. */
-function linkSlots(profile, durationMinutes, busy) {
+function linkSlots(profile, durationMinutes, busy, customWindows) {
   const dur = DURATIONS.includes(Number(durationMinutes)) ? Number(durationMinutes) : null;
+  const custom = cleanCustomWindows(customWindows);
   let windows = sanitizeBookingWindows(profile.booking_windows);
   if (dur) windows = windows.map((w) => Object.assign({}, w, { slot_minutes: dur }));
   const gap = (BUFFERS.includes(Number(profile.booking_buffer_minutes)) ? Number(profile.booking_buffer_minutes) : 0) * 60000;
   const padded = gap
     ? busy.map((b) => ({ start: new Date(new Date(b.start).getTime() - gap).toISOString(), end: new Date(new Date(b.end).getTime() + gap).toISOString() }))
     : busy;
+  // The lawyer chose these times for this one link himself, so his weekly hours and minimum notice do not apply;
+  // calendar busy times (plus the gap between meetings) still do.
+  if (custom.length) return customLinkSlots(custom, dur || 30, padded);
   const noticeH = NOTICES.includes(Number(profile.booking_min_notice_hours)) ? Number(profile.booking_min_notice_hours) : 4;
   const cutoff = Date.now() + noticeH * 3600000;
   return expandBookingSlots(windows, { days: 14, busy: padded }).filter((s) => new Date(s.start).getTime() >= cutoff);
+}
+
+/** Per-link "my own times" (founder, 9 Oct 2026): absolute {start,end} ISO windows the lawyer picks when he
+ *  sends a link, even outside his weekly hours. His weekly hours keep governing clients who book from the card. */
+const MAX_CUSTOM_WINDOWS = 10;
+const MAX_WINDOW_MS = 14 * 3600000;
+const MAX_AHEAD_MS = 30 * 86400000;
+function cleanCustomWindows(input) {
+  if (!Array.isArray(input)) return [];
+  const out = [];
+  for (const w of input) {
+    const a = w && new Date(w.start).getTime(), b = w && new Date(w.end).getTime();
+    if (!Number.isFinite(a) || !Number.isFinite(b) || b <= a || b - a > MAX_WINDOW_MS) continue;
+    out.push({ start: new Date(a).toISOString(), end: new Date(b).toISOString() });
+    if (out.length >= MAX_CUSTOM_WINDOWS) break;
+  }
+  return out.sort((x, y) => x.start.localeCompare(y.start));
+}
+function customLinkSlots(windows, stepMinutes, busy) {
+  const step = stepMinutes * 60000, now = Date.now();
+  const ranges = busy.map((b) => ({ s: new Date(b.start).getTime(), e: new Date(b.end).getTime() })).filter((b) => Number.isFinite(b.s) && Number.isFinite(b.e));
+  const seen = new Set(), out = [];
+  for (const w of windows) {
+    const ws = new Date(w.start).getTime(), we = new Date(w.end).getTime();
+    for (let t = ws; t + step <= we; t += step) {
+      if (t <= now || seen.has(t)) continue;
+      if (ranges.some((r) => t < r.e && t + step > r.s)) continue;
+      seen.add(t);
+      out.push({ start: new Date(t).toISOString(), end: new Date(t + step).toISOString() });
+    }
+  }
+  out.sort((x, y) => x.start.localeCompare(y.start));
+  return out.slice(0, 200);
+}
+/** How many days of calendar busy-time a link needs: 14, or further when its own windows reach beyond that. */
+function linkBusyDays(customWindows) {
+  const c = cleanCustomWindows(customWindows);
+  if (!c.length) return 14;
+  const last = Math.max(...c.map((w) => new Date(w.end).getTime()));
+  return Math.max(14, Math.min(31, Math.ceil((last - Date.now()) / 86400000) + 1));
 }
 
 async function loadLink(username, token) {
@@ -1119,7 +1163,7 @@ module.exports = async function handler(req, res) {
       const L = await loadLink(req.query.username, req.query.token);
       if (L.error) return json(res, L.status, { error: L.error, name: L.profile ? L.profile.full_name : null });
       const prov = meeting.pickProvider(L.link.meeting_provider);
-      const slots = linkSlots(L.profile, L.link.duration_minutes, await profileBusy(L.profile));
+      const slots = linkSlots(L.profile, L.link.duration_minutes, await profileBusy(L.profile, undefined, linkBusyDays(L.link.custom_windows)), L.link.custom_windows);
       return json(res, 200, {
         ok: true,
         advocate: L.profile.full_name || null,
@@ -1144,7 +1188,7 @@ module.exports = async function handler(req, res) {
       const startsAt = b.start ? new Date(b.start) : null;
       if (!startsAt || isNaN(startsAt.getTime())) return json(res, 400, { error: "invalid_slot" });
       // Only a time we are really offering (inside the lawyer's hours, not busy, past the notice) can be taken.
-      const offered = linkSlots(profile, link.duration_minutes, await profileBusy(profile));
+      const offered = linkSlots(profile, link.duration_minutes, await profileBusy(profile, undefined, linkBusyDays(link.custom_windows)), link.custom_windows);
       const slot = offered.find((x) => new Date(x.start).getTime() === startsAt.getTime());
       if (!slot) return json(res, 409, { error: "slot_taken" });
       const clientName = str(b.client_name, 120) || (link.reusable ? null : link.client_name);
@@ -1540,7 +1584,10 @@ module.exports = async function handler(req, res) {
       if (reusable && !requirePro(res, profile, "booking")) return;
       const clientName = str(b.client_name, 120);
       if (!clientName && !reusable) return json(res, 400, { error: "name_required" });
-      if (!sanitizeBookingWindows(profile.booking_windows).length) return json(res, 409, { error: "no_hours" });
+      // The lawyer may pick his own times for this link (even outside his weekly hours); then no weekly hours are needed.
+      const custom = cleanCustomWindows(b.custom_windows).filter((w) => new Date(w.end).getTime() > Date.now() && new Date(w.start).getTime() < Date.now() + MAX_AHEAD_MS);
+      if (Array.isArray(b.custom_windows) && b.custom_windows.length && !custom.length) return json(res, 400, { error: "bad_windows" });
+      if (!custom.length && !sanitizeBookingWindows(profile.booking_windows).length) return json(res, 409, { error: "no_hours" });
       const access = await calendarAccess(profile);
       if (!access) return json(res, 409, { error: "calendar_not_connected" });
       if (!access.canWrite) return json(res, 409, { error: "reconnect_required" });
@@ -1558,7 +1605,12 @@ module.exports = async function handler(req, res) {
           meeting_provider: prov.key,
           duration_minutes: DURATIONS.includes(Number(b.duration_minutes)) ? Number(b.duration_minutes) : null,
           reusable,
-          ...(reusable ? { expires_at: new Date(Date.now() + 90 * 86400000).toISOString() } : {}),
+          ...(custom.length ? { custom_windows: custom } : {}),
+          ...(reusable
+            ? { expires_at: new Date(Date.now() + 90 * 86400000).toISOString() }
+            : custom.length
+              ? { expires_at: custom[custom.length - 1].end > new Date(Date.now() + 7 * 86400000).toISOString() ? custom[custom.length - 1].end : new Date(Date.now() + 7 * 86400000).toISOString() }
+              : {}),
         },
         prefer: "return=representation",
       });

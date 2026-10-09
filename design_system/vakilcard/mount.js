@@ -1538,7 +1538,12 @@
 
   function showSendLinkSheet() {
     var isPro = !!(boot.profile && boot.profile.pro);
-    var minutes = 30, reusable = false;
+    var minutes = 30, reusable = false, when = "usual";
+    var CY = "#22d3ee"; // cyan = calendar things
+    var whenChip = function (on) {
+      return "padding:9px 0;flex:1;border-radius:12px;font-family:var(--font-sans);font-size:12.5px;font-weight:800;cursor:pointer;border:1.5px solid " +
+        (on ? CY : "var(--hairline)") + ";background:" + (on ? "rgba(34,211,238,.14)" : "var(--glass-thick)") + ";color:var(--text-hi)";
+    };
     var chip = function (on) {
       return "padding:8px 0;flex:1;border-radius:12px;font-family:var(--font-sans);font-size:12.5px;font-weight:800;cursor:pointer;border:1px solid " +
         (on ? "var(--violet-400)" : "var(--hairline)") + ";background:" + (on ? "var(--violet-400)" : "var(--glass-thick)") + ";color:" + (on ? "#fff" : "var(--text-hi)");
@@ -1549,6 +1554,14 @@
       '<input id="vc-sl-to" placeholder="WhatsApp number or email" autocomplete="off" autocapitalize="off" style="' + blInput + '">' +
       '<div style="display:flex;gap:6px;margin:2px 0 10px" id="vc-sl-mins">' +
       [15, 30, 45, 60].map(function (m) { return '<button type="button" data-m="' + m + '">' + m + " min</button>"; }).join("") +
+      "</div>" +
+      '<div style="font-size:11px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);margin:2px 0 6px">When can they meet?</div>' +
+      '<div style="display:flex;gap:6px;margin-bottom:8px" id="vc-sl-when">' +
+      '<button type="button" data-w="usual">My usual hours</button><button type="button" data-w="own">Pick my own times</button></div>' +
+      '<div id="vc-sl-own" style="display:none;margin-bottom:10px">' +
+      '<div id="vc-sl-rows"></div>' +
+      '<button type="button" id="vc-sl-addwin" style="width:100%;padding:9px 0;border-radius:12px;border:1.5px dashed ' + CY + ';background:transparent;color:var(--text-hi);font-family:var(--font-sans);font-size:12.5px;font-weight:800;cursor:pointer">+ Add another time</button>' +
+      '<div style="font-size:11px;color:var(--text-dim);line-height:1.45;margin-top:7px">These can be outside your usual hours. Only times your Google Calendar shows free are offered. Clients who book from your card still use your usual hours.</div>' +
       "</div>" +
       '<div style="display:flex;gap:6px;align-items:center;margin:0 0 12px;flex-wrap:wrap">' +
       '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:800;border:1px solid var(--violet-400);color:var(--text-hi)">' + blIco.video + "Google Meet</span>" +
@@ -1577,6 +1590,74 @@
     $("#vc-sl-mins").querySelectorAll("button").forEach(function (b) {
       b.addEventListener("click", function () { minutes = +b.getAttribute("data-m"); paintMins(); });
     });
+    /* ---- the lawyer's own times for this link ---- */
+    var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
+    var ymd = function (d) { return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
+    var winInput = "min-width:0;box-sizing:border-box;padding:10px 8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px;outline:none;color-scheme:dark";
+    var addRow = function (d, st, en) {
+      var row = document.createElement("div");
+      row.className = "vc-sl-row";
+      row.style.cssText = "padding:8px;margin-bottom:8px;border-radius:16px;border:1px solid var(--hairline);background:var(--glass-thick)";
+      var inp = winInput.replace("background:var(--glass-thick)", "background:transparent");
+      row.innerHTML =
+        '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">' +
+        '<input type="date" data-f="d" value="' + d + '" min="' + ymd(new Date()) + '" style="' + inp + ';flex:1">' +
+        '<button type="button" aria-label="Remove this time" style="flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--hairline);background:transparent;color:var(--text-low);font-size:16px;cursor:pointer;line-height:1">×</button>' +
+        "</div>" +
+        '<div style="display:flex;gap:6px;align-items:center">' +
+        '<input type="time" data-f="s" value="' + st + '" style="' + inp + ';flex:1">' +
+        '<span style="color:var(--text-dim);font-size:13px">to</span>' +
+        '<input type="time" data-f="e" value="' + en + '" style="' + inp + ';flex:1">' +
+        "</div>";
+      row.querySelector("button").addEventListener("click", function () {
+        var rows = $("#vc-sl-rows");
+        if (rows.children.length > 1) rows.removeChild(row);
+        else { row.querySelector('[data-f="s"]').value = "10:00"; row.querySelector('[data-f="e"]').value = "13:00"; }
+      });
+      $("#vc-sl-rows").appendChild(row);
+    };
+    var addDefaultRow = function () {
+      var rows = $("#vc-sl-rows").children;
+      if (!rows.length) { var t = new Date(); t.setDate(t.getDate() + 1); addRow(ymd(t), "10:00", "13:00"); return; }
+      var last = rows[rows.length - 1];
+      var base = new Date((last.querySelector('[data-f="d"]').value || ymd(new Date())) + "T12:00");
+      if (isNaN(base.getTime())) base = new Date();
+      base.setDate(base.getDate() + 1);
+      addRow(ymd(base), last.querySelector('[data-f="s"]').value || "10:00", last.querySelector('[data-f="e"]').value || "13:00");
+    };
+    // Returns { list } on success or { err } — absolute ISO windows in the lawyer's own time zone.
+    var readWindows = function () {
+      var list = [], rows = $("#vc-sl-rows").children;
+      for (var i = 0; i < rows.length; i++) {
+        var d = rows[i].querySelector('[data-f="d"]').value, st = rows[i].querySelector('[data-f="s"]').value, en = rows[i].querySelector('[data-f="e"]').value;
+        if (!d || !st || !en) return { err: "Fill in the date and both times, or remove that row." };
+        var a = new Date(d + "T" + st), b = new Date(d + "T" + en);
+        if (isNaN(a.getTime()) || isNaN(b.getTime())) return { err: "That date or time doesn't look right." };
+        if (b <= a) return { err: "The end time must be after the start time." };
+        if (b - a > 14 * 3600000) return { err: "Keep each time window to 14 hours or less." };
+        if (b.getTime() <= Date.now()) return { err: "Pick times that are still ahead of you." };
+        if (a.getTime() > Date.now() + 30 * 86400000) return { err: "Pick times within the next 30 days." };
+        list.push({ start: a.toISOString(), end: b.toISOString() });
+      }
+      return list.length ? { list: list } : { err: "Add at least one time." };
+    };
+    var paintWhen = function () {
+      $("#vc-sl-when").querySelectorAll("button").forEach(function (b) { b.style.cssText = whenChip(b.getAttribute("data-w") === when); });
+      $("#vc-sl-own").style.display = when === "own" ? "block" : "none";
+    };
+    paintWhen();
+    $("#vc-sl-when").querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () {
+        when = b.getAttribute("data-w");
+        if (when === "own" && !$("#vc-sl-rows").children.length) addDefaultRow();
+        paintWhen();
+      });
+    });
+    $("#vc-sl-addwin").addEventListener("click", function () {
+      if ($("#vc-sl-rows").children.length >= 10) { showErr("Ten times is the most for one link."); return; }
+      addDefaultRow();
+    });
+
     $("#vc-sl-reuse").addEventListener("click", function () {
       if (!isPro) { showErr("Reusable links are part of VakilCard Pro. " + blDashLink("Unlock with Pro →")); return; }
       reusable = !reusable;
@@ -1587,10 +1668,12 @@
       $("#vc-sl-name").placeholder = reusable ? "Label for you (optional)" : "Client's name";
     });
 
-    function getLink(f) {
-      var key = [f.name, f.phone, f.mail, minutes, reusable].join("|");
+    function getLink(f, wins) {
+      var key = [f.name, f.phone, f.mail, minutes, reusable, wins ? JSON.stringify(wins) : ""].join("|");
       if (made && made.key === key) return Promise.resolve(made.url);
-      return ownerCall({ action: "create_link", client_name: f.name, client_phone: f.phone, client_email: f.mail, duration_minutes: minutes, reusable: reusable }).then(function (r) {
+      var payload = { action: "create_link", client_name: f.name, client_phone: f.phone, client_email: f.mail, duration_minutes: minutes, reusable: reusable };
+      if (wins) payload.custom_windows = wins;
+      return ownerCall(payload).then(function (r) {
         if (r.d && r.d.ok) { made = { key: key, url: r.d.url }; return r.d.url; }
         var err = new Error("failed"); err.code = r.status === 402 ? "pro_required" : (r.d && r.d.error) || ""; throw err;
       });
@@ -1607,12 +1690,13 @@
     }
     function msgFor(f, url) {
       return (f.name && !reusable ? "Hello " + f.name + ", this is " : "Hello, this is ") + blWho() + ". Please pick a time that suits you for our " + minutes + "-minute video meeting (Google Meet):\n\n" + url +
-        "\n\n" + (reusable ? "You can use this link any time." : "This private link works for 7 days.");
+        "\n\n" + (when === "own" ? "I have opened these times just for you." : reusable ? "You can use this link any time." : "This private link works for 7 days.");
     }
     function failMsg(code) {
       if (code === "calendar_not_connected" || code === "reconnect_required")
         return "Connect your Google Calendar first — that is where the Meet link is made. " + blDashLink("Open dashboard →");
       if (code === "no_hours") return "Set the days and hours you take meetings first. " + blDashLink("Open dashboard →");
+      if (code === "bad_windows") return "Pick times that are still ahead of you, within the next 30 days.";
       if (code === "name_required") return "Add your client's name first.";
       if (code === "pro_required") return "Reusable links are part of VakilCard Pro. " + blDashLink("Unlock with Pro →");
       return "Couldn't make the link — please try again.";
@@ -1621,10 +1705,16 @@
       errEl.style.display = "none";
       var f = readForm();
       if (!f.name && !reusable) { showErr("Add your client's name first."); $("#vc-sl-name").focus(); return; }
+      var wins = null;
+      if (when === "own") {
+        var w = readWindows();
+        if (w.err) { showErr(w.err); return; }
+        wins = w.list;
+      }
       var win = null;
       // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
       if (channel === "wa") { try { win = window.open("", "_blank"); } catch (e) {} }
-      getLink(f).then(function (url) {
+      getLink(f, wins).then(function (url) {
         track("share");
         if (channel === "wa") {
           var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(msgFor(f, url));
@@ -1953,21 +2043,56 @@
     } catch (e) {}
     // The card on www.vakilpedia.com is a different origin from the dashboard, so it cannot read the
     // sign-in directly. Ask the dashboard host through a hidden frame (answers our own origins only).
+    // Last resort: the person is signed in to Vakilpedia (shared cookie on .vakilpedia.com) but has never opened
+    // the VakilCard dashboard in this browser, so there is no VakilCard sign-in to find. Ask the server whether
+    // the Vakilpedia login owns THIS card; only the owner gets a (short-lived) token back. Asked at most once
+    // per tab every 10 minutes so anonymous readers of a card do not cost a call on every view.
+    var suiteTried = false;
+    var trySuite = function () {
+      if (suiteTried || ownerViewing || !boot.profileId) return;
+      suiteTried = true;
+      var key = "vc_suite_probe_" + boot.profileId;
+      try {
+        var last = Number(sessionStorage.getItem(key) || 0);
+        if (last && Date.now() - last < 600000) return;
+        sessionStorage.setItem(key, String(Date.now()));
+      } catch (e) {}
+      fetch("/api/vakilcard/auth", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "bridge_from_suite", only_profile: boot.profileId }),
+      })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (d) {
+          if (!d || !d.found || !d.access_token) return;
+          var c4 = decodeJwt(d.access_token);
+          if (c4 && c4.pid === boot.profileId) {
+            bridgeToken = d.access_token;
+            showEditChip();
+          }
+        })
+        .catch(function () {});
+    };
     var askDashboard = function () {
       var dashOrigin = "";
       try { dashOrigin = new URL(boot.dash || "https://vakilcard.vakilpedia.com").origin; } catch (e) {}
-      if (!dashOrigin || dashOrigin === location.origin) return;
+      if (!dashOrigin || dashOrigin === location.origin) { trySuite(); return; }
       var fr = document.createElement("iframe");
+      var bridgeTimer = setTimeout(trySuite, 3500);
       fr.src = dashOrigin + "/ds/owner-bridge.html";
       fr.setAttribute("aria-hidden", "true");
       fr.tabIndex = -1;
       fr.style.cssText = "position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none";
       window.addEventListener("message", function (e) {
-        if (e.origin !== dashOrigin || !e.data || e.data.type !== "vc-owner" || !e.data.access_token) return;
-        var c3 = decodeJwt(e.data.access_token);
+        if (e.origin !== dashOrigin || !e.data || e.data.type !== "vc-owner") return;
+        clearTimeout(bridgeTimer);
+        var c3 = e.data.access_token ? decodeJwt(e.data.access_token) : null;
         if (c3 && c3.pid === boot.profileId && c3.exp * 1000 > Date.now()) {
           bridgeToken = e.data.access_token;
           showEditChip();
+        } else {
+          trySuite();
         }
       });
       fr.onload = function () {
@@ -1988,15 +2113,16 @@
       })
         .then(function (r) { return r.ok ? r.json() : null; })
         .then(function (d) {
-          if (!d || !d.access_token) return;
+          if (!d || !d.access_token) { askDashboard(); return; }
           try {
             localStorage.setItem("vc_access_token", d.access_token);
             if (d.refresh_token) localStorage.setItem("vc_refresh_token", d.refresh_token);
           } catch (e) {}
           var c2 = decodeJwt(d.access_token);
           if (c2 && c2.pid === boot.profileId) showEditChip();
+          else askDashboard();
         })
-        .catch(function () {});
+        .catch(function () { askDashboard(); });
     }
   }
 })();

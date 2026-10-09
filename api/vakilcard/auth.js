@@ -728,6 +728,20 @@ module.exports = async function handler(req, res) {
 
       const profiles = await db(`vakilcard_profiles?account_id=eq.${accountId}&select=id,username,is_published`);
       const profile = profiles[0] || null;
+      // Owner check for a public card (founder, 9 Oct 2026: "i'm logged in to Vakilpedia, viewing my own card").
+      // The card page asks "is the person signed in to Vakilpedia the owner of THIS card?". Only the owner gets
+      // anything back, and only a short-lived access token: no refresh row is written and no login is stamped,
+      // so a Vakilpedia user just reading somebody else's card leaves no trace and receives nothing.
+      if (body.only_profile) {
+        if (!profile || profile.id !== String(body.only_profile)) return json(res, 200, { ok: true, found: false });
+        return json(res, 200, {
+          ok: true,
+          found: true,
+          owner: true,
+          access_token: sign({ sub: accountId, pid: profile.id, typ: "access" }),
+          expires_in: ACCESS_TTL_SEC,
+        });
+      }
       const { access, refresh } = await issueTokens(accountId, profile && profile.id, req);
       await touchLogin(accountId);
       verification
