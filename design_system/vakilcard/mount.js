@@ -1599,7 +1599,10 @@
       (isPro ? "" : blIco.lock) + "Reusable link" + (isPro ? "" : " · Pro") + "</button>" +
       "</div>" +
       '<button id="vc-sl-wa" style="' + sheetBtnCss + blVioletBtn + ';margin-top:4px">' + nounIcon("whatsapp") + "Send on WhatsApp</button>" +
-      '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center">' + blIco.link + "<span>Copy link</span></button>" +
+      '<div style="display:flex;gap:8px">' +
+      '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.link + "<span>Copy link</span></button>" +
+      '<button id="vc-sl-msg" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12a8 8 0 0 1-11.6 7.1L4 20l1-4.6A8 8 0 1 1 21 12z"/><path d="M8.5 11h7M8.5 14h4"/></svg>' + "<span>Get message</span></button>" +
+      "</div>" +
       '<div id="vc-sl-ready" style="display:none"></div>' +
       '<div id="vc-sl-err" style="font-size:12px;color:var(--danger,#f66);margin-top:10px;line-height:1.45;display:none"></div>';
     var s = openSheet("Send a booking link", body);
@@ -1803,10 +1806,16 @@
       var win = null;
       // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
       if (channel === "wa") { try { win = window.open("", "_blank"); } catch (e) {} }
+      // Making the link takes a moment: say so on the button that was tapped, so nobody wonders if anything is happening.
+      var tapped = $(channel === "wa" ? "#vc-sl-wa" : channel === "msg" ? "#vc-sl-msg" : "#vc-sl-copy");
+      var tappedHtml = tapped.innerHTML;
+      tapped.disabled = true; tapped.style.opacity = ".75"; tapped.innerHTML = "<span>Making your link…</span>";
+      var unbusy = function () { tapped.disabled = false; tapped.style.opacity = ""; tapped.innerHTML = tappedHtml; };
       getLink(f, wins).then(function (url) {
+        unbusy();
         track("share");
         var mbody = msgFor(f, url);
-        showReady(f, url, mbody);
+        if (channel === "msg") { showReady(f, url, mbody); return; }
         if (channel === "wa") {
           var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(mbody);
           if (win) win.location.href = href; else window.location.href = href;
@@ -1815,6 +1824,7 @@
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () {});
         }
       }).catch(function (e) {
+        unbusy();
         if (win) { try { win.close(); } catch (x) {} }
         showErr(failMsg(e && e.code));
       });
@@ -1843,6 +1853,7 @@
     s.panel.addEventListener("click", function () { setTimeout(saveSend, 0); });
     $("#vc-sl-wa").addEventListener("click", function () { run("wa"); });
     $("#vc-sl-copy").addEventListener("click", function () { run("copy"); });
+    $("#vc-sl-msg").addEventListener("click", function () { run("msg"); });
     return s;
   }
 

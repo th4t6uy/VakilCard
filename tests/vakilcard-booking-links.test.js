@@ -83,6 +83,7 @@ assert(/async function loadOwnerProfile[\s\S]{0,400}select=id,account_id,usernam
 // Send sheet (9 Oct 2026): the Email button opened a blank mail app on iPhone, so it is gone; after the link is made a
 // "Ready to send" card shows the message with Copy buttons.
 assert(!/id="vc-sl-mail"/.test(mountSrc) && !/mailto:/.test(mountSrc.slice(mountSrc.indexOf("function showSendLinkSheet"), mountSrc.indexOf("CLIENT: one picker"))), "no Email button or mailto link in the send sheet");
+assert(/id="vc-sl-msg"/.test(mountSrc) && /Making your link/.test(mountSrc), "Get message button shows progress while the link is made");
 assert(/showReady\(f, url, mbody\)/.test(mountSrc) && /Ready to send/.test(mountSrc) && /Copy message/.test(mountSrc), "Ready-to-send card with Copy message");
 // Wide-screen booking page (9 Oct 2026): Calendly-style page for computers, apps cross-sell, phones keep the sheet.
 assert(/function isWide\(\)/.test(mountSrc) && /if \(isWide\(\)\) return renderWebPicker\(opts\)/.test(mountSrc), "picker switches to the web page on wide screens");
