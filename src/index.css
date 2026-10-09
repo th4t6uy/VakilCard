@@ -523,3 +523,14 @@ html[data-theme="dark"] {
   display: none !important;
 }
 /* === /VP-NIGHT === */
+
+/* iPhone / iPad Safari zooms the whole page when a field is focused and its text is under 16px (founder,
+   9 Oct 2026: the booking page jumped and stayed zoomed). Every field, dropdown and text box is 16px on
+   Apple touch devices; other browsers are untouched. */
+@supports (-webkit-touch-callout: none) {
+  input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="file"]),
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+}
