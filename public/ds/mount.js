@@ -881,6 +881,8 @@
       '<div id="vc-bk-err" style="font-size:11.5px;color:var(--danger,#f66);margin-top:6px;display:none"></div>';
 
     var s = openSheet("Confirm your details", body);
+    var bkDraft = "vc_draft_book_" + draftUser();
+    draftBind(bkDraft, { name: s.panel.querySelector("#vc-bk-name"), phone: s.panel.querySelector("#vc-bk-phone"), purpose: s.panel.querySelector("#vc-bk-purpose") });
     s.panel.querySelector("#vc-bk-submit").addEventListener("click", function () {
       var name = s.panel.querySelector("#vc-bk-name").value.trim();
       var phone = s.panel.querySelector("#vc-bk-phone").value.trim();
@@ -911,6 +913,7 @@
             errEl.style.display = "block";
             return;
           }
+          draftClear(bkDraft);
           // One outcome now. There is no payment step to branch into.
           renderRequestDone(
             d.amount_due
@@ -1524,6 +1527,32 @@
   function blDashUrl() { return ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;"); }
   function blDashLink(label) { return '<a href="' + blDashUrl() + '" target="_blank" rel="noopener" data-vc-native-link style="' + blLinkCss + '">' + label + "</a>"; }
 
+  /* ----- Drafts (founder, 9 Oct 2026): what someone has typed into a booking form is kept in THIS browser for
+     12 hours, so an accidental app close or a refresh does not mean starting again. Cleared once the form is
+     sent. Never leaves the device. ----- */
+  var DRAFT_TTL = 12 * 3600000;
+  function draftLoad(key) {
+    try {
+      var o = JSON.parse(localStorage.getItem(key) || "null");
+      if (o && o.t && Date.now() - o.t < DRAFT_TTL) return o.v || {};
+      if (o) localStorage.removeItem(key);
+    } catch (e) {}
+    return {};
+  }
+  function draftSave(key, v) { try { localStorage.setItem(key, JSON.stringify({ t: Date.now(), v: v })); } catch (e) {} }
+  function draftClear(key) { try { localStorage.removeItem(key); } catch (e) {} }
+  function draftUser() { return String((boot.profile && boot.profile.username) || "card").replace(/[^A-Za-z0-9_-]/g, ""); }
+  // Fill empty fields from the saved draft, then save every keystroke.
+  function draftBind(key, fields) {
+    var saved = draftLoad(key);
+    Object.keys(fields).forEach(function (k) {
+      var el = fields[k];
+      if (!el) return;
+      if (saved[k] != null && !el.value) el.value = saved[k];
+      el.addEventListener("input", function () { var cur = draftLoad(key); cur[k] = el.value; draftSave(key, cur); });
+    });
+  }
+
   /* ----- OWNER: the sheet ----- */
   var bridgeToken = ""; // owner sign-in handed over by the dashboard host (see owner-bridge.html)
   function ownerCall(body) {
@@ -1588,49 +1617,84 @@
     }
     paintMins();
     $("#vc-sl-mins").querySelectorAll("button").forEach(function (b) {
-      b.addEventListener("click", function () { minutes = +b.getAttribute("data-m"); paintMins(); });
+      b.addEventListener("click", function () { minutes = +b.getAttribute("data-m"); paintMins(); if (typeof syncAllRows === "function") syncAllRows(); });
     });
     /* ---- the lawyer's own times for this link ---- */
     var p2 = function (n) { return (n < 10 ? "0" : "") + n; };
     var ymd = function (d) { return d.getFullYear() + "-" + p2(d.getMonth() + 1) + "-" + p2(d.getDate()); };
     var winInput = "min-width:0;box-sizing:border-box;padding:10px 8px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-family:var(--font-sans);font-size:16px;outline:none;color-scheme:dark";
-    var addRow = function (d, st, en) {
+    // The meeting length is already chosen above, so a row is just a day and a START time; the end is worked
+    // out (start + length) and shown as "ends 10:30 AM". "Offer a range" reveals an end time for the lawyer who
+    // wants to open a longer stretch and let the client pick any slot inside it.
+    var endFor = function (st) {
+      var m = /^(\d\d):(\d\d)$/.exec(st || "");
+      if (!m) return "";
+      var tot = +m[1] * 60 + +m[2] + minutes;
+      if (tot > 1439) tot = 1439;
+      return p2(Math.floor(tot / 60)) + ":" + p2(tot % 60);
+    };
+    var syncRow = function (row) {
+      if (row.__range) return;
+      var e = endFor(row.querySelector('[data-f="s"]').value);
+      row.querySelector('[data-f="e"]').value = e;
+      row.querySelector("[data-endlbl]").textContent = e ? "ends " + blTime(new Date("1970-01-01T" + e)) : "";
+    };
+    var syncAllRows = function () {
+      var rows = $("#vc-sl-rows").children;
+      for (var i = 0; i < rows.length; i++) syncRow(rows[i]);
+    };
+    var addRow = function (d, st, en, range) {
       var row = document.createElement("div");
       row.className = "vc-sl-row";
+      row.__range = !!range;
       row.style.cssText = "padding:8px;margin-bottom:8px;border-radius:16px;border:1px solid var(--hairline);background:var(--glass-thick)";
       var inp = winInput.replace("background:var(--glass-thick)", "background:transparent");
+      var linkBtn = "flex:0 0 auto;padding:6px 4px;border:0;background:transparent;color:var(--text-low);font-family:var(--font-sans);font-size:12px;font-weight:800;text-decoration:underline;cursor:pointer";
       row.innerHTML =
         '<div style="display:flex;gap:6px;align-items:center;margin-bottom:6px">' +
         '<input type="date" data-f="d" value="' + d + '" min="' + ymd(new Date()) + '" style="' + inp + ';flex:1">' +
-        '<button type="button" aria-label="Remove this time" style="flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--hairline);background:transparent;color:var(--text-low);font-size:16px;cursor:pointer;line-height:1">×</button>' +
+        '<button type="button" data-rm aria-label="Remove this time" style="flex:0 0 auto;width:34px;height:34px;border-radius:50%;border:1px solid var(--hairline);background:transparent;color:var(--text-low);font-size:16px;cursor:pointer;line-height:1">×</button>' +
         "</div>" +
         '<div style="display:flex;gap:6px;align-items:center">' +
         '<input type="time" data-f="s" value="' + st + '" style="' + inp + ';flex:1">' +
-        '<span style="color:var(--text-dim);font-size:13px">to</span>' +
-        '<input type="time" data-f="e" value="' + en + '" style="' + inp + ';flex:1">' +
+        '<span data-endlbl style="flex:1;color:var(--text-dim);font-size:13px;font-weight:700"></span>' +
+        '<span data-tolbl style="color:var(--text-dim);font-size:13px;display:none">to</span>' +
+        '<input type="time" data-f="e" value="' + en + '" style="' + inp + ';flex:1;display:none">' +
+        '<button type="button" data-range style="' + linkBtn + '"></button>' +
         "</div>";
-      row.querySelector("button").addEventListener("click", function () {
+      var rangeBtn = row.querySelector("[data-range]");
+      var paintRange = function () {
+        row.querySelector("[data-endlbl]").style.display = row.__range ? "none" : "";
+        row.querySelector("[data-tolbl]").style.display = row.__range ? "" : "none";
+        row.querySelector('[data-f="e"]').style.display = row.__range ? "" : "none";
+        rangeBtn.textContent = row.__range ? "Single time" : "Offer a range";
+        syncRow(row);
+      };
+      rangeBtn.addEventListener("click", function () { row.__range = !row.__range; paintRange(); });
+      row.querySelector('[data-f="s"]').addEventListener("input", function () { syncRow(row); });
+      row.querySelector("[data-rm]").addEventListener("click", function () {
         var rows = $("#vc-sl-rows");
         if (rows.children.length > 1) rows.removeChild(row);
-        else { row.querySelector('[data-f="s"]').value = "10:00"; row.querySelector('[data-f="e"]').value = "13:00"; }
+        else { row.querySelector('[data-f="s"]').value = "10:00"; row.__range = false; paintRange(); }
       });
       $("#vc-sl-rows").appendChild(row);
+      paintRange();
     };
     var addDefaultRow = function () {
       var rows = $("#vc-sl-rows").children;
-      if (!rows.length) { var t = new Date(); t.setDate(t.getDate() + 1); addRow(ymd(t), "10:00", "13:00"); return; }
+      if (!rows.length) { var t = new Date(); t.setDate(t.getDate() + 1); addRow(ymd(t), "10:00", ""); return; }
       var last = rows[rows.length - 1];
       var base = new Date((last.querySelector('[data-f="d"]').value || ymd(new Date())) + "T12:00");
       if (isNaN(base.getTime())) base = new Date();
       base.setDate(base.getDate() + 1);
-      addRow(ymd(base), last.querySelector('[data-f="s"]').value || "10:00", last.querySelector('[data-f="e"]').value || "13:00");
+      addRow(ymd(base), last.querySelector('[data-f="s"]').value || "10:00", last.__range ? last.querySelector('[data-f="e"]').value : "", last.__range);
     };
     // Returns { list } on success or { err } — absolute ISO windows in the lawyer's own time zone.
     var readWindows = function () {
       var list = [], rows = $("#vc-sl-rows").children;
       for (var i = 0; i < rows.length; i++) {
         var d = rows[i].querySelector('[data-f="d"]').value, st = rows[i].querySelector('[data-f="s"]').value, en = rows[i].querySelector('[data-f="e"]').value;
-        if (!d || !st || !en) return { err: "Fill in the date and both times, or remove that row." };
+        if (!d || !st || !en) return { err: "Fill in the date and the start time, or remove that row." };
         var a = new Date(d + "T" + st), b = new Date(d + "T" + en);
         if (isNaN(a.getTime()) || isNaN(b.getTime())) return { err: "That date or time doesn't look right." };
         if (b <= a) return { err: "The end time must be after the start time." };
@@ -1674,7 +1738,7 @@
       var payload = { action: "create_link", client_name: f.name, client_phone: f.phone, client_email: f.mail, duration_minutes: minutes, reusable: reusable };
       if (wins) payload.custom_windows = wins;
       return ownerCall(payload).then(function (r) {
-        if (r.d && r.d.ok) { made = { key: key, url: r.d.url }; return r.d.url; }
+        if (r.d && r.d.ok) { made = { key: key, url: r.d.url }; draftClear(slDraft); sentOk = true; return r.d.url; }
         var err = new Error("failed"); err.code = r.status === 402 ? "pro_required" : (r.d && r.d.error) || ""; throw err;
       });
     }
@@ -1731,6 +1795,28 @@
         showErr(failMsg(e && e.code));
       });
     }
+    /* ---- keep what the lawyer has typed / chosen until the link is made ---- */
+    var slDraft = "vc_draft_send_" + draftUser();
+    var sentOk = false; // once the link exists the draft is gone; later taps (WhatsApp, Email) must not bring it back
+    var saveSend = function () {
+      if (sentOk) return;
+      var rows = $("#vc-sl-rows").children, wins = [];
+      for (var i = 0; i < rows.length; i++) {
+        wins.push({ d: rows[i].querySelector('[data-f="d"]').value, s: rows[i].querySelector('[data-f="s"]').value, e: rows[i].querySelector('[data-f="e"]').value, r: !!rows[i].__range });
+      }
+      draftSave(slDraft, { name: $("#vc-sl-name").value, to: $("#vc-sl-to").value, minutes: minutes, when: when, wins: wins });
+    };
+    var dr = draftLoad(slDraft);
+    if (dr.name && !$("#vc-sl-name").value) $("#vc-sl-name").value = dr.name;
+    if (dr.to && !$("#vc-sl-to").value) $("#vc-sl-to").value = dr.to;
+    if ([15, 30, 45, 60].indexOf(+dr.minutes) > -1) { minutes = +dr.minutes; paintMins(); }
+    if (dr.when === "own" && dr.wins && dr.wins.length) {
+      var today = ymd(new Date());
+      dr.wins.forEach(function (w) { if (w && w.d >= today) addRow(w.d, w.s || "10:00", w.e || "", !!w.r); });
+      if ($("#vc-sl-rows").children.length) { when = "own"; paintWhen(); syncAllRows(); }
+    }
+    s.panel.addEventListener("input", function () { sentOk = false; saveSend(); });
+    s.panel.addEventListener("click", function () { setTimeout(saveSend, 0); });
     $("#vc-sl-wa").addEventListener("click", function () { run("wa"); });
     $("#vc-sl-mail").addEventListener("click", function () { run("mail"); });
     $("#vc-sl-copy").addEventListener("click", function () { run("copy"); });
@@ -1775,6 +1861,8 @@
       "</div>";
     var s = openSheet(opts.title, body);
     var $ = function (id) { return s.panel.querySelector(id); };
+    var pkDraft = "vc_draft_pick_" + draftUser();
+    draftBind(pkDraft, { name: $("#vc-bl-name"), mail: $("#vc-bl-mail") });
 
     function paint() {
       $("#vc-bl-days").innerHTML = days.map(function (k) {
@@ -1815,7 +1903,7 @@
       if (!chosenSlot) return;
       btn.disabled = true; btn.textContent = "Please wait…";
       opts.submit(chosenSlot, name, mail).then(function (r) {
-        if (r.d && r.d.ok) return opts.onDone(r.d, mail);
+        if (r.d && r.d.ok) { draftClear(pkDraft); return opts.onDone(r.d, mail); }
         var e = (r.d && r.d.error) || "";
         fail((opts.errors && opts.errors[e]) || "Couldn't do that — please try again.");
         if (e === "slot_taken") { chosenSlot = null; $("#vc-bl-form").style.display = "none"; }
