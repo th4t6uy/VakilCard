@@ -15,6 +15,9 @@
   // stored session to THIS card. Drives owner-only education (e.g. the
   // greyed Pro pay preview on a Free card) — never anything visitor-facing.
   var ownerViewing = false;
+  // Set by the tile-label fixer below; the owner detection calls it once the owner is known so the
+  // Book tile can turn into the owner's "Send Link" tile (founder, 9 Oct 2026).
+  var refreshOwnerTiles = function () {};
 
   if (boot.theme === "light" || boot.theme === "dark") {
     document.documentElement.dataset.theme = boot.theme;
@@ -133,6 +136,9 @@
       else if (label.indexOf("whatsapp") === 0) { go = links.whatsapp; ev = "whatsapp"; newTab = true; }
       // "Book Appointment" (Payment section fallback wording) and the
       // CONNECT tile — now labelled just "Appointment" — both route here.
+      // The OWNER looking at their own card has no use for "Book a Meeting" -- that tile sends their
+      // own clients their time, so it opens the send-link sheet instead.
+      else if (ownerViewing && (label.indexOf("send link") === 0 || label.indexOf("book") === 0 || label.indexOf("appointment") === 0)) { showSendLinkSheet(); return; }
       else if (label.indexOf("book") === 0 || label.indexOf("appointment") === 0) { track("appointment"); showBookSheet(); return; }
       // Only the merged pill's "Pay Now" button reaches this branch now —
       // the CONNECT grid's duplicate "Pay UPI" tile was removed in favour
@@ -1446,8 +1452,15 @@
 
     var apply = function () {
       eachLabel(function (el, btn) {
-        if ((el.textContent || "").trim() === "Appointment") {
-          el.textContent = "Book a Meeting";
+        var txt = (el.textContent || "").trim();
+        if (txt === "Appointment") { el.textContent = "Book a Meeting"; txt = "Book a Meeting"; }
+        // Owner view: cyan (our calendar colour) outline, same fill, "Send Link".
+        if (ownerViewing && (txt === "Book a Meeting" || txt === "Send Link")) {
+          if (txt !== "Send Link") el.textContent = "Send Link";
+          btn.style.border = "1.5px solid #22d3ee";
+          btn.style.boxShadow = "0 0 0 3px rgba(34,211,238,.14), var(--inset-edge-soft)";
+          btn.setAttribute("aria-label", "Send Link");
+          btn.title = "Send a client your booking link";
         }
         var bw = btn.getBoundingClientRect().width;
         if (bw && el.getBoundingClientRect().width > bw) {
@@ -1457,6 +1470,7 @@
       });
     };
 
+    refreshOwnerTiles = apply;
     apply();
     // The DS mounts asynchronously, and a theme toggle re-renders the grid
     // from the component's own props -- which would restore "Appointment".
@@ -1909,6 +1923,7 @@
 
     var showEditChip = function () {
       ownerViewing = true;
+      refreshOwnerTiles();
       renderProPanel();
       if (document.getElementById("vc-edit-chip")) return;
       var a = document.createElement("a");
@@ -1924,17 +1939,10 @@
         "backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);" +
         "border:1px solid var(--hairline-strong);color:var(--text-hi);font-family:var(--font-sans);" +
         "font-size:12.5px;font-weight:700;text-decoration:none;box-shadow:0 6px 18px rgba(0,0,0,.3)";
-      // Two chips, one fixed row: Send booking link (founder, 9 Oct 2026) + Edit my card.
+      // The Send Link action now lives in the card's own Book tile (cyan outline), so only Edit floats.
       var row = document.createElement("div");
       row.id = "vc-owner-chips";
       row.style.cssText = "position:fixed;bottom:14px;right:14px;z-index:98;display:flex;gap:8px;align-items:center";
-      var sb = document.createElement("button");
-      sb.id = "vc-send-link-chip";
-      sb.type = "button";
-      sb.innerHTML = blIco.video + "<span>Send booking link</span>";
-      sb.style.cssText = a.style.cssText + ";cursor:pointer";
-      sb.addEventListener("click", function () { showSendLinkSheet(); });
-      row.appendChild(sb);
       row.appendChild(a);
       document.body.appendChild(row);
     };
