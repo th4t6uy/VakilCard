@@ -878,6 +878,34 @@ module.exports = async function handler(req, res) {
       req.query.action || (req.body && typeof req.body === "object" && req.body.action) || ""
     );
 
+    // ---- POST {action:"google_connect_url"} / {action:"gcal_connect_url"} — owner auth (Authorization header).
+    // Returns Google's consent address as JSON; the app then sends the browser there. Added 9 Oct 2026: the old way
+    // was a plain browser GET with the sign-in token pasted into the web address (?token=...). When that token did not
+    // arrive (founder, Safari private window: the page showed {"error":"unauthenticated"}) the person was stranded on a
+    // blank JSON page. A normal authenticated call refreshes an old token and reports a problem inside the app instead.
+    // The GET versions below stay for old open tabs.
+    if (req.method === "POST" && (action === "google_connect_url" || action === "gcal_connect_url")) {
+      if (!calendarConfigured()) return notConfigured(res);
+      const who = await resolveAccount(req);
+      if (!who || !who.accountId) return json(res, 401, { error: "unauthenticated" });
+      const rows = await db(`vakilcard_profiles?account_id=eq.${who.accountId}&select=id`);
+      const gp = rows[0];
+      if (!gp) return json(res, 404, { error: "no_profile" });
+      const state = sign({ pid: gp.id, typ: "gcal_state" }, { expiresInSec: 600 });
+      const url =
+        "https://accounts.google.com/o/oauth2/v2/auth?" +
+        new URLSearchParams({
+          client_id: GCAL_CLIENT_ID,
+          redirect_uri: GCAL_REDIRECT_URI,
+          response_type: "code",
+          access_type: "offline",
+          prompt: "consent",
+          scope: GCAL_SCOPE,
+          state,
+        });
+      return json(res, 200, { ok: true, url });
+    }
+
     // ---- GET ?action=gcal_start — owner auth (header or query token). Free since 9 Oct 2026.
     if (req.method === "GET" && action === "gcal_start") {
       if (!calendarConfigured()) return notConfigured(res);

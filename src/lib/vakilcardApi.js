@@ -213,16 +213,34 @@ export const setBookingStatus = (request_id, status) =>
 // Business Profile management, and booking.js's shared gcal_callback stores
 // both connections from the single resulting token.
 export const googleConnectUrl = async () => {
-  const bearer = await getBearer();
-  return `/api/vakilcard/booking?action=google_connect_start&token=${encodeURIComponent(bearer || "")}`;
+  // A normal signed-in call (refreshes an old token, fails inside the app) that returns Google's address.
+  // It used to be a plain redirect with the token in the web address; if the token did not arrive the person
+  // landed on a blank {"error":"unauthenticated"} page.
+  const r = await call("booking", { method: "POST", body: { action: "google_connect_url" } });
+  if (!r || !r.url) throw new ApiError("no_url", 500);
+  return r.url;
 };
 // Secondary flow: calendar-only, for the edge case where a lawyer's Business
 // Profile and Calendar live under different Google accounts — lets them
 // connect Calendar under a second account without disturbing Business.
 export const googleCalendarConnectUrl = async () => {
-  const bearer = await getBearer();
-  return `/api/vakilcard/booking?action=gcal_start&token=${encodeURIComponent(bearer || "")}`;
+  const r = await call("booking", { method: "POST", body: { action: "gcal_connect_url" } });
+  if (!r || !r.url) throw new ApiError("no_url", 500);
+  return r.url;
 };
+// Sends the browser to Google's consent page, or says in plain words why not (instead of leaving the person
+// on a blank error page). kind: "calendar-second-account" uses the calendar-only start.
+export async function openGoogleConnect(kind) {
+  try {
+    window.location.href = kind === "calendar-second-account" ? await googleCalendarConnectUrl() : await googleConnectUrl();
+  } catch (e) {
+    window.alert(
+      e && e.status === 401
+        ? "Please sign in to VakilCard again, then tap Connect Google once more."
+        : "We could not start Google just now. Please try again in a moment."
+    );
+  }
+}
 export const disconnectGoogleCalendar = () => call("booking", { method: "POST", body: { action: "gcal_disconnect" } });
 
 // Google Business linking, via the Places API — one tap, no OAuth.

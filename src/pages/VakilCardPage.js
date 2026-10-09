@@ -25,7 +25,7 @@ import {
   hasPhoneSession, track, ApiError,
   getBookingConfig, saveBookingWindows, manageBooking, setBookingStatus, setCalendarSource,
   placesSearch, placesLink, placesUnlink, newPlacesSession,
-  googleConnectUrl, googleCalendarConnectUrl, disconnectGoogleCalendar,
+  googleConnectUrl, googleCalendarConnectUrl, disconnectGoogleCalendar, openGoogleConnect,
   linkPhoneStart, linkPhoneVerify,
 } from "../lib/vakilcardApi";
 import { completionPct, profileToForm } from "./vakilcard/SetupWizard";
@@ -234,7 +234,7 @@ function GoogleConnectHero({ pro }) {
         </div>
         <button
           type="button"
-          onClick={async () => { window.location.href = await googleConnectUrl(); }}
+          onClick={() => openGoogleConnect()}
           className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-5 py-2.5 text-sm font-bold inline-flex items-center gap-2 flex-none transition-colors"
         >
           <MapPin className="h-4 w-4" />Connect now
@@ -509,15 +509,11 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
   // tile. Safe to click again once partially/fully connected: it re-grants
   // both scopes and merge-upserts each connection row, so it also doubles as
   // a "reconnect"/refresh action.
-  const connectGoogle = async () => {
-    window.location.href = await googleConnectUrl();
-  };
+  const connectGoogle = () => openGoogleConnect();
   // Secondary flow — Calendar only, under a second Google account, for the
   // edge case where a lawyer's Business Profile and Calendar aren't on the
   // same Google account.
-  const connectCalendarAlt = async () => {
-    window.location.href = await googleCalendarConnectUrl();
-  };
+  const connectCalendarAlt = () => openGoogleConnect("calendar-second-account");
   const disconnectCalendar = async () => {
     await disconnectGoogleCalendar();
     load();
@@ -560,7 +556,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
         )}
       </div>
       {pro && !loading && cfg && (
-        <CalendarSwitcher cfg={cfg} onChanged={load} connectHere={async () => { window.location.href = await googleConnectUrl(); }} />
+        <CalendarSwitcher cfg={cfg} onChanged={load} connectHere={() => openGoogleConnect()} />
       )}
 
       <div className="flex items-center justify-between mb-2">

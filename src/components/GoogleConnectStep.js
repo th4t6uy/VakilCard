@@ -18,9 +18,13 @@ export default function GoogleConnectStep({ onSkip }) {
     setErr("");
     try {
       window.location.href = await googleConnectUrl();
-    } catch {
+    } catch (e) {
       setBusy(false);
-      setErr("Couldn't start Google just now — you can do this later from your dashboard.");
+      setErr(
+        e && e.status === 401
+          ? "Please sign in to VakilCard again, then try once more — or do this later from your dashboard."
+          : "Couldn't start Google just now — you can do this later from your dashboard."
+      );
     }
   };
   return (

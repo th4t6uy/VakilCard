@@ -107,4 +107,12 @@ assert(/if \(isWide\(\)\) return renderWebDone/.test(mountSrc) && /if \(isWide\(
   assert(/amount_due: linkFee\(L\.link, L\.profile\)/.test(src) && /const amountInr = linkFee\(link, profile\)/.test(src), "link_info and link_book use the link's fee");
   assert(/id="vc-sl-fee"/.test(mountSrc) && /fee_inr: fee \|\| 0/.test(mountSrc) && /payable to me at the meeting/.test(mountSrc), "send sheet lets the lawyer choose a fee and tells the client");
 }
+{
+  // Google connect: asked for with a normal signed-in call that returns Google's address, not a bare redirect
+  // carrying the token in the web address (founder saw a blank {"error":"unauthenticated"} page).
+  const api = fs.readFileSync(path.join(__dirname, "..", "src", "lib", "vakilcardApi.js"), "utf8");
+  assert(/action === "google_connect_url" \|\| action === "gcal_connect_url"/.test(src), "server has the signed-in connect-address action");
+  assert(/body: \{ action: "google_connect_url" \}/.test(api) && !/google_connect_start&token=/.test(api), "app asks for the address with a signed-in call");
+  assert(/openGoogleConnect/.test(api), "one helper opens Google or explains why not");
+}
 console.log("vakilcard-booking-links: ok");
