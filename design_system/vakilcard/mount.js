@@ -1580,7 +1580,7 @@
     var body =
       '<div style="font-size:12.5px;color:var(--text-low);line-height:1.5;margin-bottom:12px">Your client gets a private link, picks a time that suits you both, and a Google Meet is made automatically.</div>' +
       '<input id="vc-sl-name" placeholder="Client\'s name" autocomplete="off" style="' + blInput + '">' +
-      '<input id="vc-sl-to" placeholder="WhatsApp number or email" autocomplete="off" autocapitalize="off" style="' + blInput + '">' +
+      '<input id="vc-sl-to" placeholder="WhatsApp number" autocomplete="off" autocapitalize="off" style="' + blInput + '">' +
       '<div style="display:flex;gap:6px;margin:2px 0 10px" id="vc-sl-mins">' +
       [15, 30, 45, 60].map(function (m) { return '<button type="button" data-m="' + m + '">' + m + " min</button>"; }).join("") +
       "</div>" +
@@ -1599,10 +1599,7 @@
       (isPro ? "" : blIco.lock) + "Reusable link" + (isPro ? "" : " · Pro") + "</button>" +
       "</div>" +
       '<button id="vc-sl-wa" style="' + sheetBtnCss + blVioletBtn + ';margin-top:4px">' + nounIcon("whatsapp") + "Send on WhatsApp</button>" +
-      '<div style="display:flex;gap:8px">' +
-      '<button id="vc-sl-mail" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.mail + "Email</button>" +
-      '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.link + "<span>Copy link</span></button>" +
-      "</div>" +
+      '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center">' + blIco.link + "<span>Copy link</span></button>" +
       '<div id="vc-sl-ready" style="display:none"></div>' +
       '<div id="vc-sl-err" style="font-size:12px;color:var(--danger,#f66);margin-top:10px;line-height:1.45;display:none"></div>';
     var s = openSheet("Send a booking link", body);
@@ -1766,10 +1763,8 @@
       if (code === "pro_required") return "Reusable links are part of VakilCard Pro. " + blDashLink("Unlock with Pro →");
       return "Couldn't make the link — please try again.";
     }
-    var EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/;
-    // "Ready to send" card (founder, 9 Oct 2026: the phone's Gmail app opened with the WRONG address and an empty
-    // message). Whatever the phone's mail app does with the mailto: link, the lawyer can see exactly what is going
-    // to be sent and copy any part of it. The Open button is a real <a href="mailto:"> — a genuine tap, not a script redirect.
+    // "Ready to send" card (founder, 9 Oct 2026: the Email button opened a blank mail app on the iPhone, so it is gone).
+    // After the link is made the lawyer sees exactly what the client will get and can copy it into anything.
     function copyText(txt, btn, label) {
       var ok = function () { if (btn) { btn.textContent = "Copied ✓"; setTimeout(function () { btn.textContent = label; }, 1800); } };
       var fallback = function () {
@@ -1778,23 +1773,20 @@
       };
       if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, fallback); else fallback();
     }
-    function showReady(f, subj, mbody) {
+    function showReady(f, url, mbody) {
       var box = $("#vc-sl-ready");
       var lbl = "font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin:10px 0 4px";
-      var mt = "mailto:" + f.mail + "?subject=" + blEnc(subj) + "&body=" + blEnc(mbody).replace(/%0A/g, "%0D%0A");
       box.innerHTML =
         '<div style="margin-top:12px;padding:12px;border-radius:16px;border:1px solid #22d3ee;background:var(--glass-thick)">' +
         '<div style="font-size:12.5px;font-weight:800;color:var(--text-hi)">Ready to send ✓</div>' +
-        '<div style="' + lbl + '">To</div><div style="font-size:14px;font-weight:700;color:var(--text-hi);word-break:break-all">' + esc(f.mail) + "</div>" +
-        '<div style="' + lbl + '">Subject</div><div style="font-size:13px;color:var(--text-hi)">' + esc(subj) + "</div>" +
-        '<div style="' + lbl + '">Message</div><div style="font-size:12.5px;line-height:1.5;color:var(--text-low);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto">' + esc(mbody) + "</div>" +
-        '<a id="vc-sl-open" href="' + esc(mt) + '" data-vc-native-link style="' + sheetBtnCss + blVioletBtn + '">' + blIco.mail + "Open my mail app</a>" +
-        '<div style="display:flex;gap:8px"><button id="vc-sl-cpm" style="' + sheetBtnCss + ';justify-content:center;flex:1">Copy message</button>' +
-        '<button id="vc-sl-cpa" style="' + sheetBtnCss + ';justify-content:center;flex:1">Copy email</button></div>' +
-        '<div style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.45">If your mail app opens empty, tap Copy message and paste it in.</div></div>';
+        (f.name && !reusable ? '<div style="' + lbl + '">For</div><div style="font-size:14px;font-weight:700;color:var(--text-hi);word-break:break-word">' + esc(f.name) + (f.phone ? " · " + esc(f.phone) : f.mail ? " · " + esc(f.mail) : "") + "</div>" : "") +
+        '<div style="' + lbl + '">Message</div><div style="font-size:12.5px;line-height:1.5;color:var(--text-low);white-space:pre-wrap;word-break:break-word;max-height:150px;overflow:auto">' + esc(mbody) + "</div>" +
+        '<div style="display:flex;gap:8px"><button id="vc-sl-cpm" style="' + sheetBtnCss + blVioletBtn + ';flex:1">Copy message</button>' +
+        '<button id="vc-sl-cpl" style="' + sheetBtnCss + ';justify-content:center;flex:1">Copy link</button></div>' +
+        '<div style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.45">Paste it into WhatsApp, SMS, email or anywhere else.</div></div>';
       box.style.display = "block";
       $("#vc-sl-cpm").addEventListener("click", function () { copyText(mbody, this, "Copy message"); });
-      $("#vc-sl-cpa").addEventListener("click", function () { copyText(f.mail, this, "Copy email"); });
+      $("#vc-sl-cpl").addEventListener("click", function () { copyText(url, this, "Copy link"); });
       if (box.scrollIntoView) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
     }
     function run(channel) {
@@ -1802,10 +1794,6 @@
       $("#vc-sl-ready").style.display = "none";
       var f = readForm();
       if (!f.name && !reusable) { showErr("Add your client's name first."); $("#vc-sl-name").focus(); return; }
-      if (channel === "mail" && !EMAIL_RE.test(f.mail)) {
-        showErr(f.phone ? "That is a phone number. Type your client's email address in the box above to send by email." : "Type your client's email address in the box above first.");
-        $("#vc-sl-to").focus(); return;
-      }
       var wins = null;
       if (when === "own") {
         var w = readWindows();
@@ -1814,28 +1802,17 @@
       }
       var win = null;
       // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
-      // Email on a computer opens Gmail's own compose window with everything filled in. A plain mailto: link
-      // handed to a browser whose mail handler is Gmail often arrives as an EMPTY draft (founder, 9 Oct 2026);
-      // phones keep mailto: so the phone's own mail app opens (plus the Ready-to-send card above as a safety net).
-      var mailOnPc = channel === "mail" && !/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || "");
-      if (channel === "wa" || mailOnPc) { try { win = window.open("", "_blank"); } catch (e) {} }
+      if (channel === "wa") { try { win = window.open("", "_blank"); } catch (e) {} }
       getLink(f, wins).then(function (url) {
         track("share");
+        var mbody = msgFor(f, url);
+        showReady(f, url, mbody);
         if (channel === "wa") {
-          var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(msgFor(f, url));
+          var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(mbody);
           if (win) win.location.href = href; else window.location.href = href;
-        } else if (channel === "mail") {
-          var subj = "Book a time to meet — " + blWho(), mbody = msgFor(f, url);
-          showReady(f, subj, mbody);
-          if (mailOnPc) {
-            var g = "https://mail.google.com/mail/?view=cm&fs=1&to=" + blEnc(f.mail) + "&su=" + blEnc(subj) + "&body=" + blEnc(mbody);
-            if (win) win.location.href = g; else window.location.href = g;
-          }
-          // phones: the lawyer taps "Open my mail app" on the card (a real link tap is the most reliable way in)
         } else {
           var done = function () { var sp = $("#vc-sl-copy span"); if (sp) { sp.textContent = "Copied ✓"; setTimeout(function () { sp.textContent = "Copy link"; }, 1800); } };
-          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { window.prompt("Copy this link", url); });
-          else window.prompt("Copy this link", url);
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () {});
         }
       }).catch(function (e) {
         if (win) { try { win.close(); } catch (x) {} }
@@ -1865,7 +1842,6 @@
     s.panel.addEventListener("input", function () { sentOk = false; saveSend(); });
     s.panel.addEventListener("click", function () { setTimeout(saveSend, 0); });
     $("#vc-sl-wa").addEventListener("click", function () { run("wa"); });
-    $("#vc-sl-mail").addEventListener("click", function () { run("mail"); });
     $("#vc-sl-copy").addEventListener("click", function () { run("copy"); });
     return s;
   }

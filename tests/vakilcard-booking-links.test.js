@@ -80,9 +80,10 @@ assert(/Pick my own times/.test(mountSrc) && /custom_windows/.test(mountSrc), "s
 // The link URL is built from the OWNER profile, so that select must include the username (9 Oct 2026:
 // links went out as /undefined?book=...).
 assert(/async function loadOwnerProfile[\s\S]{0,400}select=id,account_id,username,full_name,/.test(src), "owner profile select includes username and full_name");
-// Email share (9 Oct 2026): never opens a blank compose; shows a Ready-to-send card the lawyer can copy from.
-assert(/EMAIL_RE\.test\(f\.mail\)/.test(mountSrc) && /showReady\(f, subj, mbody\)/.test(mountSrc), "email channel validates the address and shows the Ready-to-send card");
-assert(/id="vc-sl-open" href=/.test(mountSrc) && /Copy message/.test(mountSrc), "ready card has a real mailto link and a Copy message button");
+// Send sheet (9 Oct 2026): the Email button opened a blank mail app on iPhone, so it is gone; after the link is made a
+// "Ready to send" card shows the message with Copy buttons.
+assert(!/id="vc-sl-mail"/.test(mountSrc) && !/mailto:/.test(mountSrc.slice(mountSrc.indexOf("function showSendLinkSheet"), mountSrc.indexOf("CLIENT: one picker"))), "no Email button or mailto link in the send sheet");
+assert(/showReady\(f, url, mbody\)/.test(mountSrc) && /Ready to send/.test(mountSrc) && /Copy message/.test(mountSrc), "Ready-to-send card with Copy message");
 // Wide-screen booking page (9 Oct 2026): Calendly-style page for computers, apps cross-sell, phones keep the sheet.
 assert(/function isWide\(\)/.test(mountSrc) && /if \(isWide\(\)\) return renderWebPicker\(opts\)/.test(mountSrc), "picker switches to the web page on wide screens");
 assert(/VP_APPS = \[/.test(mountSrc) && /Get your own free VakilCard/.test(mountSrc) && /utm_source=vakilcard/.test(mountSrc), "web page and done sheet carry the Vakilpedia apps and a VakilCard sign-up link");
