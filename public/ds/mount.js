@@ -225,7 +225,7 @@
       "width:100%;max-width:412px;margin:0 8px 10px;padding:22px 20px 18px;border-radius:24px;" +
       "background:var(--glass-frost);backdrop-filter:blur(28px) saturate(1.4);-webkit-backdrop-filter:blur(28px) saturate(1.4);" +
       "border:1px solid var(--hairline-strong);box-shadow:0 -8px 40px rgba(0,0,0,.5);color:var(--text-hi);" +
-      "font-family:var(--font-sans);transform:translateY(28px);opacity:0;transition:all .3s var(--ease-glass, ease-out)";
+      "font-family:var(--font-sans);max-height:94vh;overflow-y:auto;-webkit-overflow-scrolling:touch;transform:translateY(28px);opacity:0;transition:all .3s var(--ease-glass, ease-out)";
     panel.innerHTML =
       '<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">' +
       '<div style="font-size:15px;font-weight:800">' + title + "</div>" +
@@ -1603,6 +1603,7 @@
       '<button id="vc-sl-mail" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.mail + "Email</button>" +
       '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.link + "<span>Copy link</span></button>" +
       "</div>" +
+      '<div id="vc-sl-ready" style="display:none"></div>' +
       '<div id="vc-sl-err" style="font-size:12px;color:var(--danger,#f66);margin-top:10px;line-height:1.45;display:none"></div>';
     var s = openSheet("Send a booking link", body);
     var $ = function (id) { return s.panel.querySelector(id); };
@@ -1765,10 +1766,46 @@
       if (code === "pro_required") return "Reusable links are part of VakilCard Pro. " + blDashLink("Unlock with Pro →");
       return "Couldn't make the link — please try again.";
     }
+    var EMAIL_RE = /^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]{2,}$/;
+    // "Ready to send" card (founder, 9 Oct 2026: the phone's Gmail app opened with the WRONG address and an empty
+    // message). Whatever the phone's mail app does with the mailto: link, the lawyer can see exactly what is going
+    // to be sent and copy any part of it. The Open button is a real <a href="mailto:"> — a genuine tap, not a script redirect.
+    function copyText(txt, btn, label) {
+      var ok = function () { if (btn) { btn.textContent = "Copied ✓"; setTimeout(function () { btn.textContent = label; }, 1800); } };
+      var fallback = function () {
+        try { var ta = document.createElement("textarea"); ta.value = txt; ta.style.cssText = "position:fixed;opacity:0"; document.body.appendChild(ta); ta.select(); document.execCommand("copy"); ta.remove(); ok(); }
+        catch (e) { window.prompt("Copy this", txt); }
+      };
+      if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(txt).then(ok, fallback); else fallback();
+    }
+    function showReady(f, subj, mbody) {
+      var box = $("#vc-sl-ready");
+      var lbl = "font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin:10px 0 4px";
+      var mt = "mailto:" + f.mail + "?subject=" + blEnc(subj) + "&body=" + blEnc(mbody).replace(/%0A/g, "%0D%0A");
+      box.innerHTML =
+        '<div style="margin-top:12px;padding:12px;border-radius:16px;border:1px solid #22d3ee;background:var(--glass-thick)">' +
+        '<div style="font-size:12.5px;font-weight:800;color:var(--text-hi)">Ready to send ✓</div>' +
+        '<div style="' + lbl + '">To</div><div style="font-size:14px;font-weight:700;color:var(--text-hi);word-break:break-all">' + esc(f.mail) + "</div>" +
+        '<div style="' + lbl + '">Subject</div><div style="font-size:13px;color:var(--text-hi)">' + esc(subj) + "</div>" +
+        '<div style="' + lbl + '">Message</div><div style="font-size:12.5px;line-height:1.5;color:var(--text-low);white-space:pre-wrap;word-break:break-word;max-height:120px;overflow:auto">' + esc(mbody) + "</div>" +
+        '<a id="vc-sl-open" href="' + esc(mt) + '" data-vc-native-link style="' + sheetBtnCss + blVioletBtn + '">' + blIco.mail + "Open my mail app</a>" +
+        '<div style="display:flex;gap:8px"><button id="vc-sl-cpm" style="' + sheetBtnCss + ';justify-content:center;flex:1">Copy message</button>' +
+        '<button id="vc-sl-cpa" style="' + sheetBtnCss + ';justify-content:center;flex:1">Copy email</button></div>' +
+        '<div style="font-size:11.5px;color:var(--text-dim);margin-top:8px;line-height:1.45">If your mail app opens empty, tap Copy message and paste it in.</div></div>';
+      box.style.display = "block";
+      $("#vc-sl-cpm").addEventListener("click", function () { copyText(mbody, this, "Copy message"); });
+      $("#vc-sl-cpa").addEventListener("click", function () { copyText(f.mail, this, "Copy email"); });
+      if (box.scrollIntoView) box.scrollIntoView({ block: "nearest", behavior: "smooth" });
+    }
     function run(channel) {
       errEl.style.display = "none";
+      $("#vc-sl-ready").style.display = "none";
       var f = readForm();
       if (!f.name && !reusable) { showErr("Add your client's name first."); $("#vc-sl-name").focus(); return; }
+      if (channel === "mail" && !EMAIL_RE.test(f.mail)) {
+        showErr(f.phone ? "That is a phone number. Type your client's email address in the box above to send by email." : "Type your client's email address in the box above first.");
+        $("#vc-sl-to").focus(); return;
+      }
       var wins = null;
       if (when === "own") {
         var w = readWindows();
@@ -1779,7 +1816,7 @@
       // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
       // Email on a computer opens Gmail's own compose window with everything filled in. A plain mailto: link
       // handed to a browser whose mail handler is Gmail often arrives as an EMPTY draft (founder, 9 Oct 2026);
-      // phones keep mailto: so the phone's own mail app opens.
+      // phones keep mailto: so the phone's own mail app opens (plus the Ready-to-send card above as a safety net).
       var mailOnPc = channel === "mail" && !/Android|iPhone|iPad|iPod|Mobi/i.test(navigator.userAgent || "");
       if (channel === "wa" || mailOnPc) { try { win = window.open("", "_blank"); } catch (e) {} }
       getLink(f, wins).then(function (url) {
@@ -1789,12 +1826,12 @@
           if (win) win.location.href = href; else window.location.href = href;
         } else if (channel === "mail") {
           var subj = "Book a time to meet — " + blWho(), mbody = msgFor(f, url);
+          showReady(f, subj, mbody);
           if (mailOnPc) {
             var g = "https://mail.google.com/mail/?view=cm&fs=1&to=" + blEnc(f.mail) + "&su=" + blEnc(subj) + "&body=" + blEnc(mbody);
             if (win) win.location.href = g; else window.location.href = g;
-          } else {
-            window.location.href = "mailto:" + blEnc(f.mail) + "?subject=" + blEnc(subj) + "&body=" + blEnc(mbody);
           }
+          // phones: the lawyer taps "Open my mail app" on the card (a real link tap is the most reliable way in)
         } else {
           var done = function () { var sp = $("#vc-sl-copy span"); if (sp) { sp.textContent = "Copied ✓"; setTimeout(function () { sp.textContent = "Copy link"; }, 1800); } };
           if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { window.prompt("Copy this link", url); });
@@ -1833,8 +1870,244 @@
     return s;
   }
 
+  /* ===== CLIENT, wide screens: a Calendly-style booking page (founder, 9 Oct 2026) =====
+     On a computer the client sees a full page — advocate + meeting details | month calendar | times — in the
+     Vakilpedia look, with the other Vakilpedia apps underneath (a branding / sign-up opportunity). Phones keep
+     the bottom sheet. Both feed from the same renderPicker(opts) contract. */
+  var VP_SITE = "https://www.vakilpedia.com";
+  var VP_APPS = [
+    { n: "CaseLinx", d: "Case diary, hearing reminders and client updates", i: "caselinx", u: "/caselinx" },
+    { n: "CourtQue", d: "Live court boards, with WhatsApp alerts as your matter nears", i: "courtque", u: "/courtque" },
+    { n: "SignLinx", d: "Send a PDF for e-signature on WhatsApp or by link", i: "signlinx", u: "/signlinx" },
+    { n: "AffidavitMaker", d: "Filing-ready affidavits as an A4 PDF", i: "affidavitmaker", u: "/affidavitmaker" },
+    { n: "Barelex", d: "Free search of Indian bare acts, incl. BNS and BNSS", i: "barelex", u: "/barelex" },
+    { n: "IPC to BNS", d: "Type an old section, get the new one. Free", i: "ipcbns", u: "/ipc-to-bns-converter" },
+  ];
+  function vpUrl(path) {
+    var u = (boot.profile && boot.profile.username) || "";
+    return VP_SITE + path + "?utm_source=vakilcard&utm_medium=booking_page&utm_campaign=" + blEnc(u);
+  }
+  function isWide() { return (window.innerWidth || 0) >= 880; }
+  function vpAppsStrip() { // compact row for the phone "All set" sheet
+    return '<div style="margin-top:14px;padding-top:12px;border-top:1px solid var(--hairline)">' +
+      '<div style="font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim);margin-bottom:8px">More from Vakilpedia</div>' +
+      '<div style="display:flex;gap:8px;justify-content:space-between">' +
+      VP_APPS.map(function (a) {
+        return '<a href="' + esc(vpUrl(a.u)) + '" target="_blank" rel="noopener" data-vc-native-link title="' + esc(a.n) + '" aria-label="' + esc(a.n) + '" style="flex:1;max-width:50px"><img src="' + VP_SITE + "/app-icons/" + a.i + '.webp" alt="" width="44" height="44" loading="lazy" style="width:100%;height:auto;aspect-ratio:1;border-radius:12px;display:block"></a>';
+      }).join("") + "</div>" +
+      '<a href="' + esc(vpUrl("/vakilcard")) + '" target="_blank" rel="noopener" data-vc-native-link style="display:block;margin-top:10px;text-align:center;font-size:12.5px;' + blLinkCss + '">Get your own free VakilCard →</a></div>';
+  }
+  function injectWebCss() {
+    if (document.getElementById("vcw-css")) return;
+    var st = document.createElement("style");
+    st.id = "vcw-css";
+    st.textContent =
+      ".vcw{position:fixed;inset:0;z-index:200;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch;font-family:var(--font-sans);color:var(--text-hi);" +
+      "background:radial-gradient(1100px 760px at 12% 8%,rgba(99,91,255,.18),transparent 60%),radial-gradient(1000px 700px at 88% 92%,rgba(224,188,116,.14),transparent 60%),var(--bg-void,#0b0b12)}" +
+      '[data-theme="light"] .vcw{background:linear-gradient(90deg,#CDEFFB 0%,#FFFFFF 33%,#FFFFFF 66%,#FDEECB 100%)}' +
+      ".vcw *{box-sizing:border-box}.vcw a{color:inherit}" +
+      ".vcw-wrap{max-width:1080px;margin:0 auto;padding:0 28px}" +
+      ".vcw-top{display:flex;align-items:center;justify-content:space-between;padding:22px 0 18px}" +
+      ".vcw-brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px}.vcw-brand img{width:30px;height:30px;border-radius:9px}" +
+      ".vcw-brand small{font-weight:600;color:var(--text-dim);font-size:12.5px}.vcw-brand a{text-decoration:none}" +
+      ".vcw-ghost{padding:9px 16px;border-radius:999px;border:1px solid var(--hairline-strong);background:var(--glass-thick);color:var(--text-hi);font:700 13px var(--font-sans);cursor:pointer;text-decoration:none}" +
+      ".vcw-ghost:hover{border-color:var(--violet-400)}" +
+      ".vcw-card{display:grid;grid-template-columns:270px minmax(0,1fr) 270px;border-radius:28px;background:var(--glass-frost);backdrop-filter:blur(28px) saturate(1.4);-webkit-backdrop-filter:blur(28px) saturate(1.4);border:1px solid var(--hairline-strong);box-shadow:0 30px 80px -20px rgba(0,0,0,.45);overflow:hidden;min-height:500px}" +
+      ".vcw-card.vcw-one{grid-template-columns:minmax(0,1fr);max-width:520px;margin:0 auto}" +
+      ".vcw-info{padding:28px 24px;border-right:1px solid var(--hairline)}.vcw-cal{padding:28px 26px}.vcw-side{padding:28px 22px;border-left:1px solid var(--hairline)}" +
+      ".vcw-av{width:54px;height:54px;border-radius:50%;background:linear-gradient(135deg,var(--violet-400),#22d3ee);display:flex;align-items:center;justify-content:center;color:#fff;font-weight:800;font-size:19px;margin-bottom:12px}" +
+      ".vcw-who{font-size:13px;font-weight:700;color:var(--text-low)}.vcw-h1{font-size:23px;font-weight:800;line-height:1.2;margin:4px 0 14px}" +
+      ".vcw-meta{display:flex;align-items:flex-start;gap:9px;font-size:13px;color:var(--text-low);line-height:1.45;margin-top:10px}.vcw-meta svg{flex:0 0 auto;margin-top:1px;color:var(--text-dim)}" +
+      ".vcw-intro{font-size:13.5px;line-height:1.55;color:var(--text-low);margin-top:16px}" +
+      ".vcw-mh{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}.vcw-mh b{font-size:16px}" +
+      ".vcw-nav{display:flex;gap:6px}.vcw-nav button{width:34px;height:34px;border-radius:50%;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font-size:15px;cursor:pointer}.vcw-nav button:disabled{opacity:.3;cursor:default}" +
+      ".vcw-g{display:grid;grid-template-columns:repeat(7,1fr);gap:6px;text-align:center}.vcw-wd{font-size:10.5px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--text-dim);padding:6px 0}" +
+      ".vcw-d{aspect-ratio:1;max-height:50px;border-radius:50%;border:0;background:transparent;color:var(--text-dim);font:600 14px var(--font-sans);cursor:default;position:relative}" +
+      ".vcw-d.av{background:rgba(99,91,255,.16);color:var(--violet-400);font-weight:800;cursor:pointer}.vcw-d.av:hover{background:rgba(99,91,255,.3)}" +
+      ".vcw-d.sel,.vcw-d.sel:hover{background:var(--violet-400);color:#fff}.vcw-d.td::after{content:'';position:absolute;left:50%;bottom:6px;width:4px;height:4px;margin-left:-2px;border-radius:50%;background:currentColor}" +
+      ".vcw-sh{font-size:15px;font-weight:800;margin-bottom:12px}.vcw-tl{display:flex;flex-direction:column;gap:8px;max-height:400px;overflow-y:auto;padding:2px 4px 2px 0}" +
+      ".vcw-t{padding:13px 8px;border-radius:12px;border:1px solid var(--violet-400);background:transparent;color:var(--violet-400);font:800 14px var(--font-sans);cursor:pointer}.vcw-t:hover{background:var(--violet-400);color:#fff}" +
+      ".vcw-in{width:100%;padding:12px 14px;margin-bottom:10px;border-radius:12px;border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);font:500 16px var(--font-sans);outline:none}.vcw-in:focus{border-color:var(--violet-400)}" +
+      ".vcw-go{width:100%;padding:13px;border-radius:999px;border:0;background:var(--violet-400);color:#fff;font:800 14.5px var(--font-sans);cursor:pointer}.vcw-go:disabled{opacity:.6;cursor:default}" +
+      ".vcw-back{border:0;background:transparent;color:var(--text-low);font:700 12.5px var(--font-sans);cursor:pointer;padding:0 0 10px}.vcw-back:hover{color:var(--text-hi)}" +
+      ".vcw-err{font-size:12.5px;color:var(--danger,#f66);margin-top:8px;display:none;line-height:1.45}" +
+      ".vcw-sec{margin-top:36px}.vcw-sec h2{font-size:20px;font-weight:800;margin:0 0 4px}.vcw-sec p{margin:0 0 16px;font-size:13.5px;color:var(--text-low)}" +
+      ".vcw-apps{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}" +
+      ".vcw-app{display:flex;gap:13px;align-items:center;padding:14px;border-radius:20px;border:1px solid var(--hairline);background:var(--glass-frost);text-decoration:none;transition:transform .18s,border-color .18s}.vcw-app:hover{transform:translateY(-2px);border-color:var(--violet-400)}" +
+      ".vcw-app img{width:48px;height:48px;border-radius:13px;flex:0 0 auto}.vcw-app b{display:block;font-size:14.5px}.vcw-app span{display:block;font-size:12px;color:var(--text-low);line-height:1.4;margin-top:2px}" +
+      ".vcw-cta{margin-top:20px;padding:24px 28px;border-radius:24px;background:linear-gradient(120deg,rgba(99,91,255,.95),rgba(34,211,238,.75));color:#fff;display:flex;align-items:center;justify-content:space-between;gap:20px}" +
+      ".vcw-cta b{font-size:19px;display:block}.vcw-cta span{font-size:13.5px;opacity:.92;display:block;margin-top:4px;line-height:1.45}" +
+      ".vcw-cta a{flex:0 0 auto;padding:13px 22px;border-radius:999px;background:#fff;color:#2a2470;font:800 14px var(--font-sans);text-decoration:none}" +
+      ".vcw-foot{padding:26px 0 36px;text-align:center;font-size:12px;color:var(--text-dim)}.vcw-foot a{text-decoration:none;font-weight:700}" +
+      ".vcw-btns a,.vcw-btns button{display:flex;align-items:center;justify-content:center;gap:10px;width:100%;margin-top:10px;padding:13px;border-radius:999px;border:1px solid var(--hairline-strong);background:var(--glass-thick);color:var(--text-hi);font:700 14px var(--font-sans);text-decoration:none;cursor:pointer}" +
+      ".vcw-btns a.pri{background:var(--violet-400);border-color:transparent;color:#fff}" +
+      "@media (max-width:1020px){.vcw-card{grid-template-columns:240px minmax(0,1fr) 240px}.vcw-apps{grid-template-columns:repeat(2,minmax(0,1fr))}}";
+    document.head.appendChild(st);
+  }
+  function webShell() {
+    injectWebCss();
+    ["vc-web", "vc-sheet"].forEach(function (id) { var o = document.getElementById(id); if (o) o.remove(); });
+    var root = document.createElement("div");
+    root.id = "vc-web"; root.className = "vcw"; root.setAttribute("role", "dialog"); root.setAttribute("aria-label", "Book a meeting");
+    var appsHtml = VP_APPS.map(function (a) {
+      return '<a class="vcw-app" href="' + esc(vpUrl(a.u)) + '" target="_blank" rel="noopener" data-vc-native-link><img src="' + VP_SITE + "/app-icons/" + a.i + '.webp" alt="" loading="lazy"><div><b>' + esc(a.n) + "</b><span>" + esc(a.d) + "</span></div></a>";
+    }).join("");
+    root.innerHTML =
+      '<div class="vcw-wrap">' +
+      '<div class="vcw-top"><div class="vcw-brand"><img src="' + VP_SITE + '/app-icons/vakilcard.webp" alt=""><a href="' + esc(vpUrl("/vakilcard")) + '" target="_blank" rel="noopener" data-vc-native-link>VakilCard</a><small>by <a href="' + esc(vpUrl("/")) + '" target="_blank" rel="noopener" data-vc-native-link>Vakilpedia</a></small></div>' +
+      '<button class="vcw-ghost" id="vcw-view" type="button">View ' + esc(blWho()) + "'s card</button></div>" +
+      '<div id="vcw-main"></div>' +
+      '<div class="vcw-sec"><h2>More from Vakilpedia</h2><p>Free, practical tools built for Indian advocates and their clients.</p><div class="vcw-apps">' + appsHtml + "</div>" +
+      '<div class="vcw-cta"><div><b>Get your own free VakilCard</b><span>A digital card with your payment links and a booking page like this one. Free to start.</span></div>' +
+      '<a href="' + esc(vpUrl("/vakilcard")) + '" target="_blank" rel="noopener" data-vc-native-link>Create my VakilCard</a></div></div>' +
+      '<div class="vcw-foot">Powered by <a href="' + esc(vpUrl("/")) + '" target="_blank" rel="noopener" data-vc-native-link>Vakilpedia</a> · <a href="' + VP_SITE + '/privacy" target="_blank" rel="noopener" data-vc-native-link>Privacy</a></div>' +
+      "</div>";
+    document.body.appendChild(root);
+    var close = function () { root.remove(); document.removeEventListener("keydown", onKey); };
+    var onKey = function (e) { if (e.key === "Escape") close(); };
+    document.addEventListener("keydown", onKey);
+    root.querySelector("#vcw-view").addEventListener("click", close);
+    return { root: root, main: root.querySelector("#vcw-main"), close: close };
+  }
+  function webDead(text, msgBtn) {
+    var sh = webShell();
+    sh.main.innerHTML = '<div class="vcw-card vcw-one"><div class="vcw-cal" style="padding:36px 30px;text-align:center"><div class="vcw-h1" style="margin-top:0">Book a meeting</div>' +
+      '<div style="font-size:14px;color:var(--text-low);line-height:1.6">' + text + '</div><div class="vcw-btns">' + (msgBtn || "").replace(/ style="[^"]*"/, "") + "</div></div></div>";
+    return sh;
+  }
+  function blTzName(tz) {
+    try {
+      var parts = new Intl.DateTimeFormat("en", { timeZone: tz, timeZoneName: "long" }).formatToParts(new Date());
+      for (var i = 0; i < parts.length; i++) if (parts[i].type === "timeZoneName") return parts[i].value;
+    } catch (e) {}
+    return String(tz).replace(/_/g, " ");
+  }
+  function webInitials(who) {
+    var w = String(who || "").replace(/^adv(ocate)?\.?\s+/i, "").trim().split(/\s+/).filter(Boolean);
+    return ((w[0] || "V").charAt(0) + (w.length > 1 ? w[w.length - 1].charAt(0) : "")).toUpperCase();
+  }
+  var BL_IC_CLOCK = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>';
+  var BL_IC_GLOBE = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3c3 3.2 3 14.8 0 18M12 3c-3 3.2-3 14.8 0 18"/></svg>';
+
+  function renderWebPicker(opts) {
+    var sh = webShell(), main = sh.main;
+    var days = [], byDay = {};
+    opts.slots.forEach(function (sl) {
+      var d = new Date(sl.start), k = blDayKey(d);
+      if (!byDay[k]) { byDay[k] = { date: d, slots: [] }; days.push(k); }
+      byDay[k].slots.push(sl);
+    });
+    var first = byDay[days[0]].date, last = byDay[days[days.length - 1]].date;
+    var minView = new Date(first.getFullYear(), first.getMonth(), 1), maxView = new Date(last.getFullYear(), last.getMonth(), 1);
+    var view = new Date(minView), chosenDay = days[0], chosenSlot = null;
+    var who = opts.who || blWho(), tz = blTz();
+    main.innerHTML =
+      '<div class="vcw-card">' +
+      '<aside class="vcw-info"><div class="vcw-av">' + esc(webInitials(who)) + "</div>" +
+      '<div class="vcw-who">' + esc(who) + '</div><h1 class="vcw-h1">' + esc(opts.title) + "</h1>" +
+      (opts.minutes ? '<div class="vcw-meta">' + BL_IC_CLOCK + "<span>" + opts.minutes + " minutes</span></div>" : "") +
+      '<div class="vcw-meta">' + blIco.video + "<span>" + esc(String(opts.badge || "").replace(/^\d+ min · /, "")) + "</span></div>" +
+      (tz ? '<div class="vcw-meta">' + BL_IC_GLOBE + "<span>" + esc(blTzName(tz)) + "</span></div>" : "") +
+      '<div class="vcw-intro">' + opts.intro + "</div></aside>" +
+      '<section class="vcw-cal"><div class="vcw-mh"><b id="vcw-mon"></b><div class="vcw-nav"><button type="button" id="vcw-prev" aria-label="Previous month">‹</button><button type="button" id="vcw-next" aria-label="Next month">›</button></div></div>' +
+      '<div class="vcw-g" id="vcw-g"></div></section>' +
+      '<section class="vcw-side"><div class="vcw-err" id="vcw-note" style="margin:0 0 10px"></div><div id="vcw-times"></div>' +
+      '<div id="vcw-form" style="display:none"><button type="button" class="vcw-back" id="vcw-bk">← Change time</button><div class="vcw-sh" id="vcw-sum"></div>' +
+      (opts.askDetails
+        ? '<input class="vcw-in" id="vc-bl-name" placeholder="Your name" autocomplete="name" value="' + esc(opts.nameVal || "") + '">' +
+          '<input class="vcw-in" id="vc-bl-mail" type="email" autocomplete="email" placeholder="' + (opts.hasEmail ? "Email for the invite (saved)" : "Email, to get the invite (optional)") + '">'
+        : "") +
+      '<button type="button" class="vcw-go" id="vc-bl-go"></button><div class="vcw-err" id="vc-bl-err"></div></div></section></div>';
+    var $ = function (id) { return main.querySelector(id); };
+    $("#vc-bl-go").textContent = opts.cta;
+    var pkDraft = "vc_draft_pick_" + draftUser();
+    draftBind(pkDraft, { name: $("#vc-bl-name"), mail: $("#vc-bl-mail") });
+    var todayK = blDayKey(new Date());
+
+    function paintCal() {
+      $("#vcw-mon").textContent = view.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      $("#vcw-prev").disabled = view <= minView;
+      $("#vcw-next").disabled = view >= maxView;
+      var h = "";
+      for (var i = 0; i < 7; i++) h += '<div class="vcw-wd">' + new Date(2023, 0, 1 + i).toLocaleDateString(undefined, { weekday: "short" }).slice(0, 3) + "</div>";
+      var lead = new Date(view.getFullYear(), view.getMonth(), 1).getDay();
+      for (var b = 0; b < lead; b++) h += "<div></div>";
+      var n = new Date(view.getFullYear(), view.getMonth() + 1, 0).getDate();
+      for (var d = 1; d <= n; d++) {
+        var k = blDayKey(new Date(view.getFullYear(), view.getMonth(), d)), av = !!byDay[k];
+        h += '<button type="button" class="vcw-d' + (av ? " av" : "") + (k === chosenDay ? " sel" : "") + (k === todayK ? " td" : "") + '"' + (av ? ' data-k="' + k + '"' : " disabled tabindex=\"-1\"") + ">" + d + "</button>";
+      }
+      $("#vcw-g").innerHTML = h;
+      $("#vcw-g").querySelectorAll("[data-k]").forEach(function (el) {
+        el.addEventListener("click", function () { chosenDay = el.getAttribute("data-k"); chosenSlot = null; paintCal(); paintTimes(); });
+      });
+    }
+    function paintTimes() {
+      $("#vcw-form").style.display = "none"; $("#vcw-times").style.display = "block";
+      var dd = byDay[chosenDay];
+      $("#vcw-times").innerHTML = dd
+        ? '<div class="vcw-sh">' + esc(dd.date.toLocaleDateString(undefined, { weekday: "long", day: "numeric", month: "long" })) + '</div><div class="vcw-tl">' +
+          dd.slots.map(function (sl, i) { return '<button type="button" class="vcw-t" data-i="' + i + '">' + esc(blTime(new Date(sl.start))) + "</button>"; }).join("") + "</div>"
+        : '<div style="font-size:13.5px;color:var(--text-low);line-height:1.5">Pick a highlighted day to see the free times.</div>';
+      $("#vcw-times").querySelectorAll("[data-i]").forEach(function (el) {
+        el.addEventListener("click", function () {
+          chosenSlot = dd.slots[+el.getAttribute("data-i")]; $("#vcw-note").style.display = "none";
+          $("#vcw-times").style.display = "none"; $("#vcw-form").style.display = "block";
+          $("#vcw-sum").textContent = blWhen(chosenSlot.start);
+          $("#vc-bl-err").style.display = "none";
+          var f = $("#vc-bl-name") || $("#vc-bl-go"); try { f.focus(); } catch (e) {}
+        });
+      });
+    }
+    $("#vcw-prev").addEventListener("click", function () { view = new Date(view.getFullYear(), view.getMonth() - 1, 1); paintCal(); });
+    $("#vcw-next").addEventListener("click", function () { view = new Date(view.getFullYear(), view.getMonth() + 1, 1); paintCal(); });
+    $("#vcw-bk").addEventListener("click", function () { chosenSlot = null; paintTimes(); });
+    paintCal(); paintTimes();
+
+    $("#vc-bl-go").addEventListener("click", function () {
+      var errEl = $("#vc-bl-err"), btn = $("#vc-bl-go");
+      var nameEl = $("#vc-bl-name"), mailEl = $("#vc-bl-mail");
+      var name = nameEl ? nameEl.value.trim() : "", mail = mailEl ? mailEl.value.trim() : "";
+      var fail = function (t) { errEl.textContent = t; errEl.style.display = "block"; btn.disabled = false; btn.textContent = opts.cta; };
+      errEl.style.display = "none";
+      if (opts.askDetails && !name) { fail("Please add your name."); return; }
+      if (!chosenSlot) return;
+      btn.disabled = true; btn.textContent = "Please wait…";
+      opts.submit(chosenSlot, name, mail).then(function (r) {
+        if (r.d && r.d.ok) { draftClear(pkDraft); return opts.onDone(r.d, mail); }
+        var e = (r.d && r.d.error) || "";
+        fail((opts.errors && opts.errors[e]) || "Couldn't do that. Please try again.");
+        if (e === "slot_taken") {
+          var k = blDayKey(new Date(chosenSlot.start));
+          if (byDay[k]) byDay[k].slots = byDay[k].slots.filter(function (x) { return x.start !== chosenSlot.start; });
+          if (byDay[k] && !byDay[k].slots.length) { delete byDay[k]; days = days.filter(function (x) { return x !== k; }); }
+          chosenSlot = null; chosenDay = byDay[chosenDay] ? chosenDay : days[0];
+          errEl.style.display = "none";
+          paintCal(); paintTimes();
+          var nt = $("#vcw-note"); nt.textContent = (opts.errors && opts.errors.slot_taken) || ""; nt.style.display = "block";
+        }
+      }).catch(function () { fail("Couldn't reach the server. Check your connection and try again."); });
+    });
+  }
+
+  function renderWebDone(d, mail, who, calHref) {
+    var sh = webShell();
+    var b = '<div class="vcw-btns">' +
+      (d.meet_url ? '<a class="pri" href="' + esc(d.meet_url) + '" target="_blank" rel="noopener" data-vc-native-link>' + blIco.video + "Join " + esc(d.meeting || "Google Meet") + "</a>" : "") +
+      '<a href="' + calHref + '" target="_blank" rel="noopener" data-vc-native-link>Add to Google Calendar</a>' +
+      (d.manage_url ? '<a href="' + esc(d.manage_url) + '" target="_blank" rel="noopener" data-vc-native-link>Reschedule or cancel</a>' : "") + "</div>";
+    sh.main.innerHTML = '<div class="vcw-card vcw-one"><div class="vcw-cal" style="padding:36px 30px;text-align:center">' +
+      '<div style="width:56px;height:56px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:26px;margin:0 auto 12px">✓</div>' +
+      '<div class="vcw-h1" style="margin:0 0 6px">You\'re booked</div>' +
+      '<div style="font-size:16px;font-weight:800">' + esc(blWhen(d.start)) + "</div>" +
+      '<div style="font-size:13.5px;color:var(--text-low);margin-top:4px">with ' + esc(who) + " · " + esc(d.meeting || "Google Meet") + "</div>" + b +
+      (d.meet_url ? "" : '<div style="font-size:13px;color:var(--text-low);line-height:1.5;margin-top:14px">' + esc(who) + " will send you the meeting link shortly.</div>") +
+      '<div style="font-size:12px;color:var(--text-dim);margin-top:14px;line-height:1.5">' + esc(who) + " has been told." + (mail ? " A calendar invite is on its way to " + esc(mail) + "." : "") + "</div></div></div>";
+  }
+
   /* ----- CLIENT: one picker for booking AND rescheduling ----- */
   function blDead(text, msgBtn) {
+    if (isWide()) return webDead(text, msgBtn);
     openSheet("Book a meeting", '<div style="font-size:13px;color:var(--text-low);line-height:1.55">' + text + "</div>" + msgBtn);
   }
   function blMsgBtn() {
@@ -1845,6 +2118,7 @@
 
   // opts: title, intro (html), slots, badge (text), askDetails, nameVal, hasEmail, cta, submit(slot,name,mail)->Promise<{status,d}>, onDone(d,mail), errors{code:text}
   function renderPicker(opts) {
+    if (isWide()) return renderWebPicker(opts);
     var days = [], byDay = {};
     opts.slots.forEach(function (sl) {
       var d = new Date(sl.start), k = blDayKey(d);
@@ -1936,7 +2210,8 @@
         if (!d.slots || !d.slots.length) return blDead("No free times are open right now. Message " + esc(who) + " and they'll find one with you.", msgBtn);
         var first = (d.client_name || "").split(" ")[0];
         renderPicker({
-          title: "Book a meeting",
+          title: "Book a meeting", minutes: d.minutes || 0,
+          who: d.advocate ? (/^adv(ocate)?\.?\s/i.test(d.advocate) ? d.advocate : "Adv. " + d.advocate) : blWho(),
           intro: (first ? "Hi <b style=\"color:var(--text-hi)\">" + esc(first) + "</b>, pick" : "Pick") + " a time for your video meeting with <b style=\"color:var(--text-hi)\">" + esc(d.advocate || "your advocate") + "</b>.",
           slots: d.slots,
           badge: (d.minutes ? d.minutes + " min · " : "") + (d.meeting || "Google Meet") + " link is created for you",
@@ -1960,6 +2235,7 @@
     var who = d.advocate ? (/^adv(ocate)?\.?\s/i.test(d.advocate) ? d.advocate : "Adv. " + d.advocate) : blWho();
     var calHref = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + blEnc("Meeting with " + who) +
       "&dates=" + fmtZ(start) + "/" + fmtZ(end) + (d.meet_url ? "&details=" + blEnc("Join: " + d.meet_url) + "&location=" + blEnc(d.meet_url) : "");
+    if (isWide()) return renderWebDone(d, mail, who, calHref);
     var body =
       '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 4px;text-align:center">' +
       '<div style="width:46px;height:46px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px">✓</div>' +
@@ -1974,7 +2250,7 @@
     body += '<a href="' + calHref + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + ';justify-content:center">Add to Google Calendar</a>';
     if (d.manage_url) body += '<a href="' + esc(d.manage_url) + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + ';justify-content:center">Reschedule or cancel</a>';
     body += '<div style="font-size:11px;color:var(--text-dim);margin-top:10px;text-align:center;line-height:1.45">' +
-      esc(who) + " has been told." + (mail ? " A calendar invite is on its way to " + esc(mail) + "." : "") + "</div>";
+      esc(who) + " has been told." + (mail ? " A calendar invite is on its way to " + esc(mail) + "." : "") + "</div>" + vpAppsStrip();
     openSheet("All set", body);
   }
 
@@ -2004,7 +2280,7 @@
         if (mv) mv.addEventListener("click", function () {
           if (!d.slots || !d.slots.length) { blDead("No other free times are open right now. Message " + esc(who) + ".", msgBtn); return; }
           renderPicker({
-            title: "Pick a new time", intro: "Choose a new time for your meeting with <b style=\"color:var(--text-hi)\">" + esc(who) + "</b>.",
+            title: "Pick a new time", who: who, intro: "Choose a new time for your meeting with <b style=\"color:var(--text-hi)\">" + esc(who) + "</b>.",
             slots: d.slots, badge: (d.meeting || "Google Meet") + " link stays the same", askDetails: false, cta: "Move my meeting",
             submit: function (slot) {
               return fetch("/api/vakilcard/booking", { method: "POST", headers: { "Content-Type": "application/json" },
