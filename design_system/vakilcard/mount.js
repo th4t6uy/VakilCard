@@ -1511,9 +1511,10 @@
   function blDashLink(label) { return '<a href="' + blDashUrl() + '" target="_blank" rel="noopener" data-vc-native-link style="' + blLinkCss + '">' + label + "</a>"; }
 
   /* ----- OWNER: the sheet ----- */
+  var bridgeToken = ""; // owner sign-in handed over by the dashboard host (see owner-bridge.html)
   function ownerCall(body) {
-    var t = "";
-    try { t = localStorage.getItem("vc_access_token") || ""; } catch (e) {}
+    var t = bridgeToken;
+    if (!t) { try { t = localStorage.getItem("vc_access_token") || ""; } catch (e) {} }
     return fetch("/api/vakilcard/booking", {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer " + t },
@@ -1942,9 +1943,35 @@
       storedAccess = localStorage.getItem("vc_access_token");
       storedRefresh = localStorage.getItem("vc_refresh_token");
     } catch (e) {}
+    // The card on www.vakilpedia.com is a different origin from the dashboard, so it cannot read the
+    // sign-in directly. Ask the dashboard host through a hidden frame (answers our own origins only).
+    var askDashboard = function () {
+      var dashOrigin = "";
+      try { dashOrigin = new URL(boot.dash || "https://vakilcard.vakilpedia.com").origin; } catch (e) {}
+      if (!dashOrigin || dashOrigin === location.origin) return;
+      var fr = document.createElement("iframe");
+      fr.src = dashOrigin + "/ds/owner-bridge.html";
+      fr.setAttribute("aria-hidden", "true");
+      fr.tabIndex = -1;
+      fr.style.cssText = "position:absolute;width:0;height:0;border:0;opacity:0;pointer-events:none";
+      window.addEventListener("message", function (e) {
+        if (e.origin !== dashOrigin || !e.data || e.data.type !== "vc-owner" || !e.data.access_token) return;
+        var c3 = decodeJwt(e.data.access_token);
+        if (c3 && c3.pid === boot.profileId && c3.exp * 1000 > Date.now()) {
+          bridgeToken = e.data.access_token;
+          showEditChip();
+        }
+      });
+      fr.onload = function () {
+        try { fr.contentWindow.postMessage({ type: "vc-owner-request" }, dashOrigin); } catch (e) {}
+      };
+      document.body.appendChild(fr);
+    };
     var claims = storedAccess && decodeJwt(storedAccess);
     if (claims && claims.pid === boot.profileId && claims.exp * 1000 > Date.now() + 30000) {
       showEditChip();
+    } else if (!storedRefresh) {
+      askDashboard();
     } else if (storedRefresh) {
       fetch("/api/vakilcard/auth", {
         method: "POST",

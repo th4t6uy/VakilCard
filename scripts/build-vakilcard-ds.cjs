@@ -45,6 +45,7 @@ copy(path.join(src, "styles.css"), path.join(out, "styles.css"));
 copy(path.join(src, "_ds_bundle.js"), path.join(out, "_ds_bundle.js"));
 copy(path.join(src, "page.css"), path.join(out, "page.css"));
 copy(path.join(src, "mount.js"), path.join(out, "mount.js"));
+copy(path.join(src, "owner-bridge.html"), path.join(out, "owner-bridge.html")); // hidden frame: lets a card on another origin (www) see the owner sign-in
 // The whole assets tree (logos + action/upi/brand icon PNGs). Everything the
 // card references at runtime must live under /ds/* — the www proxy
 // (Vakilpedia-code middleware) only forwards /ds/* and /api/vakilcard/*, so

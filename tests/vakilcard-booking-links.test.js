@@ -39,4 +39,11 @@ assert(/no_hours/.test(clBody) && /calendar_not_connected/.test(clBody), "needs 
 assert(/calendar_not_connected/.test(cl.slice(0, 900)));
 // The link is claimed atomically (status=eq.open) before a booking row is written.
 assert(/vakilcard_booking_links\?id=eq\.\$\{link\.id\}&status=eq\.open/.test(src));
+// Owner bridge: a card shown on www must still recognise its owner (sign-in lives on the dashboard host).
+const bridge = fs.readFileSync(path.join(__dirname, "../design_system/vakilcard/owner-bridge.html"), "utf8");
+assert(/OK = \{[^}]*"https:\/\/www\.vakilpedia\.com"/.test(bridge), "bridge answers only our own origins");
+assert(!/refresh_token:\s*rt\s*\)?\s*[,}]\s*\n?\s*\}?\s*,\s*"/.test(bridge) && !/postMessage\(\{[^}]*refresh/.test(bridge), "bridge never hands out the refresh token");
+const mountSrc = fs.readFileSync(path.join(__dirname, "../design_system/vakilcard/mount.js"), "utf8");
+assert(/owner-bridge\.html/.test(mountSrc) && /askDashboard\(\)/.test(mountSrc), "mount.js asks the dashboard host when the card is on another origin");
+assert(/owner-bridge\.html/.test(fs.readFileSync(path.join(__dirname, "../scripts/build-vakilcard-ds.cjs"), "utf8")), "build copies the bridge");
 console.log("vakilcard-booking-links: ok");

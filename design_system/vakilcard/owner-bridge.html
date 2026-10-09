@@ -1,0 +1,43 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="robots" content="noindex"><title>VakilCard</title></head>
+<body>
+<script>
+/* Owner bridge (founder, 9 Oct 2026). The lawyer signs in on the dashboard host, but a card is shown on
+   www.vakilpedia.com/<username> too -- a different origin, so it cannot read the sign-in on its own and
+   the owner buttons (Send booking link, Edit my card) never appeared there. A card page puts this page in
+   a hidden frame and asks; it answers ONLY our own origins, and hands back only the short-lived access
+   token (never the refresh token). Nothing is shown here. */
+(function () {
+  var OK = { "https://www.vakilpedia.com": 1, "https://vakilpedia.com": 1, "https://vakilcard.vakilpedia.com": 1 };
+  function dec(t) {
+    try { return JSON.parse(atob(t.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))); } catch (e) { return null; }
+  }
+  function reply(src, origin, tok) {
+    try { src.postMessage({ type: "vc-owner", access_token: tok || null }, origin); } catch (e) {}
+  }
+  window.addEventListener("message", function (e) {
+    if (!OK[e.origin] || !e.data || e.data.type !== "vc-owner-request" || !e.source) return;
+    var at = null, rt = null;
+    try { at = localStorage.getItem("vc_access_token"); rt = localStorage.getItem("vc_refresh_token"); } catch (x) {}
+    var c = at && dec(at);
+    if (c && c.exp * 1000 > Date.now() + 30000) return reply(e.source, e.origin, at);
+    if (!rt) return reply(e.source, e.origin, null);
+    fetch("/api/vakilcard/auth", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ action: "refresh", refresh_token: rt }),
+    })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) {
+        if (!d || !d.access_token) return reply(e.source, e.origin, null);
+        try {
+          localStorage.setItem("vc_access_token", d.access_token);
+          if (d.refresh_token) localStorage.setItem("vc_refresh_token", d.refresh_token);
+        } catch (x) {}
+        reply(e.source, e.origin, d.access_token);
+      })
+      .catch(function () { reply(e.source, e.origin, null); });
+  });
+})();
+</script>
+</body></html>
