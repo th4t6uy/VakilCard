@@ -1471,6 +1471,375 @@
     }
   })();
 
+  /* ---------- Personal booking links (founder, 9 Oct 2026) ----------
+     OWNER, on their own card: "Send booking link" -> client name + their WhatsApp number or email,
+     meeting length -> one tap on WhatsApp / Email / Copy. A private link
+     (vakilpedia.com/<username>?book=<token>) is made. FREE for every card.
+     CLIENT, opening that link: pick a day and a time -> a Google Meet link is made in the lawyer's
+     calendar and shown straight away. Pro lawyers also give the client a reschedule / cancel page
+     (?manage=<token>) and reminder emails, and can send a reusable link.
+     Server: api/vakilcard/booking.js (create_link, link_info, link_book, manage_*); providers live
+     in api/vakilcard/_meeting.js, so Zoom later changes nothing here. */
+
+  var blEnc = encodeURIComponent;
+  var blVioletBtn = ";background:var(--violet-400);border-color:transparent;color:#fff;justify-content:center";
+  var blInput =
+    "width:100%;box-sizing:border-box;padding:12px 14px;margin-bottom:8px;border-radius:14px;" +
+    "border:1px solid var(--hairline);background:var(--glass-thick);color:var(--text-hi);" +
+    "font-family:var(--font-sans);font-size:16px;outline:none";
+  var blIco = {
+    video: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="6" width="13" height="12" rx="3"/><path d="M15.5 10.5l6-3.5v10l-6-3.5"/></svg>',
+    mail: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="3"/><path d="M3.5 7.5l8.5 6 8.5-6"/></svg>',
+    link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M10 14a4.5 4.5 0 0 0 6.4 0l3-3a4.5 4.5 0 0 0-6.4-6.4l-1 1"/><path d="M14 10a4.5 4.5 0 0 0-6.4 0l-3 3a4.5 4.5 0 0 0 6.4 6.4l1-1"/></svg>',
+    lock: '<svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="10" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>',
+  };
+  var blLinkCss = "color:var(--violet-400);font-weight:800;text-decoration:none";
+
+  function blWho() {
+    var nm = String((boot.profile && boot.profile.name) || "").trim();
+    return /^adv(ocate)?\.?\s/i.test(nm) ? nm : nm ? "Adv. " + nm : "your advocate";
+  }
+  function blDayKey(d) { return d.getFullYear() + "-" + d.getMonth() + "-" + d.getDate(); }
+  function blTime(d) { return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" }); }
+  function blWhen(iso) {
+    var d = new Date(iso);
+    return d.toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short" }) + " · " + blTime(d);
+  }
+  function blTz() { try { return Intl.DateTimeFormat().resolvedOptions().timeZone || ""; } catch (e) { return ""; } }
+  function blJson(r) { return r.json().catch(function () { return {}; }).then(function (d) { return { status: r.status, d: d }; }); }
+  function blDashUrl() { return ((boot.dash || "https://vakilcard.vakilpedia.com") + "/").replace(/"/g, "&quot;"); }
+  function blDashLink(label) { return '<a href="' + blDashUrl() + '" target="_blank" rel="noopener" data-vc-native-link style="' + blLinkCss + '">' + label + "</a>"; }
+
+  /* ----- OWNER: the sheet ----- */
+  function ownerCall(body) {
+    var t = "";
+    try { t = localStorage.getItem("vc_access_token") || ""; } catch (e) {}
+    return fetch("/api/vakilcard/booking", {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer " + t },
+      body: JSON.stringify(body),
+    }).then(blJson);
+  }
+
+  function showSendLinkSheet() {
+    var isPro = !!(boot.profile && boot.profile.pro);
+    var minutes = 30, reusable = false;
+    var chip = function (on) {
+      return "padding:8px 0;flex:1;border-radius:12px;font-family:var(--font-sans);font-size:12.5px;font-weight:800;cursor:pointer;border:1px solid " +
+        (on ? "var(--violet-400)" : "var(--hairline)") + ";background:" + (on ? "var(--violet-400)" : "var(--glass-thick)") + ";color:" + (on ? "#fff" : "var(--text-hi)");
+    };
+    var body =
+      '<div style="font-size:12.5px;color:var(--text-low);line-height:1.5;margin-bottom:12px">Your client gets a private link, picks a time that suits you both, and a Google Meet is made automatically.</div>' +
+      '<input id="vc-sl-name" placeholder="Client\'s name" autocomplete="off" style="' + blInput + '">' +
+      '<input id="vc-sl-to" placeholder="WhatsApp number or email" autocomplete="off" autocapitalize="off" style="' + blInput + '">' +
+      '<div style="display:flex;gap:6px;margin:2px 0 10px" id="vc-sl-mins">' +
+      [15, 30, 45, 60].map(function (m) { return '<button type="button" data-m="' + m + '">' + m + " min</button>"; }).join("") +
+      "</div>" +
+      '<div style="display:flex;gap:6px;align-items:center;margin:0 0 12px;flex-wrap:wrap">' +
+      '<span style="display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:800;border:1px solid var(--violet-400);color:var(--text-hi)">' + blIco.video + "Google Meet</span>" +
+      '<span style="padding:6px 11px;border-radius:999px;font-size:11.5px;font-weight:700;border:1px dashed var(--hairline-strong);color:var(--text-dim)">Zoom · soon</span>' +
+      '<button type="button" id="vc-sl-reuse" style="margin-left:auto;display:inline-flex;align-items:center;gap:5px;padding:6px 11px;border-radius:999px;font-family:var(--font-sans);font-size:11.5px;font-weight:700;cursor:pointer;border:1px solid var(--hairline);background:transparent;color:var(--text-low)">' +
+      (isPro ? "" : blIco.lock) + "Reusable link" + (isPro ? "" : " · Pro") + "</button>" +
+      "</div>" +
+      '<button id="vc-sl-wa" style="' + sheetBtnCss + blVioletBtn + ';margin-top:4px">' + nounIcon("whatsapp") + "Send on WhatsApp</button>" +
+      '<div style="display:flex;gap:8px">' +
+      '<button id="vc-sl-mail" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.mail + "Email</button>" +
+      '<button id="vc-sl-copy" style="' + sheetBtnCss + ';justify-content:center;flex:1">' + blIco.link + "<span>Copy link</span></button>" +
+      "</div>" +
+      '<div id="vc-sl-err" style="font-size:12px;color:var(--danger,#f66);margin-top:10px;line-height:1.45;display:none"></div>';
+    var s = openSheet("Send a booking link", body);
+    var $ = function (id) { return s.panel.querySelector(id); };
+    var errEl = $("#vc-sl-err");
+    var showErr = function (html) { errEl.innerHTML = html; errEl.style.display = "block"; };
+    var made = null; // { key, url } — reuse one link across WhatsApp / Email / Copy
+
+    function paintMins() {
+      $("#vc-sl-mins").querySelectorAll("button").forEach(function (b) {
+        b.style.cssText = chip(+b.getAttribute("data-m") === minutes);
+      });
+    }
+    paintMins();
+    $("#vc-sl-mins").querySelectorAll("button").forEach(function (b) {
+      b.addEventListener("click", function () { minutes = +b.getAttribute("data-m"); paintMins(); });
+    });
+    $("#vc-sl-reuse").addEventListener("click", function () {
+      if (!isPro) { showErr("Reusable links are part of VakilCard Pro. " + blDashLink("Unlock with Pro →")); return; }
+      reusable = !reusable;
+      var b = $("#vc-sl-reuse");
+      b.style.borderColor = reusable ? "var(--violet-400)" : "var(--hairline)";
+      b.style.color = reusable ? "var(--text-hi)" : "var(--text-low)";
+      b.style.background = reusable ? "var(--glass-thick)" : "transparent";
+      $("#vc-sl-name").placeholder = reusable ? "Label for you (optional)" : "Client's name";
+    });
+
+    function getLink(f) {
+      var key = [f.name, f.phone, f.mail, minutes, reusable].join("|");
+      if (made && made.key === key) return Promise.resolve(made.url);
+      return ownerCall({ action: "create_link", client_name: f.name, client_phone: f.phone, client_email: f.mail, duration_minutes: minutes, reusable: reusable }).then(function (r) {
+        if (r.d && r.d.ok) { made = { key: key, url: r.d.url }; return r.d.url; }
+        var err = new Error("failed"); err.code = r.status === 402 ? "pro_required" : (r.d && r.d.error) || ""; throw err;
+      });
+    }
+    function readForm() {
+      var name = $("#vc-sl-name").value.trim();
+      var to = $("#vc-sl-to").value.trim();
+      var isMail = to.indexOf("@") > -1;
+      return { name: name, phone: isMail ? "" : to, mail: isMail ? to : "" };
+    }
+    function waNumber(raw) {
+      var d = String(raw || "").replace(/\D/g, "").replace(/^0+/, "");
+      return d.length === 10 ? "91" + d : d;
+    }
+    function msgFor(f, url) {
+      return (f.name && !reusable ? "Hello " + f.name + ", this is " : "Hello, this is ") + blWho() + ". Please pick a time that suits you for our " + minutes + "-minute video meeting (Google Meet):\n\n" + url +
+        "\n\n" + (reusable ? "You can use this link any time." : "This private link works for 7 days.");
+    }
+    function failMsg(code) {
+      if (code === "calendar_not_connected" || code === "reconnect_required")
+        return "Connect your Google Calendar first — that is where the Meet link is made. " + blDashLink("Open dashboard →");
+      if (code === "no_hours") return "Set the days and hours you take meetings first. " + blDashLink("Open dashboard →");
+      if (code === "name_required") return "Add your client's name first.";
+      if (code === "pro_required") return "Reusable links are part of VakilCard Pro. " + blDashLink("Unlock with Pro →");
+      return "Couldn't make the link — please try again.";
+    }
+    function run(channel) {
+      errEl.style.display = "none";
+      var f = readForm();
+      if (!f.name && !reusable) { showErr("Add your client's name first."); $("#vc-sl-name").focus(); return; }
+      var win = null;
+      // Opened inside the tap so the browser lets it through, pointed at WhatsApp once the link exists.
+      if (channel === "wa") { try { win = window.open("", "_blank"); } catch (e) {} }
+      getLink(f).then(function (url) {
+        track("share");
+        if (channel === "wa") {
+          var href = "https://wa.me/" + waNumber(f.phone) + "?text=" + blEnc(msgFor(f, url));
+          if (win) win.location.href = href; else window.location.href = href;
+        } else if (channel === "mail") {
+          window.location.href = "mailto:" + blEnc(f.mail) + "?subject=" + blEnc("Book a time to meet — " + blWho()) + "&body=" + blEnc(msgFor(f, url));
+        } else {
+          var done = function () { var sp = $("#vc-sl-copy span"); if (sp) { sp.textContent = "Copied ✓"; setTimeout(function () { sp.textContent = "Copy link"; }, 1800); } };
+          if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, function () { window.prompt("Copy this link", url); });
+          else window.prompt("Copy this link", url);
+        }
+      }).catch(function (e) {
+        if (win) { try { win.close(); } catch (x) {} }
+        showErr(failMsg(e && e.code));
+      });
+    }
+    $("#vc-sl-wa").addEventListener("click", function () { run("wa"); });
+    $("#vc-sl-mail").addEventListener("click", function () { run("mail"); });
+    $("#vc-sl-copy").addEventListener("click", function () { run("copy"); });
+    return s;
+  }
+
+  /* ----- CLIENT: one picker for booking AND rescheduling ----- */
+  function blDead(text, msgBtn) {
+    openSheet("Book a meeting", '<div style="font-size:13px;color:var(--text-low);line-height:1.55">' + text + "</div>" + msgBtn);
+  }
+  function blMsgBtn() {
+    return links.whatsapp
+      ? '<a href="' + links.whatsapp + '" target="_blank" rel="noopener" style="' + sheetBtnCss + ';justify-content:center">' + nounIcon("whatsapp") + "Message " + esc(blWho()) + "</a>"
+      : "";
+  }
+
+  // opts: title, intro (html), slots, badge (text), askDetails, nameVal, hasEmail, cta, submit(slot,name,mail)->Promise<{status,d}>, onDone(d,mail), errors{code:text}
+  function renderPicker(opts) {
+    var days = [], byDay = {};
+    opts.slots.forEach(function (sl) {
+      var d = new Date(sl.start), k = blDayKey(d);
+      if (!byDay[k]) { byDay[k] = { date: d, slots: [] }; days.push(k); }
+      byDay[k].slots.push(sl);
+    });
+    var chosenDay = days[0], chosenSlot = null;
+    var tz = blTz();
+    var body =
+      '<div style="max-height:70vh;overflow-y:auto;overflow-x:hidden;margin:0 -4px;padding:0 4px">' +
+      '<div style="font-size:13px;color:var(--text-low);line-height:1.5;margin-bottom:12px">' + opts.intro + "</div>" +
+      '<div id="vc-bl-days" style="display:flex;gap:8px;overflow-x:auto;padding:2px 2px 8px;-webkit-overflow-scrolling:touch"></div>' +
+      '<div id="vc-bl-times" style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px"></div>' +
+      '<div id="vc-bl-form" style="display:none;margin-top:14px">' +
+      (opts.askDetails
+        ? '<input id="vc-bl-name" placeholder="Your name" value="' + esc(opts.nameVal || "") + '" style="' + blInput + '">' +
+          '<input id="vc-bl-mail" type="email" placeholder="' + (opts.hasEmail ? "Email for the invite (saved)" : "Email — to get the invite (optional)") + '" style="' + blInput + '">'
+        : "") +
+      '<button id="vc-bl-go" style="' + sheetBtnCss + blVioletBtn + '">' + opts.cta + "</button>" +
+      '<div id="vc-bl-err" style="font-size:12px;color:var(--danger,#f66);margin-top:8px;display:none;line-height:1.45"></div>' +
+      "</div>" +
+      '<div style="display:flex;align-items:center;gap:8px;margin-top:14px;font-size:11.5px;color:var(--text-dim);line-height:1.4">' + blIco.video + "<span>" + esc(opts.badge) + "</span></div>" +
+      (tz ? '<div style="margin-top:6px;font-size:11px;color:var(--text-dim)">Times are shown in your time zone (' + esc(tz.replace(/_/g, " ")) + ").</div>" : "") +
+      "</div>";
+    var s = openSheet(opts.title, body);
+    var $ = function (id) { return s.panel.querySelector(id); };
+
+    function paint() {
+      $("#vc-bl-days").innerHTML = days.map(function (k) {
+        var d = byDay[k].date, on = k === chosenDay;
+        return '<button data-day="' + k + '" style="flex:0 0 auto;min-width:58px;padding:9px 6px;border-radius:16px;border:1px solid ' + (on ? "transparent" : "var(--hairline)") +
+          ";background:" + (on ? "var(--violet-400)" : "var(--glass-thick)") + ";color:" + (on ? "#fff" : "var(--text-hi)") + ';font-family:var(--font-sans);cursor:pointer">' +
+          '<div style="font-size:10px;font-weight:700;letter-spacing:.06em;text-transform:uppercase;opacity:.8">' + d.toLocaleDateString(undefined, { weekday: "short" }) + "</div>" +
+          '<div style="font-size:17px;font-weight:800;line-height:1.25">' + d.getDate() + "</div>" +
+          '<div style="font-size:10px;opacity:.8">' + d.toLocaleDateString(undefined, { month: "short" }) + "</div></button>";
+      }).join("");
+      $("#vc-bl-times").innerHTML = byDay[chosenDay].slots.map(function (sl, i) {
+        var on = chosenSlot && chosenSlot.start === sl.start;
+        return '<button data-slot="' + i + '" style="padding:11px 4px;border-radius:14px;border:1px solid ' + (on ? "var(--violet-400)" : "var(--hairline)") +
+          ";background:" + (on ? "var(--violet-400)" : "var(--glass-thick)") + ";color:" + (on ? "#fff" : "var(--text-hi)") +
+          ';font-family:var(--font-sans);font-size:13px;font-weight:700;cursor:pointer">' + blTime(new Date(sl.start)) + "</button>";
+      }).join("");
+      $("#vc-bl-days").querySelectorAll("[data-day]").forEach(function (b) {
+        b.addEventListener("click", function () { chosenDay = b.getAttribute("data-day"); chosenSlot = null; $("#vc-bl-form").style.display = "none"; paint(); });
+      });
+      $("#vc-bl-times").querySelectorAll("[data-slot]").forEach(function (b) {
+        b.addEventListener("click", function () {
+          chosenSlot = byDay[chosenDay].slots[+b.getAttribute("data-slot")];
+          $("#vc-bl-form").style.display = "block";
+          paint();
+          var f = $("#vc-bl-form"); if (f.scrollIntoView) f.scrollIntoView({ block: "nearest", behavior: "smooth" });
+        });
+      });
+    }
+    paint();
+
+    $("#vc-bl-go").addEventListener("click", function () {
+      var errEl = $("#vc-bl-err"), btn = $("#vc-bl-go");
+      var nameEl = $("#vc-bl-name"), mailEl = $("#vc-bl-mail");
+      var name = nameEl ? nameEl.value.trim() : "", mail = mailEl ? mailEl.value.trim() : "";
+      var fail = function (t) { errEl.textContent = t; errEl.style.display = "block"; btn.disabled = false; btn.textContent = opts.cta; };
+      errEl.style.display = "none";
+      if (opts.askDetails && !name) { fail("Please add your name."); return; }
+      if (!chosenSlot) return;
+      btn.disabled = true; btn.textContent = "Please wait…";
+      opts.submit(chosenSlot, name, mail).then(function (r) {
+        if (r.d && r.d.ok) return opts.onDone(r.d, mail);
+        var e = (r.d && r.d.error) || "";
+        fail((opts.errors && opts.errors[e]) || "Couldn't do that — please try again.");
+        if (e === "slot_taken") { chosenSlot = null; $("#vc-bl-form").style.display = "none"; }
+      }).catch(function () { fail("Couldn't reach the server — check your connection and try again."); });
+    });
+  }
+
+  /* ----- CLIENT: opening a booking link ----- */
+  function openBookingLink(token) {
+    var username = (boot.profile && boot.profile.username) || "";
+    var who = blWho(), msgBtn = blMsgBtn();
+    openSheet("Book a meeting", '<div style="display:flex;align-items:center;justify-content:center;padding:28px 0;color:var(--text-low);font-size:13px">Loading available times…</div>');
+    fetch("/api/vakilcard/booking?action=link_info&username=" + blEnc(username) + "&token=" + blEnc(token))
+      .then(blJson)
+      .then(function (r) {
+        var d = r.d || {};
+        if (r.status === 410 && d.error === "link_used") return blDead("This link has already been used to book a meeting. Need another time? Message " + esc(who) + ".", msgBtn);
+        if (r.status === 410) return blDead("This link has expired. Message " + esc(who) + " for a fresh one.", msgBtn);
+        if (!d.ok) return blDead("This booking link isn't valid any more. Message " + esc(who) + " and ask for a new one.", msgBtn);
+        if (!d.slots || !d.slots.length) return blDead("No free times are open right now. Message " + esc(who) + " and they'll find one with you.", msgBtn);
+        var first = (d.client_name || "").split(" ")[0];
+        renderPicker({
+          title: "Book a meeting",
+          intro: (first ? "Hi <b style=\"color:var(--text-hi)\">" + esc(first) + "</b>, pick" : "Pick") + " a time for your video meeting with <b style=\"color:var(--text-hi)\">" + esc(d.advocate || "your advocate") + "</b>.",
+          slots: d.slots,
+          badge: (d.minutes ? d.minutes + " min · " : "") + (d.meeting || "Google Meet") + " link is created for you",
+          askDetails: true, nameVal: d.client_name, hasEmail: d.has_email, cta: "Confirm meeting",
+          submit: function (slot, name, mail) {
+            return fetch("/api/vakilcard/booking", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ action: "link_book", username: username, token: token, start: slot.start, end: slot.end, client_name: name, client_email: mail }),
+            }).then(blJson);
+          },
+          onDone: function (res, mail) { track("appointment"); renderLinkDone(res, mail); },
+          errors: { slot_taken: "That time was just taken — please pick another.", link_used: "This link has already been used.", name_required: "Please add your name." },
+        });
+      })
+      .catch(function () { blDead("Couldn't load the available times. Please try again in a moment.", msgBtn); });
+  }
+
+  function renderLinkDone(d, mail) {
+    var start = new Date(d.start), end = new Date(d.end || d.start);
+    var fmtZ = function (x) { return x.toISOString().replace(/[-:]|\.\d{3}/g, ""); };
+    var who = d.advocate ? (/^adv(ocate)?\.?\s/i.test(d.advocate) ? d.advocate : "Adv. " + d.advocate) : blWho();
+    var calHref = "https://calendar.google.com/calendar/render?action=TEMPLATE&text=" + blEnc("Meeting with " + who) +
+      "&dates=" + fmtZ(start) + "/" + fmtZ(end) + (d.meet_url ? "&details=" + blEnc("Join: " + d.meet_url) + "&location=" + blEnc(d.meet_url) : "");
+    var body =
+      '<div style="display:flex;flex-direction:column;align-items:center;gap:6px;padding:6px 0 4px;text-align:center">' +
+      '<div style="width:46px;height:46px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px">✓</div>' +
+      '<div style="font-size:16px;font-weight:800;margin-top:6px">You\'re booked</div>' +
+      '<div style="font-size:14px;font-weight:700;color:var(--text-hi)">' + esc(blWhen(d.start)) + "</div>" +
+      '<div style="font-size:12.5px;color:var(--text-low)">with ' + esc(who) + " · " + esc(d.meeting || "Google Meet") + "</div></div>";
+    if (d.meet_url) {
+      body += '<a href="' + esc(d.meet_url) + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + blVioletBtn + ';margin-top:14px">' + blIco.video + "Join " + esc(d.meeting || "Google Meet") + "</a>";
+    } else {
+      body += '<div style="font-size:12.5px;color:var(--text-low);line-height:1.5;margin-top:12px;text-align:center">' + esc(who) + " will send you the meeting link shortly.</div>";
+    }
+    body += '<a href="' + calHref + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + ';justify-content:center">Add to Google Calendar</a>';
+    if (d.manage_url) body += '<a href="' + esc(d.manage_url) + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + ';justify-content:center">Reschedule or cancel</a>';
+    body += '<div style="font-size:11px;color:var(--text-dim);margin-top:10px;text-align:center;line-height:1.45">' +
+      esc(who) + " has been told." + (mail ? " A calendar invite is on its way to " + esc(mail) + "." : "") + "</div>";
+    openSheet("All set", body);
+  }
+
+  /* ----- CLIENT (Pro lawyer): ?manage=<token> — reschedule or cancel ----- */
+  function openManage(token) {
+    var username = (boot.profile && boot.profile.username) || "";
+    var who = blWho(), msgBtn = blMsgBtn();
+    openSheet("Your meeting", '<div style="display:flex;align-items:center;justify-content:center;padding:28px 0;color:var(--text-low);font-size:13px">Loading…</div>');
+    fetch("/api/vakilcard/booking?action=manage_info&username=" + blEnc(username) + "&token=" + blEnc(token))
+      .then(blJson)
+      .then(function (r) {
+        var d = r.d || {};
+        if (r.status === 410 && d.error === "cancelled") return blDead("This meeting was cancelled. Message " + esc(who) + " to set up a new time.", msgBtn);
+        if (r.status === 410) return blDead("This meeting has already happened.", "");
+        if (!d.ok) return blDead("This page isn't available. Message " + esc(who) + " if you need to change your meeting.", msgBtn);
+        var body =
+          '<div style="text-align:center;padding:4px 0 2px"><div style="font-size:11px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;color:var(--text-dim)">Your meeting with ' + esc(d.advocate ? who : "the advocate") + "</div>" +
+          '<div style="font-size:17px;font-weight:800;margin-top:6px">' + esc(blWhen(d.start)) + "</div></div>" +
+          (d.meet_url ? '<a href="' + esc(d.meet_url) + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + blVioletBtn + ';margin-top:14px">' + blIco.video + "Join " + esc(d.meeting || "Google Meet") + "</a>" : "") +
+          (d.rescheduled >= 3 ? "" : '<button id="vc-mg-move" style="' + sheetBtnCss + ';justify-content:center">Pick a new time</button>') +
+          '<button id="vc-mg-cancel" style="' + sheetBtnCss + ';justify-content:center;color:var(--danger,#f66)">Cancel this meeting</button>' +
+          '<div id="vc-mg-ask" style="display:none;margin-top:10px;font-size:12.5px;line-height:1.5;text-align:center">Cancel this meeting? ' + esc(who) + " will be told." +
+          '<div style="display:flex;gap:8px"><button id="vc-mg-no" style="' + sheetBtnCss + ';justify-content:center;flex:1">Keep it</button><button id="vc-mg-yes" style="' + sheetBtnCss + ';justify-content:center;flex:1;color:var(--danger,#f66)">Yes, cancel</button></div></div>';
+        var s = openSheet("Your meeting", body);
+        var $ = function (id) { return s.panel.querySelector(id); };
+        var mv = $("#vc-mg-move");
+        if (mv) mv.addEventListener("click", function () {
+          if (!d.slots || !d.slots.length) { blDead("No other free times are open right now. Message " + esc(who) + ".", msgBtn); return; }
+          renderPicker({
+            title: "Pick a new time", intro: "Choose a new time for your meeting with <b style=\"color:var(--text-hi)\">" + esc(who) + "</b>.",
+            slots: d.slots, badge: (d.meeting || "Google Meet") + " link stays the same", askDetails: false, cta: "Move my meeting",
+            submit: function (slot) {
+              return fetch("/api/vakilcard/booking", { method: "POST", headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ action: "manage_reschedule", username: username, token: token, start: slot.start }) }).then(blJson);
+            },
+            onDone: function (res) {
+              openSheet("Moved", '<div style="text-align:center;padding:8px 0"><div style="width:46px;height:46px;border-radius:50%;background:var(--success);display:flex;align-items:center;justify-content:center;color:#fff;font-size:21px;margin:0 auto 8px">✓</div>' +
+                '<div style="font-size:16px;font-weight:800">Your meeting is moved</div><div style="font-size:14px;font-weight:700;margin-top:6px">' + esc(blWhen(res.start)) + "</div>" +
+                '<div style="font-size:12px;color:var(--text-low);margin-top:6px">' + esc(who) + " has been told.</div></div>" +
+                (res.meet_url ? '<a href="' + esc(res.meet_url) + '" target="_blank" rel="noopener" data-vc-native-link style="' + sheetBtnCss + blVioletBtn + ';margin-top:10px">' + blIco.video + "Join link</a>" : ""));
+            },
+            errors: { slot_taken: "That time was just taken — please pick another.", too_many_changes: "This meeting has been moved too many times. Please message " + who + "." },
+          });
+        });
+        $("#vc-mg-cancel").addEventListener("click", function () { $("#vc-mg-ask").style.display = "block"; });
+        $("#vc-mg-no").addEventListener("click", function () { $("#vc-mg-ask").style.display = "none"; });
+        $("#vc-mg-yes").addEventListener("click", function () {
+          fetch("/api/vakilcard/booking", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ action: "manage_cancel", username: username, token: token }) })
+            .then(blJson).then(function (x) {
+              if (x.d && x.d.ok) openSheet("Cancelled", '<div style="font-size:13.5px;line-height:1.55;color:var(--text-low)">Your meeting is cancelled and ' + esc(who) + " has been told.</div>" + msgBtn);
+              else blDead("Couldn't cancel just now. Please message " + esc(who) + ".", msgBtn);
+            }).catch(function () { blDead("Couldn't cancel just now. Please message " + esc(who) + ".", msgBtn); });
+        });
+      })
+      .catch(function () { blDead("Couldn't load your meeting. Please try again in a moment.", msgBtn); });
+  }
+
+  (function maybeOpenBookingLink() {
+    var tk = "", mg = "";
+    try {
+      var q = new URLSearchParams(window.location.search);
+      tk = (q.get("book") || "").replace(/[^A-Za-z0-9_-]/g, "");
+      mg = (q.get("manage") || "").replace(/[^A-Za-z0-9_-]/g, "");
+    } catch (e) {}
+    if ((!tk && !mg) || visualOnly || boot.demo || !(boot.profile && boot.profile.username)) return;
+    setTimeout(function () { if (mg) openManage(mg); else openBookingLink(tk); }, 350);
+  })();
+
   /* ---------- Owner auto-detect → minimal Edit chip ----------
      The dashboard and public cards share an origin, so the owner's session
      tokens are readable here. If the stored access token's pid matches this
@@ -1549,12 +1918,24 @@
       a.href = (boot.dash || "https://vakilcard.vakilpedia.com") + "/setup";
       a.textContent = "✎ Edit my card";
       a.style.cssText =
-        "position:fixed;bottom:14px;right:14px;z-index:98;display:inline-flex;align-items:center;gap:6px;" +
+        "display:inline-flex;align-items:center;gap:6px;flex:0 0 auto;" +
         "height:38px;padding:0 16px;border-radius:999px;background:var(--glass-frost);" +
         "backdrop-filter:blur(20px) saturate(1.4);-webkit-backdrop-filter:blur(20px) saturate(1.4);" +
         "border:1px solid var(--hairline-strong);color:var(--text-hi);font-family:var(--font-sans);" +
         "font-size:12.5px;font-weight:700;text-decoration:none;box-shadow:0 6px 18px rgba(0,0,0,.3)";
-      document.body.appendChild(a);
+      // Two chips, one fixed row: Send booking link (founder, 9 Oct 2026) + Edit my card.
+      var row = document.createElement("div");
+      row.id = "vc-owner-chips";
+      row.style.cssText = "position:fixed;bottom:14px;right:14px;z-index:98;display:flex;gap:8px;align-items:center";
+      var sb = document.createElement("button");
+      sb.id = "vc-send-link-chip";
+      sb.type = "button";
+      sb.innerHTML = blIco.video + "<span>Send booking link</span>";
+      sb.style.cssText = a.style.cssText + ";cursor:pointer";
+      sb.addEventListener("click", function () { showSendLinkSheet(); });
+      row.appendChild(sb);
+      row.appendChild(a);
+      document.body.appendChild(row);
     };
     var storedAccess = null, storedRefresh = null;
     try {

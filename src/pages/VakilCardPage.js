@@ -226,7 +226,7 @@ function GoogleConnectHero({ pro }) {
                 api/vakilcard/booking.js). What Google GRANTS and what VakilCard
                 USES are now different things, and both are stated. Do not
                 collapse them back into one reassuring sentence. */}
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 hyphens-none">Clients can only book times you are actually free. Google will ask you to allow viewing and editing calendar events — VakilCard uses it only to read when you are busy.</p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 hyphens-none">Clients can only book times you are actually free. Google will ask you to allow viewing and editing calendar events — VakilCard uses it to see when you are busy and to add the meetings you book — it does not read your other events.</p>
           </div>
         </div>
         <button
@@ -400,6 +400,10 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
   const [loading, setLoading] = useState(true);
   const [groups, setGroups] = useState([]);
   const [savingWindows, setSavingWindows] = useState(false);
+  // Gap between meetings (minutes) and the shortest notice a client may book at (hours) — free, they
+  // apply to every booking link.
+  const [gap, setGap] = useState(0);
+  const [notice, setNotice] = useState(4);
   const [busyId, setBusyId] = useState(null);
   const [err, setErr] = useState("");
   // Google Business, one tap. `query` is what they typed, `hits` is what
@@ -468,8 +472,9 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
       .then((c) => {
         setCfg(c);
         const g = groupWindows(c && c.windows);
-        // Free sees an example row in the (locked) slot builder, so they can see what Pro gives.
-        setGroups(g.length || (c && c.pro) ? g : [{ id: "example", days: [1, 2, 3, 4, 5], start: "17:00", end: "19:00", slot_minutes: 30 }]);
+        // Booking hours are free for everyone (9 Oct 2026): start from a sensible example row.
+        setGroups(g.length ? g : [{ id: "example", days: [1, 2, 3, 4, 5], start: "17:00", end: "19:00", slot_minutes: 30 }]);
+        if (c) { setGap(c.buffer_minutes || 0); setNotice(c.min_notice_hours != null ? c.min_notice_hours : 4); }
       })
       .catch(() => setCfg(null))
       .finally(() => setLoading(false));
@@ -487,7 +492,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
     setErr("");
     try {
       const flat = flattenGroups(groups.filter((g) => g.days.length));
-      const r = await saveBookingWindows(flat);
+      const r = await saveBookingWindows(flat, { buffer_minutes: gap, min_notice_hours: notice });
       setCfg((c) => ({ ...c, windows: r.windows }));
       setGroups(groupWindows(r.windows));
     } catch {
@@ -532,35 +537,35 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
     <div className={panel}>
       <h2 className="text-xl font-black tracking-tight text-slate-900 dark:text-white mb-4">Booking &amp; Reviews</h2>
 
-      {!pro && (
-        <div className="mb-4 rounded-2xl border border-[#635BFF]/30 bg-[#635BFF]/5 p-4">
-          <div className="flex items-center gap-2">
-            <CalendarClock className="h-4 w-4 text-[#635BFF] dark:text-[#a5a0ff]" />
-            <p className="text-sm font-black text-slate-900 dark:text-white">Appointments are a Pro feature</p>
-          </div>
-          <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 hyphens-none">
-            Right now, when a client taps Book on your card, WhatsApp opens with a message to you asking for a time. With Pro, clients pick a free slot themselves and it lands in your Google Calendar — or your CaseLinx calendar, next to your hearings.
-          </p>
-          <button type="button" onClick={() => onUpgrade("booking")} className="mt-3 rounded-full bg-[#635BFF] text-white px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5">
-            <Sparkles className="h-4 w-4" />Unlock appointments
-          </button>
+      <div className="mb-4 rounded-2xl border border-emerald-500/25 bg-emerald-500/5 p-4">
+        <div className="flex items-center gap-2">
+          <CalendarClock className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />
+          <p className="text-sm font-black text-slate-900 dark:text-white">Booking links are free</p>
         </div>
-      )}
+        <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 hyphens-none">
+          Set your hours and connect Google Calendar once. Then open your own card and tap <b>Send booking link</b> to send any client a private link on WhatsApp or email — they pick a time and a Google Meet is made for you both.
+        </p>
+        {!pro && (
+          <>
+            <p className="text-xs text-slate-600 dark:text-slate-300 mt-2 hyphens-none">
+              Pro adds: clients booking straight from your card&rsquo;s Book button, your CaseLinx calendar next to hearings, reschedule and cancel by the client, reminder emails, and reusable links.
+            </p>
+            <button type="button" onClick={() => onUpgrade("booking")} className="mt-3 rounded-full bg-[#635BFF] text-white px-4 py-2 text-sm font-bold inline-flex items-center gap-1.5">
+              <Sparkles className="h-4 w-4" />See what Pro adds
+            </button>
+          </>
+        )}
+      </div>
       {pro && !loading && cfg && (
         <CalendarSwitcher cfg={cfg} onChanged={load} connectHere={async () => { window.location.href = await googleConnectUrl(); }} />
       )}
 
       <div className="flex items-center justify-between mb-2">
         <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Weekly availability</p>
-        {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
       </div>
-      {/* Free sees the real slot builder (users only buy what they can see); any tap opens the upgrade. */}
-      <div className={!pro ? "relative" : undefined}>
-      {!pro && (
-        <button type="button" aria-label="Unlock appointments with VakilCard Pro" onClick={() => onUpgrade("booking")}
-          className="absolute inset-0 z-10 rounded-2xl cursor-pointer bg-white/30 dark:bg-black/20" />
-      )}
-      <div className={!pro ? "opacity-50 pointer-events-none select-none" : undefined} aria-hidden={!pro || undefined}>
+      {/* Hours are free for everyone (founder, 9 Oct 2026). */}
+      <div>
+      <div>
       {loading ? (
         <p className="text-sm text-slate-500 dark:text-slate-400">Loading…</p>
       ) : (
@@ -594,6 +599,20 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
               {!g.days.length && <p className="text-xs text-amber-600 dark:text-amber-400 mt-2">Pick at least one day — this row won't be saved otherwise.</p>}
             </div>
           ))}
+          <div className="grid grid-cols-2 gap-2 pt-1">
+            <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+              Gap between meetings
+              <select value={gap} onChange={(e) => setGap(+e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white text-sm px-2 py-1.5">
+                {[0, 5, 10, 15, 30, 60].map((m) => <option key={m} value={m}>{m ? `${m} min` : "None"}</option>)}
+              </select>
+            </label>
+            <label className="text-xs font-bold text-slate-600 dark:text-slate-300">
+              Minimum notice
+              <select value={notice} onChange={(e) => setNotice(+e.target.value)} className="mt-1 w-full rounded-xl border border-slate-200 dark:border-white/10 dark:bg-white/5 dark:text-white text-sm px-2 py-1.5">
+                {[[0, "None"], [1, "1 hour"], [2, "2 hours"], [4, "4 hours"], [12, "12 hours"], [24, "1 day"], [48, "2 days"]].map(([h, l]) => <option key={h} value={h}>{l}</option>)}
+              </select>
+            </label>
+          </div>
           <div className="flex flex-wrap gap-2 pt-1">
             <button type="button" onClick={addGroup} className={btn}><Plus className="h-4 w-4" />Add availability</button>
             <button type="button" onClick={saveWindows} disabled={savingWindows} className="rounded-full bg-slate-900 dark:bg-white text-white dark:text-slate-900 hover:bg-[#635BFF] dark:hover:text-white px-4 py-2 text-sm font-bold disabled:opacity-50 transition-colors">
@@ -609,14 +628,8 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
       <div className="mt-6 pt-5 border-t border-slate-200 dark:border-white/10">
         <div className="flex items-center justify-between">
           <p className="text-sm font-bold text-slate-800 dark:text-slate-200">Google Calendar</p>
-          {!pro && <span className="rounded-full bg-[#635BFF]/10 text-[#635BFF] dark:text-[#a5a0ff] text-[10px] font-black uppercase tracking-wider px-2 py-0.5">Pro</span>}
         </div>
-        {!pro ? (
-          <>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Sync your calendar so clients can only book times you are actually free — no double-bookings.</p>
-            <button type="button" onClick={() => onUpgrade("booking")} className="text-sm font-bold text-[#635BFF] dark:text-[#a5a0ff] mt-1">Upgrade to connect Google Calendar →</button>
-          </>
-        ) : !cfg || !cfg.calendar_platform_configured ? (
+        {!cfg || !cfg.calendar_platform_configured ? (
           <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 hyphens-none">Not switched on for this deployment yet — contact support.</p>
         ) : (
           <>
@@ -646,7 +659,7 @@ function BookingPanel({ pro, place, onPlaceChange, googleNotice, onUpgrade }) {
             {!cfg.calendar_connected && (
               <>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-1 hyphens-none">
-                  Connect your Google Calendar so clients can only book times you are actually free. Google’s consent screen asks for permission to view and edit events on your calendars — that is the access Google grants. VakilCard reads only your busy times to block slots, and does not read what your appointments are.
+                  Connect your Google Calendar so clients can only book times you are actually free. Google’s consent screen asks for permission to view and edit events on your calendars — that is the access Google grants. VakilCard looks only at your busy times to block slots and adds the meetings you book (with a Google Meet link). It does not read what your other events are.
                 </p>
                 <button type="button" onClick={connectGoogle} className={btn + " mt-1"}><Sparkles className="h-4 w-4" />Connect Google Calendar</button>
               </>

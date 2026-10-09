@@ -339,7 +339,7 @@ function DemoPhone({ onCreate }) {
                 aria-hidden="true"
               />
               {/* glass reflection */}
-              <div className="pointer-events-none absolute inset-0 z-20" style={{ borderRadius: outerR }} style={{ background: "linear-gradient(115deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 28%, transparent 46%)" }} aria-hidden="true" />
+              <div className="pointer-events-none absolute inset-0 z-20" style={{ borderRadius: outerR, overflow: "hidden", background: "linear-gradient(115deg, rgba(255,255,255,.14) 0%, rgba(255,255,255,.04) 28%, transparent 46%)" }} aria-hidden="true" />
               {/* mobile: first touch opens the immersive demo */}
               {status === "live" && (
                 <button

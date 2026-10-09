@@ -197,8 +197,8 @@ export const getBookingConfig = () => call("booking");
 // calendar ("caselinx" + firm_id), shared with hearings. Pro; CaseLinx needs the connection.
 export const setCalendarSource = (source, firm_id) =>
   call("booking", { method: "POST", body: { action: "set_calendar_source", source, firm_id: firm_id || null } });
-export const saveBookingWindows = (windows) =>
-  call("booking", { method: "POST", body: { action: "save_windows", windows } });
+export const saveBookingWindows = (windows, extra = {}) =>
+  call("booking", { method: "POST", body: { action: "save_windows", windows, ...extra } });
 export const manageBooking = (request_id, op) =>
   call("booking", { method: "POST", body: { action: "manage", request_id, op } });
 export const setBookingStatus = (request_id, status) =>

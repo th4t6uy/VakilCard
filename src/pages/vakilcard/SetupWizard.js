@@ -26,6 +26,7 @@ import QaStepJumper from "../../components/QaStepJumper";
 import LiveCardPreview from "../../components/LiveCardPreview";
 import UpgradeSheet from "../../components/UpgradeSheet";
 import UsernamePicker from "../../components/UsernamePicker";
+import GoogleConnectStep from "../../components/GoogleConnectStep";
 
 const PRACTICE_AREAS = [
   "Civil", "Criminal", "Property", "Corporate", "Family", "Taxation",
@@ -195,6 +196,18 @@ function firstIncompleteStep(f) {
 
 const stepKey = (id) => `vc_setup_step_${id || "anon"}`;
 
+// The optional Google screen is offered once per browser, right after the first publish.
+const GOOGLE_OFFER_KEY = "vc_google_step_seen";
+function firstGoogleOffer() {
+  try {
+    if (localStorage.getItem(GOOGLE_OFFER_KEY)) return false;
+    localStorage.setItem(GOOGLE_OFFER_KEY, "1");
+  } catch {
+    /* no storage: still offer it, it is one tap to skip */
+  }
+  return true;
+}
+
 export default function SetupWizard() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
@@ -208,6 +221,8 @@ export default function SetupWizard() {
   const [rawProfile, setRawProfile] = useState(null); // for the link picker (created_username, phone)
   const [upgradeFeature, setUpgradeFeature] = useState(null);
   const [published, setPublished] = useState(false);
+  // After the FIRST publish: one optional "Connect Google Calendar" screen, then on to `dest`.
+  const [googleStep, setGoogleStep] = useState(null);
   const [step, setStep] = useState(sectionMode ? sectionStep : 0);
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -368,7 +383,9 @@ export default function SetupWizard() {
       track("published", profileId.current);
       track("quick_onboard_done", profileId.current);
       try { localStorage.removeItem(stepKey(profileId.current)); } catch {}
-      navigate(f.username ? `/${f.username}/dashboard` : "/");
+      const dest = f.username ? `/${f.username}/dashboard` : "/";
+      if (firstGoogleOffer()) setGoogleStep({ dest, hard: false });
+      else navigate(dest);
     } catch {
       setError("Couldn't save. Check your connection and try again.");
       setSaving(false);
@@ -386,7 +403,8 @@ export default function SetupWizard() {
       await persist({ is_published: true });
       track("published", profileId.current);
       try { localStorage.removeItem(stepKey(profileId.current)); } catch {}
-      window.location.href = `/${f.username}`;
+      if (!published && firstGoogleOffer()) { setSaving(false); setGoogleStep({ dest: `/${f.username}`, hard: true }); }
+      else window.location.href = `/${f.username}`;
     } catch {
       setError("Couldn't publish. Please try again.");
       setSaving(false);
@@ -430,6 +448,12 @@ export default function SetupWizard() {
     }
   };
 
+  if (googleStep)
+    return (
+      <Shell>
+        <GoogleConnectStep onSkip={() => (googleStep.hard ? (window.location.href = googleStep.dest) : navigate(googleStep.dest))} />
+      </Shell>
+    );
   if (loadError)
     return (
       <Shell>

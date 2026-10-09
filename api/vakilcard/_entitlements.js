@@ -91,7 +91,7 @@ const CARD_LOCKABLE_FEATURES = [
   {
     key: "booking",
     title: "Clients book appointments on your card",
-    detail: "Clients pick a free slot themselves and it lands in your Google Calendar — or your CaseLinx calendar, next to your hearings. Today, Book opens WhatsApp to you instead.",
+    detail: "Clients pick a free slot themselves and it lands in your Google Calendar — or your CaseLinx calendar, next to your hearings. Today, Book opens WhatsApp to you instead. Pro also adds reschedule and cancel for clients you send a booking link to, email reminders, and one reusable booking link. (Plain booking links are free.)",
   },
   {
     key: "website",
